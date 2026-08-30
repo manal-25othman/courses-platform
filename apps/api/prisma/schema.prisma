@@ -130,6 +130,12 @@ model User {
   studentProfile StudentProfile?
   refreshTokens  RefreshToken[]
 
+  // Phase 5 — her own progress. Kept on User rather than StudentProfile so a
+  // record is never orphaned by a profile change.
+  vocabularyProgress VocabularyProgress[]
+  sectionProgress    SectionProgress[]
+  activityAttempts   ActivityAttempt[]
+
   // A username is unique within its school, so two schools may each have a
   // student called "sara".
   // NOTE: PostgreSQL treats NULLs as distinct, so this does not constrain
@@ -281,11 +287,12 @@ model Unit {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
-  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  sections        UnitSection[]
-  vocabularyItems VocabularyItem[]
-  questions       Question[]
-  questionSets    QuestionSet[]
+  course           Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sections         UnitSection[]
+  vocabularyItems  VocabularyItem[]
+  questions        Question[]
+  questionSets     QuestionSet[]
+  activityAttempts ActivityAttempt[]
 
   @@unique([courseId, orderIndex])
   @@index([courseId])
@@ -305,6 +312,16 @@ model SectionType {
   /// True where the material is inherently on paper (handwriting practice),
   /// so it is presented for reference rather than answered on screen.
   isPaperBased Boolean @default(false) @map("is_paper_based")
+  /// Which part of the progress model this kind of section counts towards
+  /// (SRS 16, 21): "vocabulary", "grammar", or null for a kind that is read
+  /// but not counted.
+  ///
+  /// Data rather than a key written into the code, because which sections
+  /// count is a curriculum decision the client has not settled — Reading,
+  /// Writing, Orthography and Handwriting are real parts of this material and
+  /// sit outside the four confirmed components. Changing what counts is
+  /// changing this column, not changing the platform.
+  progressComponent String? @map("progress_component")
   isActive     Boolean @default(true) @map("is_active")
   orderIndex   Int     @map("order_index")
 
@@ -330,10 +347,11 @@ model UnitSection {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
-  unit      Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  type      SectionType  @relation(fields: [typeKey], references: [key])
+  unit      Unit              @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  type      SectionType       @relation(fields: [typeKey], references: [key])
   media     MediaAsset[]
   questions Question[]
+  progress  SectionProgress[]
 
   @@unique([unitId, orderIndex])
   @@index([unitId])
@@ -360,7 +378,8 @@ model VocabularyItem {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
-  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unit     Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  progress VocabularyProgress[]
 
   @@unique([unitId, wordEn])
   @@index([unitId])
@@ -455,10 +474,11 @@ model Question {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
-  unit    Unit              @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  section UnitSection?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  type    QuestionType      @relation(fields: [typeKey], references: [key])
-  sets    QuestionSetItem[]
+  unit           Unit              @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  section        UnitSection?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  type           QuestionType      @relation(fields: [typeKey], references: [key])
+  sets           QuestionSetItem[]
+  attemptAnswers AttemptAnswer[]
 
   @@index([unitId])
   @@index([sectionId])
@@ -525,4 +545,134 @@ model QuestionSetItem {
   @@unique([setId, questionId])
   @@index([setId])
   @@map("question_set_items")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the student's own progress through a unit.
+//
+// Everything here belongs to one student and records what she has done, never
+// what the curriculum contains. Content lives in the models above and is
+// shared; progress is personal and is never shared between schools.
+// ---------------------------------------------------------------------------
+
+/// How far a student has got with one word.
+///
+/// A word counts as learned only once she has both seen it and heard it. That
+/// rule is SRS 22 and is stored as a setting (`vocabulary.completion_rule`),
+/// so the two timestamps are recorded separately and the rule is applied when
+/// progress is worked out, rather than being baked into a single flag.
+model VocabularyProgress {
+  id        String @id @default(uuid()) @db.Uuid
+  studentId String @map("student_id") @db.Uuid
+  itemId    String @map("item_id") @db.Uuid
+
+  /// When the card was first shown to her.
+  seenAt        DateTime? @map("seen_at")
+  /// When she played the pronunciation.
+  audioPlayedAt DateTime? @map("audio_played_at")
+  /// Set once the configured rule is satisfied. Kept as a column so a later
+  /// change to the rule does not silently rewrite what a student has already
+  /// completed.
+  learnedAt     DateTime? @map("learned_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  item    VocabularyItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, itemId])
+  @@index([studentId])
+  @@map("vocabulary_progress")
+}
+
+/// That a student has read a teaching section — grammar, reading, writing.
+///
+/// There is nothing to answer in these, so being shown one is all there is to
+/// record.
+model SectionProgress {
+  id        String @id @default(uuid()) @db.Uuid
+  studentId String @map("student_id") @db.Uuid
+  sectionId String @map("section_id") @db.Uuid
+
+  viewedAt DateTime @default(now()) @map("viewed_at")
+
+  student User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  section UnitSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, sectionId])
+  @@index([studentId])
+  @@map("section_progress")
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+
+  @@map("attempt_status")
+}
+
+/// One run at a unit's activity questions.
+///
+/// Retries are unlimited for activities (SRS 9), so a student may have many of
+/// these for one unit. Which attempt counts is the result policy in the
+/// settings store (SRS 19), applied when progress is worked out.
+model ActivityAttempt {
+  id        String @id @default(uuid()) @db.Uuid
+  studentId String @map("student_id") @db.Uuid
+  unitId    String @map("unit_id") @db.Uuid
+
+  /// Fixes the shuffle for this attempt, so leaving the page and coming back
+  /// shows the same questions in the same order (SRS 11, 23).
+  seed   String
+  status AttemptStatus @default(IN_PROGRESS)
+
+  startedAt   DateTime  @default(now()) @map("started_at")
+  submittedAt DateTime? @map("submitted_at")
+
+  /// The result, written once at submission and never recalculated. Marking
+  /// again later would use whatever the questions say then, which is exactly
+  /// what must not happen to a result a student has already been given.
+  correctCount    Int? @map("correct_count")
+  incorrectCount  Int? @map("incorrect_count")
+  pointsAwarded   Int? @map("points_awarded")
+  pointsAvailable Int? @map("points_available")
+  scorePercent    Int? @map("score_percent")
+
+  student User            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  unit    Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  answers AttemptAnswer[]
+
+  @@index([studentId, unitId])
+  @@map("activity_attempts")
+}
+
+/// One question inside one attempt, frozen.
+///
+/// `snapshot` holds the question exactly as it was put to the student —
+/// wording, choices, answer key and marks. The attempt is marked from the
+/// snapshot, never from the live question, so a teacher correcting a question
+/// afterwards changes what future students see and leaves every past attempt
+/// and result untouched.
+///
+/// `questionId` keeps the link for reporting and is allowed to go null if the
+/// question is later removed; the snapshot survives either way.
+model AttemptAnswer {
+  id         String  @id @default(uuid()) @db.Uuid
+  attemptId  String  @map("attempt_id") @db.Uuid
+  questionId String? @map("question_id") @db.Uuid
+  orderIndex Int     @map("order_index")
+
+  snapshot Json
+  response Json?
+
+  isCorrect     Boolean? @map("is_correct")
+  pointsAwarded Int?     @map("points_awarded")
+
+  attempt  ActivityAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question?       @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@unique([attemptId, orderIndex])
+  @@index([attemptId])
+  @@map("attempt_answers")
 }

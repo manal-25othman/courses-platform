@@ -406,9 +406,28 @@ export class ContentService {
         where: { unitId, status: ContentStatus.DRAFT },
         data: { status: ContentStatus.PUBLISHED },
       });
+
+      // Questions too, otherwise approving a unit gives the students a unit
+      // with nothing to do. The one exception is the rule that matters: a
+      // question the import could not read the answer for stays a draft
+      // however the unit is approved, and is reported so the teacher knows
+      // what is still waiting for her.
+      const questions = await tx.question.updateMany({
+        where: { unitId, status: ContentStatus.DRAFT, needsReview: false },
+        data: { status: ContentStatus.PUBLISHED },
+      });
+      const heldBack = await tx.question.count({
+        where: { unitId, needsReview: true },
+      });
+
       await tx.unit.update({ where: { id: unitId }, data: { status: ContentStatus.PUBLISHED } });
 
-      return { sections: sections.count, words: words.count };
+      return {
+        sections: sections.count,
+        words: words.count,
+        questions: questions.count,
+        questionsNeedingReview: heldBack,
+      };
     });
 
     await this.audit.record({

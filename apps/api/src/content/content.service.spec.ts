@@ -13,7 +13,11 @@ const teacher: CurrentUser = {
 const student: CurrentUser = { ...teacher, sub: 's1', userId: 's1', role: UserRole.STUDENT };
 
 /** Records the filters the service builds, which is what hides drafts. */
-function serviceCapturing(captured: { unitWhere?: Record<string, unknown>; school?: string }) {
+function serviceCapturing(captured: {
+  unitWhere?: Record<string, unknown>;
+  questionWhere?: Record<string, unknown>;
+  school?: string;
+}) {
   const tx = {
     course: {
       findFirst: async () => ({ id: 'course-1', ownerSchoolId: SCHOOL }),
@@ -35,6 +39,13 @@ function serviceCapturing(captured: { unitWhere?: Record<string, unknown>; schoo
     },
     unitSection: { updateMany: async () => ({ count: 3 }) },
     vocabularyItem: { updateMany: async () => ({ count: 5 }) },
+    question: {
+      updateMany: async (args: { where: Record<string, unknown> }) => {
+        captured.questionWhere = args.where;
+        return { count: 7 };
+      },
+      count: async () => 2,
+    },
     sectionType: { findMany: async () => [], findUnique: async () => null },
   };
 
@@ -50,7 +61,11 @@ function serviceCapturing(captured: { unitWhere?: Record<string, unknown>; schoo
 }
 
 describe('ContentService draft visibility', () => {
-  let captured: { unitWhere?: Record<string, unknown>; school?: string };
+  let captured: {
+    unitWhere?: Record<string, unknown>;
+    questionWhere?: Record<string, unknown>;
+    school?: string;
+  };
   let service: ContentService;
 
   beforeEach(() => {
@@ -100,10 +115,26 @@ describe('ContentService draft visibility', () => {
     ).rejects.toThrow(/not attached to a school/i);
   });
 
-  it('publishes a unit together with its sections and words', async () => {
+  it('publishes a unit together with its sections, words and questions', async () => {
     const result = await service.publishUnitTree(teacher, 'unit-1');
 
-    expect(result).toEqual({ sections: 3, words: 5 });
+    expect(result).toEqual({
+      sections: 3,
+      words: 5,
+      questions: 7,
+      questionsNeedingReview: 2,
+    });
+  });
+
+  /**
+   * The rule that stops an unread answer key reaching a student. Approving a
+   * whole unit must not be a way round the check that publishing one question
+   * enforces.
+   */
+  it('never publishes a question that still needs checking', async () => {
+    await service.publishUnitTree(teacher, 'unit-1');
+
+    expect(captured.questionWhere?.needsReview).toBe(false);
   });
 });
 

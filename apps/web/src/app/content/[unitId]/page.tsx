@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, FormEvent } from 'react';
 import { api, ApiError, homeFor, Me, Section, SectionType, UnitDetail, VocabularyItem } from '@/lib/api';
+import { QuestionList } from '@/components/QuestionList';
 
 /** One unit: its sections and its word list. */
 export default function UnitPage() {
@@ -94,6 +95,8 @@ export default function UnitPage() {
       />
 
       <VocabularyList unit={unit} onRun={run} />
+
+      <QuestionList unitId={unit.id} onRun={run} />
     </main>
   );
 }

@@ -170,3 +170,158 @@ export function homeFor(user: Me): string {
   if (user.mustChangePassword) return '/change-password';
   return user.role === 'STUDENT' ? '/home' : '/students';
 }
+
+// --- Questions (Phase 4 engine, edited here in Phase 5) --------------------
+
+export interface QuestionType {
+  key: string;
+  displayName: string;
+  description: string | null;
+  supportsOptionShuffle: boolean;
+  isTyped: boolean;
+  needsMedia: boolean;
+  presentInSource: boolean;
+  isActive: boolean;
+  orderIndex: number;
+}
+
+/** A question as the teacher sees it: answer key included. */
+export interface Question {
+  id: string;
+  unitId: string;
+  typeKey: string;
+  prompt: string;
+  payload: Record<string, unknown>;
+  answerKey: Record<string, unknown>;
+  points: number;
+  orderIndex: number;
+  needsReview: boolean;
+  reviewNotes: string | null;
+  sourceRef: string | null;
+  status: ContentStatus;
+  type?: QuestionType;
+}
+
+export interface ReviewSummary {
+  total: number;
+  needingReview: number;
+  published: number;
+  readyToPublish: number;
+}
+
+export interface Choice {
+  id: string;
+  text: string;
+}
+
+/** The options a choice-style question offers, if it has any. */
+export function choicesOf(question: Question): Choice[] {
+  const options = question.payload?.options;
+  if (!Array.isArray(options)) return [];
+  return options
+    .filter((o): o is Choice => Boolean(o) && typeof o === 'object' && 'id' in o && 'text' in o)
+    .map((o) => ({ id: String(o.id), text: String(o.text) }));
+}
+
+/** Which choice is marked correct, or null where the kind works differently. */
+export function correctChoiceId(question: Question): string | null {
+  const key = question.answerKey?.correctOptionId;
+  return typeof key === 'string' ? key : null;
+}
+
+// --- Learning (student) ----------------------------------------------------
+
+export interface ComponentProgress {
+  total: number;
+  done: number;
+  percent: number;
+}
+
+export interface UnitProgress {
+  unitId: string;
+  vocabulary: ComponentProgress;
+  grammar: ComponentProgress;
+  activity: ComponentProgress;
+  bestScorePercent: number | null;
+  attemptsTaken: number;
+  overallPercent: number;
+  notCounted: string[];
+  isComplete: boolean;
+}
+
+export interface LearnUnitSummary {
+  id: string;
+  title: string;
+  description: string | null;
+  orderIndex: number;
+  progress: UnitProgress;
+}
+
+export interface LearnSection {
+  id: string;
+  typeKey: string;
+  title: string | null;
+  body: string | null;
+  orderIndex: number;
+  type: SectionType & { progressComponent: string | null };
+  media: { id: string; url: string; altText: string | null }[];
+  viewed: boolean;
+}
+
+export interface LearnWord {
+  id: string;
+  wordEn: string;
+  meaningAr: string | null;
+  partOfSpeech: string | null;
+  exampleSentence: string | null;
+  orderIndex: number;
+  seen: boolean;
+  audioPlayed: boolean;
+  learned: boolean;
+}
+
+export interface LearnUnit {
+  id: string;
+  title: string;
+  description: string | null;
+  sections: LearnSection[];
+  vocabulary: LearnWord[];
+  activity: { questionCount: number };
+}
+
+export interface AttemptQuestion {
+  answerId: string;
+  typeKey: string;
+  prompt: string;
+  payload: Record<string, unknown>;
+  points: number;
+  response: unknown;
+  isCorrect?: boolean | null;
+  pointsAwarded?: number | null;
+  expected?: Record<string, unknown>;
+}
+
+export interface Attempt {
+  id: string;
+  unitId: string;
+  status: 'IN_PROGRESS' | 'SUBMITTED';
+  startedAt: string;
+  submittedAt?: string | null;
+  correctCount?: number | null;
+  incorrectCount?: number | null;
+  pointsAwarded?: number | null;
+  pointsAvailable?: number | null;
+  scorePercent?: number | null;
+  questions: AttemptQuestion[];
+}
+
+/** One of her finished tries, as listed on the activity tab. */
+export interface AttemptSummary {
+  id: string;
+  submittedAt: string | null;
+  correctCount: number | null;
+  incorrectCount: number | null;
+  pointsAwarded: number | null;
+  pointsAvailable: number | null;
+  scorePercent: number | null;
+}

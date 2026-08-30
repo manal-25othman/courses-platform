@@ -27,6 +27,8 @@ const VOCAB_A = '22222222-2222-2222-2222-222222222222';
 const MEDIA_A = '33333333-3333-3333-3333-333333333333';
 const QUESTION_A2 = '44444444-4444-4444-4444-444444444444';
 const ITEM_A = '55555555-5555-5555-5555-555555555555';
+const ATTEMPT_A = '66666666-6666-6666-6666-666666666666';
+const VOCAB_PROGRESS_A = '77777777-7777-7777-7777-777777777777';
 
 const owner = new PrismaClient({ datasourceUrl: OWNER_URL });
 const app = new PrismaClient({ datasourceUrl: APP_URL });
@@ -141,6 +143,56 @@ beforeAll(async () => {
     update: {},
     create: { id: MEDIA_A, sectionId: SECTION_A, url: 'https://example.invalid/a.png', mimeType: 'image/png' },
   });
+
+  // Progress belonging to a student of school A. These rows exist for the whole
+  // run so that "an unscoped query sees nothing" is a real assertion and not
+  // one that passes because the table happened to be empty.
+  const studentA = await owner.user.findFirstOrThrow({ where: { username: 'iso-a-1' } });
+
+  await owner.activityAttempt.upsert({
+    where: { id: ATTEMPT_A },
+    update: {},
+    create: {
+      id: ATTEMPT_A,
+      studentId: studentA.id,
+      unitId: UNIT_A,
+      seed: 'isolation-test',
+      status: 'SUBMITTED',
+      scorePercent: 50,
+    },
+  });
+  await owner.attemptAnswer.upsert({
+    where: { id: '88888888-8888-8888-8888-888888888888' },
+    update: {},
+    create: {
+      id: '88888888-8888-8888-8888-888888888888',
+      attemptId: ATTEMPT_A,
+      questionId: QUESTION_A,
+      orderIndex: 0,
+      snapshot: { questionId: QUESTION_A, typeKey: 'multiple_choice', points: 1 },
+    },
+  });
+  await owner.vocabularyProgress.upsert({
+    where: { id: VOCAB_PROGRESS_A },
+    update: {},
+    create: {
+      id: VOCAB_PROGRESS_A,
+      studentId: studentA.id,
+      itemId: VOCAB_A,
+      seenAt: new Date(),
+      audioPlayedAt: new Date(),
+      learnedAt: new Date(),
+    },
+  });
+  await owner.sectionProgress.upsert({
+    where: { id: '99999999-9999-9999-9999-999999999999' },
+    update: {},
+    create: {
+      id: '99999999-9999-9999-9999-999999999999',
+      studentId: studentA.id,
+      sectionId: SECTION_A,
+    },
+  });
 });
 
 const TENANT_TABLES = [
@@ -160,9 +212,19 @@ const TENANT_TABLES = [
   'questions',
   'question_sets',
   'question_set_items',
+  // Progress, added in Phase 5. Unlike the curriculum above, this is personal
+  // data about a named child and is never shared between schools.
+  'vocabulary_progress',
+  'section_progress',
+  'activity_attempts',
+  'attempt_answers',
 ] as const;
 
 afterAll(async () => {
+  await owner.attemptAnswer.deleteMany({ where: { attemptId: ATTEMPT_A } });
+  await owner.activityAttempt.deleteMany({ where: { id: ATTEMPT_A } });
+  await owner.vocabularyProgress.deleteMany({ where: { id: VOCAB_PROGRESS_A } });
+  await owner.sectionProgress.deleteMany({ where: { sectionId: SECTION_A } });
   await owner.mediaAsset.deleteMany({ where: { id: MEDIA_A } });
   await owner.vocabularyItem.deleteMany({ where: { unitId: UNIT_A } });
   await owner.unitSection.deleteMany({ where: { unitId: UNIT_A } });
@@ -432,6 +494,61 @@ describe('audit entries that belong to no school', () => {
 
     const rows = await owner.auditLog.findMany({ where: { action } });
     expect(rows).toHaveLength(0);
+  });
+});
+
+/**
+ * A student's progress is not curriculum.
+ *
+ * Content is readable across schools on purpose. Progress is the opposite: it
+ * says what a named child has done, so these tables have no shared-master
+ * allowance at all — not for reading, and not for writing.
+ */
+describe("a student's progress never leaves her school", () => {
+  it.each([
+    'vocabulary_progress',
+    'section_progress',
+    'activity_attempts',
+    'attempt_answers',
+  ])('returns nothing from %s when no school is set', async (table) => {
+    const [row] = await app.$queryRawUnsafe<{ count: bigint }[]>(
+      `SELECT count(*)::bigint AS count FROM "${table}"`,
+    );
+
+    expect(Number(row.count)).toBe(0);
+  });
+
+  it("does not show one school another school's attempts", async () => {
+    const asOwner = await forSchool(SCHOOL_A, (tx) =>
+      tx.activityAttempt.findMany({ where: { id: ATTEMPT_A } }),
+    );
+    const asOther = await forSchool(SCHOOL_B, (tx) =>
+      tx.activityAttempt.findMany({ where: { id: ATTEMPT_A } }),
+    );
+
+    expect(asOwner).toHaveLength(1);
+    expect(asOther).toHaveLength(0);
+  });
+
+  it("does not show one school another school's word progress", async () => {
+    const asOther = await forSchool(SCHOOL_B, (tx) =>
+      tx.vocabularyProgress.findMany({ where: { id: VOCAB_PROGRESS_A } }),
+    );
+
+    expect(asOther).toHaveLength(0);
+  });
+
+  it("refuses to record progress against another school's student", async () => {
+    const studentA = await owner.user.findFirstOrThrow({ where: { username: 'iso-a-1' } });
+
+    await expect(
+      forSchool(SCHOOL_B, (tx) =>
+        tx.$executeRawUnsafe(
+          `INSERT INTO activity_attempts (id, student_id, unit_id, seed, status, started_at)
+           VALUES (gen_random_uuid(), '${studentA.id}', '${UNIT_A}', 'x', 'IN_PROGRESS', now())`,
+        ),
+      ),
+    ).rejects.toThrow();
   });
 });
 

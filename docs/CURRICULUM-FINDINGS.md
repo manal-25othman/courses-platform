@@ -135,3 +135,45 @@ read from the file. It is flagged rather than resolved.
   placed; anything unplaceable would have been reported and left out.
 - A question whose answer could not be read is imported without one, marked,
   and refused publication until a teacher confirms it.
+
+---
+
+# Phase 5 — what the learning flow revealed
+
+## A decision the material forces
+
+Nine kinds of section exist in this file; SRS 16 and 21 define completion and
+progress over four components. Rather than pick a mapping and write it into the
+code, which kinds count is now a column on the section type
+(`section_types.progress_component`):
+
+| Section kind | Counts towards |
+|---|---|
+| Grammar | grammar |
+| Vocabulary | vocabulary |
+| General Question, Controlled Writing, Reading, Orthography, Handwriting, Writing, Reading Passage | nothing yet |
+
+A student can read all of them; only the two above move her progress bar.
+Changing that is an `UPDATE` on one column, not a change to the platform. The
+open decision from Phase 3 (mismatches 3 and 4) is unchanged — this records it
+rather than settling it.
+
+## Assessment is named, not guessed
+
+`progress.weights` gives assessments a quarter of the total, and assessments are
+Phase 6. Progress therefore reports `notCounted: ["assessment"]` and leaves that
+weight out of the calculation, rather than counting it as zero — which would
+make a finished unit read as three-quarters done — or as complete, which would
+be untrue.
+
+## Pronunciation depends on the device, not only the browser
+
+The approved approach is the browser's own voice (SRS 7). Having the speech API
+is not the same as being able to speak: a browser with no voice installed
+accepts the request and then fails. Because a word is not learned until it has
+been heard (SRS 22), that makes a unit impossible to finish on such a device.
+
+The platform now detects this and says so plainly instead of asking her to try
+again at something that cannot work. **It does not mark the word as heard.**
+Whether a student on a voice-less device should be able to complete vocabulary
+some other way is a decision for the client, not one to take quietly.

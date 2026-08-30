@@ -12,6 +12,7 @@ import { SettingsModule } from './settings/settings.module';
 import { StudentsModule } from './students/students.module';
 import { ContentModule } from './content/content.module';
 import { QuestionsModule } from './questions/questions.module';
+import { LearningModule } from './learning/learning.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { QuestionsModule } from './questions/questions.module';
     StudentsModule,
     ContentModule,
     QuestionsModule,
+    LearningModule,
     HealthModule,
   ],
   providers: [
