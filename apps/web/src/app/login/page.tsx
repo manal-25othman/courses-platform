@@ -1,11 +1,14 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, FormEvent } from 'react';
-import { api, ApiError, Me } from '@/lib/api';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState, FormEvent } from 'react';
+import { api, ApiError, homeFor, Me } from '@/lib/api';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const params = useSearchParams();
+  // Set after a password change, which signs every device out on purpose.
+  const justChanged = params.get('changed') === '1';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +21,8 @@ export default function LoginPage() {
 
     try {
       const result = await api.post<{ user: Me }>('/auth/login', { username, password });
-      // A password the teacher set is temporary, so she chooses her own first.
-      router.push(result.user.mustChangePassword ? '/change-password' : '/students');
+      // Role and account state decide where they land.
+      router.push(homeFor(result.user));
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Could not sign in.');
       setBusy(false);
@@ -31,6 +34,12 @@ export default function LoginPage() {
       <div className="card">
         <h1>Sign in</h1>
         <p className="muted">TOP GOAL</p>
+
+        {justChanged && (
+          <p className="alert ok" style={{ marginTop: '1rem' }} role="status">
+            Your password was changed. Please sign in with your new password.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} noValidate>
           <label htmlFor="username">Username</label>
@@ -74,5 +83,23 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+/**
+ * Reading the query string forces this part to render in the browser, so it
+ * sits behind a boundary and the rest of the page can still be prerendered.
+ */
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="center">
+          <p className="muted">Loading\u2026</p>
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

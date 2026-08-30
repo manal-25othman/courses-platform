@@ -119,6 +119,16 @@ Sign in at `/login`, then manage her students at `/students`:
 A teacher sees only her own students. Another teacher's students are not listed
 and cannot be reached even with a direct link.
 
+A student who signs in gets her own page — not the teacher's. Her lessons
+arrive in a later phase; for now she can see she is signed in and change her
+own password.
+
+### Staying signed in
+
+Sign-in lasts a short while and renews itself quietly in the background, so
+the teacher is not interrupted mid-task. Repeated wrong passwords from the
+same place are slowed down after a few attempts.
+
 ### Passwords the teacher sets are temporary
 
 Whenever the teacher sets or resets a password, the student is asked to choose

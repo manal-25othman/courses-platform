@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, FormEvent } from 'react';
-import { api, ApiError, Me, Student } from '@/lib/api';
+import { api, ApiError, homeFor, Me, Student } from '@/lib/api';
 
 export default function StudentsPage() {
   const router = useRouter();
@@ -36,8 +36,10 @@ export default function StudentsPage() {
     api
       .get<Me>('/auth/me')
       .then((user) => {
-        if (user.mustChangePassword) {
-          router.push('/change-password');
+        // This page is the teacher's. A student is sent to her own instead of
+        // being shown a screen she has no permission to use.
+        if (user.role === 'STUDENT' || user.mustChangePassword) {
+          router.replace(homeFor(user));
           return;
         }
         setMe(user);
@@ -99,7 +101,10 @@ export default function StudentsPage() {
           {/* The teacher's name comes from her account, never a fixed value (SRS 33). */}
           <p className="muted">Signed in as {me.displayName}</p>
         </div>
-        <button onClick={signOut}>Sign out</button>
+        <div className="row">
+          <button onClick={() => router.push('/change-password')}>Change my password</button>
+          <button onClick={signOut}>Sign out</button>
+        </div>
       </div>
 
       {error && <p className="alert error" role="alert">{error}</p>}
@@ -178,7 +183,7 @@ export default function StudentsPage() {
                   <tr key={student.id} className={student.isDeleted ? 'is-deleted' : undefined}>
                     <td>{student.fullName}</td>
                     <td data-label="Username">{student.username}</td>
-                    <td className="hide-sm muted" data-label="Email">{student.email ?? '—'}</td>
+                    <td className="muted" data-label="Email">{student.email ?? '—'}</td>
                     <td data-label="Status">
                       {student.isDeleted ? (
                         <span className="badge deleted">Deleted</span>

@@ -10,6 +10,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { UseGuards } from '@nestjs/common';
+import { AuthThrottleGuard } from './guards/auth-throttle.guard';
 import type { Request, Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
@@ -59,6 +61,7 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(AuthThrottleGuard)
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(
@@ -126,6 +129,7 @@ export class AuthController {
    * Every role may change their own. Because all sessions end, the client has
    * to sign in again afterwards with the new password.
    */
+  @UseGuards(AuthThrottleGuard)
   @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
   @Post('change-password')
   @HttpCode(HttpStatus.NO_CONTENT)
