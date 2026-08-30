@@ -48,10 +48,11 @@ describe('AuthService.login', () => {
 
     const prisma = {
       user: {
-        findFirst: async () => user,
+        // Login looks the username up across schools and expects exactly one
+        // match, so the stand-in returns a list.
+        findMany: async () => (user ? [user] : []),
         update: async () => user,
       },
-      school: { findMany: async () => [{ id: SCHOOL }] },
     } as unknown as PrismaService;
 
     const audit = {

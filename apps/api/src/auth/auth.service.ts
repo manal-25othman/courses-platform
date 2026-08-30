@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { User, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
@@ -6,6 +6,7 @@ import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { TokenPair } from './auth.types';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 /** What the caller is told about themselves after signing in. */
 export interface AuthenticatedUserView {
@@ -34,11 +35,18 @@ export class AuthService {
    * usernames are real (SRS 37).
    */
   async login(dto: LoginDto, deviceLabel?: string): Promise<{ pair: TokenPair; user: User }> {
-    const schoolId = dto.schoolId ?? (await this.resolveSingleSchoolId());
-
-    const user = await this.prisma.user.findFirst({
-      where: { username: dto.username, schoolId },
+    // Usernames are unique within a school, not across all of them. Look the
+    // name up and use the match when there is exactly one; if two schools
+    // happen to use the same username, the client must say which school.
+    const candidates = await this.prisma.user.findMany({
+      where: {
+        username: dto.username,
+        ...(dto.schoolId ? { schoolId: dto.schoolId } : {}),
+      },
+      take: 2,
     });
+
+    const user = candidates.length === 1 ? candidates[0] : null;
 
     const failure = new UnauthorizedException('Incorrect username or password.');
 
@@ -51,8 +59,11 @@ export class AuthService {
       );
       await this.audit.record({
         action: AUDIT_ACTIONS.LOGIN_FAILED,
-        schoolId,
-        metadata: { username: dto.username, reason: 'unknown_user' },
+        schoolId: dto.schoolId ?? null,
+        metadata: {
+          username: dto.username,
+          reason: candidates.length > 1 ? 'ambiguous_username' : 'unknown_user',
+        },
       });
       throw failure;
     }
@@ -98,12 +109,44 @@ export class AuthService {
   }
 
   /**
-   * With one school, a student should not have to know a school id to sign in.
-   * Once there is more than one, the client must say which.
+   * Replaces the caller's own password.
+   *
+   * This is what clears the temporary password a teacher issued (SRS 28.6.2).
+   * Every other session ends, so a password change also signs out any device
+   * that was using the old one.
    */
-  private async resolveSingleSchoolId(): Promise<string | null> {
-    const schools = await this.prisma.school.findMany({ take: 2, select: { id: true } });
-    return schools.length === 1 ? schools[0].id : null;
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user || user.deletedAt !== null || user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid session.');
+    }
+
+    const matches = await this.passwords.verify(user.passwordHash, dto.currentPassword);
+
+    if (!matches) {
+      throw new UnauthorizedException('Your current password is not correct.');
+    }
+
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException('Your new password must be different from the current one.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await this.passwords.hash(dto.newPassword),
+        mustChangePassword: false,
+      },
+    });
+
+    await this.tokens.revokeAllForUser(user.id);
+
+    await this.audit.record({
+      action: AUDIT_ACTIONS.PASSWORD_CHANGED,
+      schoolId: user.schoolId,
+      actorUserId: user.id,
+    });
   }
 
   /** The caller's own details, for "who am I". */

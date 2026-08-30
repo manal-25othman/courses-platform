@@ -8,6 +8,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SettingsModule } from './settings/settings.module';
+import { StudentsModule } from './students/students.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SettingsModule } from './settings/settings.module';
     SettingsModule,
     AuditModule,
     AuthModule,
+    StudentsModule,
     HealthModule,
   ],
   providers: [

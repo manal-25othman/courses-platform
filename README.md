@@ -2,9 +2,9 @@
 
 An educational web platform for Grade 6 English, built around the TOP GOAL curriculum.
 
-> **Current status: Phase 1 — identity and tenancy.**
-> Sign-in works. There are no screens yet: the website is still a placeholder,
-> and creating students, password recovery and lessons come in later phases.
+> **Current status: Phase 2 — student management.**
+> The teacher can sign in and manage her students. Lessons, activities and
+> assessments come in later phases.
 
 ## Documentation
 
@@ -78,7 +78,7 @@ npm run db:bootstrap -w @courses/api
 
 Running it twice is safe: it will not touch an account that already exists.
 
-**4. Start it**
+**5. Start it**
 
 Open two terminals:
 
@@ -86,6 +86,13 @@ Open two terminals:
 npm run dev:api    # the engine, on http://localhost:3001
 npm run dev:web    # the website, on http://localhost:3000
 ```
+
+Then open <http://localhost:3000> and sign in with the teacher account you
+created in step 4.
+
+> **When deploying:** the website reads `NEXT_PUBLIC_API_URL` when it is
+> **built**, not when it runs. Set it before `npm run build`, or the deployed
+> site will still be looking for the API on localhost.
 
 Check it works by visiting <http://localhost:3001/api/v1/health>.
 You should see `"status": "ok"` and `"database": "connected"`.
@@ -97,6 +104,26 @@ curl -X POST http://localhost:3001/api/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"teacher","password":"your-password"}'
 ```
+
+## What the teacher can do today
+
+Sign in at `/login`, then manage her students at `/students`:
+
+- **Add a student** — name, username, a temporary password, and an optional email
+- **Edit** her name, username or email
+- **Disable** — she cannot sign in, but stays visible in the list
+- **Delete** — she is hidden and cannot sign in, but **every result, answer and
+  message is kept**. Tick "Show deleted" to find her and **Restore** her
+- **Reset password** — shows a temporary password once, to hand to the student
+
+A teacher sees only her own students. Another teacher's students are not listed
+and cannot be reached even with a direct link.
+
+### Passwords the teacher sets are temporary
+
+Whenever the teacher sets or resets a password, the student is asked to choose
+her own the next time she signs in. Any session opened with the old password
+ends immediately.
 
 ## How sign-in works
 

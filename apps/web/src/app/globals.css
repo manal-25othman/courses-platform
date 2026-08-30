@@ -1,0 +1,133 @@
+/*
+ * Neutral design tokens.
+ *
+ * The final logo, colours and typography are still to be decided (SRS 41), so
+ * every visual value lives here as a token. Applying the real branding later
+ * means changing these values, not rewriting components.
+ */
+:root {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --border: #e2e5ee;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --primary: #4338ca;
+  --primary-text: #ffffff;
+  --danger: #b42318;
+  --danger-bg: #fef3f2;
+  --success: #067647;
+  --success-bg: #ecfdf3;
+  --warning: #b54708;
+  --warning-bg: #fffaeb;
+  --radius: 10px;
+  --gap: 1rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.page { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+.center { max-width: 24rem; margin: 3rem auto; padding: 0 1rem; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
+.muted { color: var(--muted); font-size: .875rem; }
+
+label { display: block; font-size: .875rem; font-weight: 600; margin: .75rem 0 .25rem; }
+input {
+  width: 100%; padding: .6rem .7rem; font-size: 1rem;
+  border: 1px solid var(--border); border-radius: 8px; background: #fff; color: inherit;
+}
+input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+button {
+  font: inherit; font-weight: 600; cursor: pointer;
+  padding: .55rem .9rem; border-radius: 8px;
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+}
+button:hover:not(:disabled) { background: #f3f4f6; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.danger { color: var(--danger); border-color: #f3c4c0; }
+button.small { padding: .35rem .6rem; font-size: .8125rem; }
+
+.row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.between { display: flex; justify-content: space-between; align-items: center; gap: var(--gap); flex-wrap: wrap; }
+.stack > * + * { margin-top: var(--gap); }
+
+.alert { padding: .7rem .85rem; border-radius: 8px; font-size: .9rem; }
+.alert.error { background: var(--danger-bg); color: var(--danger); }
+.alert.ok { background: var(--success-bg); color: var(--success); }
+.alert.warn { background: var(--warning-bg); color: var(--warning); }
+
+.badge {
+  display: inline-block; padding: .15rem .5rem; border-radius: 999px;
+  font-size: .75rem; font-weight: 700;
+}
+.badge.active { background: var(--success-bg); color: var(--success); }
+.badge.disabled { background: var(--warning-bg); color: var(--warning); }
+.badge.deleted { background: var(--danger-bg); color: var(--danger); }
+
+/* The table scrolls inside its own box, so the page never scrolls sideways. */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .9375rem; }
+th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--border); }
+th { font-size: .8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+tr.is-deleted td { opacity: .55; }
+
+code.temp {
+  display: inline-block; font-size: 1.05rem; font-weight: 700;
+  padding: .3rem .55rem; background: #fff; border: 1px dashed var(--border); border-radius: 6px;
+  letter-spacing: .06em;
+}
+
+button, .badge { white-space: nowrap; }
+
+/*
+ * On a phone a wide table either clips its buttons or forces sideways
+ * scrolling, so each student becomes a card instead. Same markup, so there is
+ * no second version of the list to keep in step.
+ */
+@media (max-width: 40rem) {
+  .hide-sm { display: none; }
+
+  table, tbody, tr, td { display: block; width: 100%; }
+  thead { display: none; }
+
+  tr {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .75rem;
+    margin-bottom: .75rem;
+  }
+
+  td { border: none; padding: .2rem 0; }
+
+  /* Name first and prominent, then the label/value pairs. */
+  td:first-child { font-weight: 700; font-size: 1.05rem; padding-bottom: .35rem; }
+
+  td[data-label]::before {
+    content: attr(data-label) ": ";
+    color: var(--muted);
+    font-size: .8125rem;
+    font-weight: 600;
+  }
+
+  td:last-child { padding-top: .6rem; }
+  td:last-child .row { gap: .4rem; }
+  td:last-child button { flex: 1 1 auto; min-width: 7.5rem; }
+}

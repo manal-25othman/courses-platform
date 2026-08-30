@@ -18,6 +18,7 @@ import { TokenService } from './token.service';
 import { TokenPair, CurrentUser as CurrentUserType } from './auth.types';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { Public } from './decorators/public.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -116,6 +117,24 @@ export class AuthController {
     }
 
     // Always clear, so a client with a stale cookie ends up signed out either way.
+    this.clearCookies(response);
+  }
+
+  /**
+   * Changes the caller's own password.
+   *
+   * Every role may change their own. Because all sessions end, the client has
+   * to sign in again afterwards with the new password.
+   */
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
+  @Post('change-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changePassword(
+    @CurrentUser() user: CurrentUserType,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    await this.auth.changePassword(user.userId, dto);
     this.clearCookies(response);
   }
 

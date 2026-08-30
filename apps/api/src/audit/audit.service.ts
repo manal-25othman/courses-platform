@@ -9,6 +9,14 @@ export const AUDIT_ACTIONS = {
   LOGOUT: 'auth.logout',
   TOKEN_REFRESHED: 'auth.token_refreshed',
   TOKEN_REUSE_DETECTED: 'auth.token_reuse_detected',
+  PASSWORD_CHANGED: 'auth.password_changed',
+  STUDENT_CREATED: 'student.created',
+  STUDENT_UPDATED: 'student.updated',
+  STUDENT_DISABLED: 'student.disabled',
+  STUDENT_ENABLED: 'student.enabled',
+  STUDENT_DELETED: 'student.deleted',
+  STUDENT_RESTORED: 'student.restored',
+  STUDENT_PASSWORD_RESET: 'student.password_reset',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
