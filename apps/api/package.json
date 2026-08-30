@@ -14,7 +14,8 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:studio": "prisma studio",
     "test:watch": "vitest",
-    "db:bootstrap": "ts-node prisma/bootstrap.ts"
+    "db:bootstrap": "ts-node prisma/bootstrap.ts",
+    "test:db": "vitest run --config vitest.integration.config.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

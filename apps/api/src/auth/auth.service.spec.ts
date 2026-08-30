@@ -47,12 +47,14 @@ describe('AuthService.login', () => {
     audited = [];
 
     const prisma = {
-      user: {
-        // Login looks the username up across schools and expects exactly one
-        // match, so the stand-in returns a list.
-        findMany: async () => (user ? [user] : []),
-        update: async () => user,
-      },
+      // Signing in cannot be scoped to a school, because the school is what is
+      // being established, so it goes through the narrow lookup instead.
+      findUsersForAuthentication: async () => (user ? [user] : []),
+      findUserForAuthentication: async () => user,
+      // Everything after sign-in runs inside the caller's own school.
+      forSchool: async <T>(_schoolId: string, work: (t: unknown) => Promise<T>) =>
+        work({ user: { update: async () => user } }),
+      user: { update: async () => user },
     } as unknown as PrismaService;
 
     const audit = {

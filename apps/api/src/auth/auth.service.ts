@@ -38,13 +38,10 @@ export class AuthService {
     // Usernames are unique within a school, not across all of them. Look the
     // name up and use the match when there is exactly one; if two schools
     // happen to use the same username, the client must say which school.
-    const candidates = await this.prisma.user.findMany({
-      where: {
-        username: dto.username,
-        ...(dto.schoolId ? { schoolId: dto.schoolId } : {}),
-      },
-      take: 2,
-    });
+    // Signing in cannot be scoped to a school, because the school is what is
+    // being established. This goes through a database function that answers
+    // only this one question rather than around the policies generally.
+    const candidates = await this.prisma.findUsersForAuthentication(dto.username, dto.schoolId);
 
     const user = candidates.length === 1 ? candidates[0] : null;
 
@@ -94,10 +91,11 @@ export class AuthService {
 
     const pair = await this.tokens.issuePair(user, deviceLabel);
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    if (user.schoolId) {
+      await this.prisma.forSchool(user.schoolId, (tx) =>
+        tx.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
+      );
+    }
 
     await this.audit.record({
       action: AUDIT_ACTIONS.LOGIN_SUCCEEDED,
@@ -116,7 +114,7 @@ export class AuthService {
    * that was using the old one.
    */
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.findUserForAuthentication(userId);
 
     if (!user || user.deletedAt !== null || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Invalid session.');
@@ -132,13 +130,16 @@ export class AuthService {
       throw new BadRequestException('Your new password must be different from the current one.');
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash: await this.passwords.hash(dto.newPassword),
-        mustChangePassword: false,
-      },
-    });
+    const passwordHash = await this.passwords.hash(dto.newPassword);
+
+    if (user.schoolId) {
+      await this.prisma.forSchool(user.schoolId, (tx) =>
+        tx.user.update({
+          where: { id: user.id },
+          data: { passwordHash, mustChangePassword: false },
+        }),
+      );
+    }
 
     await this.tokens.revokeAllForUser(user.id);
 
@@ -151,14 +152,22 @@ export class AuthService {
 
   /** The caller's own details, for "who am I". */
   async describe(userId: string): Promise<AuthenticatedUserView> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { teacherProfile: true, studentProfile: true },
-    });
+    const account = await this.prisma.findUserForAuthentication(userId);
 
-    if (!user || user.deletedAt !== null || user.status !== UserStatus.ACTIVE) {
+    if (!account || account.deletedAt !== null || account.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Invalid session.');
     }
+
+    // The display name lives on the profile, which is tenant-scoped like every
+    // other row, so it is read inside the caller's own school.
+    const user = account.schoolId
+      ? ((await this.prisma.forSchool(account.schoolId, (tx) =>
+          tx.user.findUnique({
+            where: { id: userId },
+            include: { teacherProfile: true, studentProfile: true },
+          }),
+        )) ?? { ...account, teacherProfile: null, studentProfile: null })
+      : { ...account, teacherProfile: null, studentProfile: null };
 
     return {
       id: user.id,

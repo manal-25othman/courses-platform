@@ -193,6 +193,35 @@ npm test                        # run once
 npm run test:watch -w @courses/api   # re-run as you edit
 ```
 
+## How schools are kept apart
+
+Two independent barriers, so a mistake in one does not expose data:
+
+1. **The code** confines every query to the caller's own school.
+2. **The database** enforces the same rule itself. Each request sets which
+   school it is for, and PostgreSQL refuses to return anything else.
+
+The second barrier only works because the application connects as a
+**restricted database user** (`app_user`), not as the owner. The owner is a
+superuser and ignores these rules entirely — so if the app ever connects with
+the owner's details, the protection is silently switched off. That is why
+`DATABASE_URL` and `DIRECT_URL` use two different users.
+
+**If a query forgets to say which school it is for, it returns nothing** —
+never another school's data. A missing filter shows up as an empty page, not
+as a leak.
+
+Verify it at any time with:
+
+```bash
+npm run test:db -w @courses/api
+```
+
+These tests run against a real database and check both halves: that one school
+cannot see another's rows even when it knows the exact id, and that the
+application's database user cannot turn the protection off. They also run on
+every push in CI.
+
 ## Security
 
 Never commit `.env`. It holds your database password.

@@ -21,9 +21,13 @@ const teacher: CurrentUser = {
 
 const admin: CurrentUser = { ...teacher, sub: 'admin-1', userId: 'admin-1', role: UserRole.ADMIN };
 
-/** Captures the `where` clause the service builds, which is what confines it. */
-function serviceCapturing(captured: { where?: Prisma.UserWhereInput }) {
-  const prisma = {
+/**
+ * Captures the `where` clause the service builds, and the school it opened the
+ * transaction with. Both matter: the school is the database-enforced barrier,
+ * the where clause is the application one.
+ */
+function serviceCapturing(captured: { where?: Prisma.UserWhereInput; school?: string }) {
+  const tx = {
     user: {
       findMany: async (args: { where: Prisma.UserWhereInput }) => {
         captured.where = args.where;
@@ -36,6 +40,16 @@ function serviceCapturing(captured: { where?: Prisma.UserWhereInput }) {
       create: async () => ({}),
       update: async () => ({}),
     },
+  };
+
+  const prisma = {
+    // Every read and write goes through here, which is what pins the query to
+    // one school inside the database.
+    forSchool: async <T>(schoolId: string, work: (t: typeof tx) => Promise<T>) => {
+      captured.school = schoolId;
+      return work(tx);
+    },
+    user: tx.user,
   } as unknown as PrismaService;
 
   return new StudentsService(
@@ -47,12 +61,20 @@ function serviceCapturing(captured: { where?: Prisma.UserWhereInput }) {
 }
 
 describe('StudentsService scoping', () => {
-  let captured: { where?: Prisma.UserWhereInput };
+  let captured: { where?: Prisma.UserWhereInput; school?: string };
   let service: StudentsService;
 
   beforeEach(() => {
     captured = {};
     service = serviceCapturing(captured);
+  });
+
+  // The school comes from the verified token and is what the database policy
+  // matches on, so a query can only ever touch one school's rows.
+  it('opens the transaction with the school from the token', async () => {
+    await service.list(teacher);
+
+    expect(captured.school).toBe(SCHOOL_A);
   });
 
   it('only ever looks at students', async () => {
@@ -127,11 +149,10 @@ describe('StudentsService scoping', () => {
 
 describe('StudentsService.create', () => {
   it('refuses a duplicate username within the same school', async () => {
+    const tx = { user: { findFirst: async () => ({ id: 'existing' }), create: async () => ({}) } };
     const prisma = {
-      user: {
-        findFirst: async () => ({ id: 'existing' }),
-        create: async () => ({}),
-      },
+      forSchool: async <T>(_s: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+      user: tx.user,
     } as unknown as PrismaService;
 
     const service = new StudentsService(
@@ -149,7 +170,7 @@ describe('StudentsService.create', () => {
   it('marks a teacher-set password as temporary (SRS 28.6.2)', async () => {
     let createdData: { mustChangePassword?: boolean } = {};
 
-    const prisma = {
+    const tx = {
       user: {
         findFirst: async () => null,
         create: async (args: { data: { mustChangePassword?: boolean } }) => {
@@ -157,6 +178,10 @@ describe('StudentsService.create', () => {
           return { ...args.data, id: 'new', studentProfile: { fullName: 'A' }, createdAt: new Date() };
         },
       },
+    };
+    const prisma = {
+      forSchool: async <T>(_s: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+      user: tx.user,
     } as unknown as PrismaService;
 
     const service = new StudentsService(

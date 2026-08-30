@@ -12,7 +12,12 @@
  */
 import { PrismaClient, SettingScope } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// Maintenance scripts connect with DIRECT_URL, the owner connection. The
+// running application uses the restricted role instead, which the row-level
+// policies apply to. See prisma/migrations/*_tenant_isolation_rls.
+const prisma = new PrismaClient({
+  datasourceUrl: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+});
 
 /** key -> value, with the SRS reference that confirmed it. */
 const GLOBAL_SETTINGS: Array<{ key: string; value: unknown; source: string }> = [

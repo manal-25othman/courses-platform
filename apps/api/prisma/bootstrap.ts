@@ -20,7 +20,12 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 
-const prisma = new PrismaClient();
+// Maintenance scripts connect with DIRECT_URL, the owner connection. The
+// running application uses the restricted role instead, which the row-level
+// policies apply to. See prisma/migrations/*_tenant_isolation_rls.
+const prisma = new PrismaClient({
+  datasourceUrl: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+});
 
 const MIN_PASSWORD_LENGTH = 12;
 

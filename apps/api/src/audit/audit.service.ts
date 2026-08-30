@@ -43,17 +43,24 @@ export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
   async record(entry: AuditEntry): Promise<void> {
+    const data = {
+      action: entry.action,
+      schoolId: entry.schoolId ?? null,
+      actorUserId: entry.actorUserId ?? null,
+      targetType: entry.targetType ?? null,
+      targetId: entry.targetId ?? null,
+      metadata: entry.metadata,
+    };
+
     try {
-      await this.prisma.auditLog.create({
-        data: {
-          action: entry.action,
-          schoolId: entry.schoolId ?? null,
-          actorUserId: entry.actorUserId ?? null,
-          targetType: entry.targetType ?? null,
-          targetId: entry.targetId ?? null,
-          metadata: entry.metadata,
-        },
-      });
+      // Entries belonging to a school are written inside that school's scope.
+      // Entries without one — a failed sign-in for an unknown username, say —
+      // are permitted by the policy because they belong to no school.
+      if (entry.schoolId) {
+        await this.prisma.forSchool(entry.schoolId, (tx) => tx.auditLog.create({ data }));
+      } else {
+        await this.prisma.auditLog.create({ data });
+      }
     } catch (error) {
       this.logger.error(`Could not write audit entry "${entry.action}"`, error as Error);
     }

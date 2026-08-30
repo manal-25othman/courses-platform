@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, UserRole, UserStatus } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TenantClient } from '../prisma/prisma.service';
 import { PasswordService } from '../auth/password.service';
 import { TokenService } from '../auth/token.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
@@ -92,21 +92,36 @@ export class StudentsService {
    * teacher can restore one.
    */
   async list(actor: CurrentUser, includeDeleted = false): Promise<StudentView[]> {
-    const students = await this.prisma.user.findMany({
-      where: {
-        ...this.scopeFor(actor),
-        ...(includeDeleted ? {} : { deletedAt: null }),
-      },
-      include: { studentProfile: true },
-      orderBy: [{ deletedAt: 'asc' }, { createdAt: 'asc' }],
-    });
+    return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+      const students = await tx.user.findMany({
+        where: {
+          ...this.scopeFor(actor),
+          ...(includeDeleted ? {} : { deletedAt: null }),
+        },
+        include: { studentProfile: true },
+        orderBy: [{ deletedAt: 'asc' }, { createdAt: 'asc' }],
+      });
 
-    return students.map((student) => this.toView(student));
+      return students.map((student) => this.toView(student));
+    });
+  }
+
+  /**
+   * The school every query in this service runs under.
+   *
+   * Taken from the verified token. An account with no school cannot reach
+   * school data at all, which is the safe direction.
+   */
+  private schoolOf(actor: CurrentUser): string {
+    if (!actor.schoolId) {
+      throw new ForbiddenException('Your account is not attached to a school.');
+    }
+    return actor.schoolId;
   }
 
   /** Loads one student, or refuses if she is not this actor's to see. */
-  private async findInScope(actor: CurrentUser, studentId: string) {
-    const student = await this.prisma.user.findFirst({
+  private async findInScope(tx: TenantClient, actor: CurrentUser, studentId: string) {
+    const student = await tx.user.findFirst({
       where: { id: studentId, ...this.scopeFor(actor) },
       include: { studentProfile: true },
     });
@@ -121,39 +136,42 @@ export class StudentsService {
   }
 
   async get(actor: CurrentUser, studentId: string): Promise<StudentView> {
-    return this.toView(await this.findInScope(actor, studentId));
+    return this.prisma.forSchool(this.schoolOf(actor), async (tx) =>
+      this.toView(await this.findInScope(tx, actor, studentId)),
+    );
   }
 
   async create(actor: CurrentUser, dto: CreateStudentDto): Promise<StudentView> {
-    if (!actor.schoolId) {
-      throw new ForbiddenException('Your account is not attached to a school.');
-    }
+    const schoolId = this.schoolOf(actor);
+    const passwordHash = await this.passwords.hash(dto.password);
 
-    await this.assertUsernameFree(actor.schoolId, dto.username);
+    const created = await this.prisma.forSchool(schoolId, async (tx) => {
+      await this.assertUsernameFree(tx, schoolId, dto.username);
 
-    const teacherId =
-      actor.role === UserRole.TEACHER ? actor.userId : await this.firstTeacherOf(actor.schoolId);
+      const teacherId =
+        actor.role === UserRole.TEACHER ? actor.userId : await this.firstTeacherOf(tx, schoolId);
 
-    const created = await this.prisma.user.create({
-      data: {
-        schoolId: actor.schoolId,
-        role: UserRole.STUDENT,
-        username: dto.username,
-        email: dto.email ?? null,
-        passwordHash: await this.passwords.hash(dto.password),
-        // A password the teacher chose is temporary; the student sets her own
-        // when she first signs in (SRS 28.6.2).
-        mustChangePassword: true,
-        studentProfile: {
-          create: { fullName: dto.fullName, assignedTeacherId: teacherId },
+      return tx.user.create({
+        data: {
+          schoolId,
+          role: UserRole.STUDENT,
+          username: dto.username,
+          email: dto.email ?? null,
+          passwordHash,
+          // A password the teacher chose is temporary; the student sets her own
+          // when she first signs in (SRS 28.6.2).
+          mustChangePassword: true,
+          studentProfile: {
+            create: { fullName: dto.fullName, assignedTeacherId: teacherId },
+          },
         },
-      },
-      include: { studentProfile: true },
+        include: { studentProfile: true },
+      });
     });
 
     await this.audit.record({
       action: AUDIT_ACTIONS.STUDENT_CREATED,
-      schoolId: actor.schoolId,
+      schoolId,
       actorUserId: actor.userId,
       targetType: 'student',
       targetId: created.id,
@@ -163,21 +181,27 @@ export class StudentsService {
   }
 
   async update(actor: CurrentUser, studentId: string, dto: UpdateStudentDto): Promise<StudentView> {
-    const student = await this.findInScope(actor, studentId);
+    const schoolId = this.schoolOf(actor);
 
-    if (dto.username && dto.username !== student.username) {
-      await this.assertUsernameFree(student.schoolId, dto.username, student.id);
-    }
+    const { student, updated } = await this.prisma.forSchool(schoolId, async (tx) => {
+      const student = await this.findInScope(tx, actor, studentId);
 
-    const updated = await this.prisma.user.update({
-      where: { id: student.id },
-      data: {
-        ...(dto.username ? { username: dto.username } : {}),
-        // An empty string clears the address, since email is optional.
-        ...(dto.email !== undefined ? { email: dto.email || null } : {}),
-        ...(dto.fullName ? { studentProfile: { update: { fullName: dto.fullName } } } : {}),
-      },
-      include: { studentProfile: true },
+      if (dto.username && dto.username !== student.username) {
+        await this.assertUsernameFree(tx, student.schoolId, dto.username, student.id);
+      }
+
+      const updated = await tx.user.update({
+        where: { id: student.id },
+        data: {
+          ...(dto.username ? { username: dto.username } : {}),
+          // An empty string clears the address, since email is optional.
+          ...(dto.email !== undefined ? { email: dto.email || null } : {}),
+          ...(dto.fullName ? { studentProfile: { update: { fullName: dto.fullName } } } : {}),
+        },
+        include: { studentProfile: true },
+      });
+
+      return { student, updated };
     });
 
     await this.audit.record({
@@ -198,12 +222,16 @@ export class StudentsService {
     studentId: string,
     status: UserStatus,
   ): Promise<StudentView> {
-    const student = await this.findInScope(actor, studentId);
+    const { student, updated } = await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+      const student = await this.findInScope(tx, actor, studentId);
 
-    const updated = await this.prisma.user.update({
-      where: { id: student.id },
-      data: { status },
-      include: { studentProfile: true },
+      const updated = await tx.user.update({
+        where: { id: student.id },
+        data: { status },
+        include: { studentProfile: true },
+      });
+
+      return { student, updated };
     });
 
     if (status === UserStatus.DISABLED) {
@@ -231,12 +259,16 @@ export class StudentsService {
    * Reversible by restore (SRS 27.1). Nothing is erased.
    */
   async softDelete(actor: CurrentUser, studentId: string): Promise<StudentView> {
-    const student = await this.findInScope(actor, studentId);
+    const { student, updated } = await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+      const student = await this.findInScope(tx, actor, studentId);
 
-    const updated = await this.prisma.user.update({
-      where: { id: student.id },
-      data: { deletedAt: new Date() },
-      include: { studentProfile: true },
+      const updated = await tx.user.update({
+        where: { id: student.id },
+        data: { deletedAt: new Date() },
+        include: { studentProfile: true },
+      });
+
+      return { student, updated };
     });
 
     await this.tokens.revokeAllForUser(student.id);
@@ -253,12 +285,16 @@ export class StudentsService {
   }
 
   async restore(actor: CurrentUser, studentId: string): Promise<StudentView> {
-    const student = await this.findInScope(actor, studentId);
+    const { student, updated } = await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+      const student = await this.findInScope(tx, actor, studentId);
 
-    const updated = await this.prisma.user.update({
-      where: { id: student.id },
-      data: { deletedAt: null },
-      include: { studentProfile: true },
+      const updated = await tx.user.update({
+        where: { id: student.id },
+        data: { deletedAt: null },
+        include: { studentProfile: true },
+      });
+
+      return { student, updated };
     });
 
     await this.audit.record({
@@ -282,16 +318,19 @@ export class StudentsService {
     actor: CurrentUser,
     studentId: string,
   ): Promise<{ student: StudentView; temporaryPassword: string }> {
-    const student = await this.findInScope(actor, studentId);
     const temporaryPassword = this.generateTemporaryPassword();
+    const passwordHash = await this.passwords.hash(temporaryPassword);
 
-    const updated = await this.prisma.user.update({
-      where: { id: student.id },
-      data: {
-        passwordHash: await this.passwords.hash(temporaryPassword),
-        mustChangePassword: true,
-      },
-      include: { studentProfile: true },
+    const { student, updated } = await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+      const student = await this.findInScope(tx, actor, studentId);
+
+      const updated = await tx.user.update({
+        where: { id: student.id },
+        data: { passwordHash, mustChangePassword: true },
+        include: { studentProfile: true },
+      });
+
+      return { student, updated };
     });
 
     // Any session opened with the old password must end.
@@ -320,11 +359,12 @@ export class StudentsService {
   }
 
   private async assertUsernameFree(
+    tx: TenantClient,
     schoolId: string | null,
     username: string,
     exceptUserId?: string,
   ): Promise<void> {
-    const clash = await this.prisma.user.findFirst({
+    const clash = await tx.user.findFirst({
       where: { schoolId, username, ...(exceptUserId ? { NOT: { id: exceptUserId } } : {}) },
     });
 
@@ -333,8 +373,8 @@ export class StudentsService {
     }
   }
 
-  private async firstTeacherOf(schoolId: string): Promise<string | null> {
-    const teacher = await this.prisma.user.findFirst({
+  private async firstTeacherOf(tx: TenantClient, schoolId: string): Promise<string | null> {
+    const teacher = await tx.user.findFirst({
       where: { schoolId, role: UserRole.TEACHER, deletedAt: null },
     });
 
