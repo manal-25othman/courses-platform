@@ -1,0 +1,57 @@
+// Interactive English Learning Platform — TOP GOAL
+// Phase 0 baseline schema.
+//
+// Only the Settings store exists at this stage. It is the mechanism that keeps
+// the values the SRS requires to stay changeable (passing score, attempt limit,
+// progress weights, result policy, randomization, game effects) out of the code
+// and in the database. See ARCHITECTURE.md section 5.9.
+//
+// Identity, tenancy, content, questions, assessments and progress models are
+// Phase 1 onward and are deliberately NOT defined yet.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Scope at which a setting applies. Resolution runs from the most specific
+/// scope to the least specific: ASSESSMENT -> UNIT -> COURSE -> SCHOOL -> GLOBAL.
+enum SettingScope {
+  GLOBAL
+  SCHOOL
+  COURSE
+  UNIT
+  ASSESSMENT
+
+  @@map("setting_scope")
+}
+
+/// A single configuration value. Never read a rule from a constant in code —
+/// read it from here, so it can be changed without a redeploy (SRS 17, 19, 21, 58).
+model Setting {
+  id        String       @id @default(uuid()) @db.Uuid
+  scope     SettingScope
+  /// Null for GLOBAL. Otherwise the id of the school / course / unit / assessment.
+  scopeId   String?      @map("scope_id") @db.Uuid
+  key       String
+  value     Json
+  /// User who last changed this value. Null for values created by seeding.
+  updatedBy String?      @map("updated_by") @db.Uuid
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  // NOTE: PostgreSQL treats NULLs as distinct, so this constraint does NOT
+  // prevent duplicate GLOBAL rows (where scopeId is null). A partial unique
+  // index must be added in the first real migration:
+  //   CREATE UNIQUE INDEX settings_global_key_key
+  //     ON settings (key) WHERE scope = 'GLOBAL';
+  // Until then the seed script looks rows up explicitly rather than upserting.
+  @@unique([scope, scopeId, key])
+  @@index([key])
+  @@map("settings")
+}

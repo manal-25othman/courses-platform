@@ -1,0 +1,24 @@
+{
+  "name": "courses-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive English Learning Platform — TOP GOAL",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @courses/api",
+    "dev:web": "npm run dev -w @courses/web",
+    "build": "npm run build -w @courses/shared-types && npm run build -w @courses/api && npm run build -w @courses/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run db:generate -w @courses/api",
+    "db:migrate": "npm run db:migrate -w @courses/api",
+    "db:seed": "npm run db:seed -w @courses/api"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
