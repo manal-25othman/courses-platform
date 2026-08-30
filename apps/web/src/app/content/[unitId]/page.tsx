@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState, FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useState, FormEvent } from 'react';
 import { api, ApiError, homeFor, Me, Section, SectionType, UnitDetail, VocabularyItem } from '@/lib/api';
 import { QuestionList } from '@/components/QuestionList';
 
@@ -276,6 +276,7 @@ function VocabularyList({
   const [word, setWord] = useState('');
   const [meaning, setMeaning] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
 
   async function add(event: FormEvent) {
     event.preventDefault();
@@ -332,35 +333,167 @@ function VocabularyList({
             </thead>
             <tbody>
               {unit.vocabularyItems.map((item: VocabularyItem) => (
-                <tr key={item.id}>
-                  <td>{item.wordEn}</td>
-                  <td data-label="Arabic" dir="rtl" lang="ar">
-                    {item.meaningAr ?? '—'}
-                  </td>
-                  <td data-label="Status">
-                    <span className={`badge ${item.status === 'PUBLISHED' ? 'active' : 'disabled'}`}>
-                      {item.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      className="small danger"
-                      onClick={() =>
-                        onRun(
-                          () => api.del(`/content/vocabulary/${item.id}`),
-                          `"${item.wordEn}" was removed.`,
-                        )
-                      }
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
+                <Fragment key={item.id}>
+                  <tr>
+                    <td>{item.wordEn}</td>
+                    <td data-label="Arabic" dir="rtl" lang="ar">
+                      {item.meaningAr ?? '—'}
+                    </td>
+                    <td data-label="Status">
+                      <span
+                        className={`badge ${item.status === 'PUBLISHED' ? 'active' : 'disabled'}`}
+                      >
+                        {item.status === 'PUBLISHED' ? 'Published' : 'Draft'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="row">
+                        <button
+                          className="small"
+                          data-testid={`edit-word-${item.wordEn}`}
+                          aria-label={`Edit the word ${item.wordEn}`}
+                          onClick={() => setEditing(editing === item.id ? null : item.id)}
+                        >
+                          {editing === item.id ? 'Close' : 'Edit'}
+                        </button>
+                        <button
+                          className="small danger"
+                          onClick={() =>
+                            onRun(
+                              () => api.del(`/content/vocabulary/${item.id}`),
+                              `"${item.wordEn}" was removed.`,
+                            )
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {editing === item.id && (
+                    <tr>
+                      <td colSpan={4}>
+                        <WordEditor
+                          item={item}
+                          onCancel={() => setEditing(null)}
+                          onSave={(changes) =>
+                            onRun(
+                              () => api.patch(`/content/vocabulary/${item.id}`, changes),
+                              'Word saved.',
+                            ).then(() => setEditing(null))
+                          }
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Correcting a word that is already in the list.
+ *
+ * Every field the word has, so a spelling or a meaning can be fixed in place.
+ * Deleting and retyping was the only way before, and that threw away the
+ * progress students had recorded against the word.
+ */
+function WordEditor({
+  item,
+  onSave,
+  onCancel,
+}: {
+  item: VocabularyItem;
+  onSave: (changes: Record<string, string | null>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [wordEn, setWordEn] = useState(item.wordEn);
+  const [meaningAr, setMeaningAr] = useState(item.meaningAr ?? '');
+  const [partOfSpeech, setPartOfSpeech] = useState(item.partOfSpeech ?? '');
+  const [exampleSentence, setExampleSentence] = useState(item.exampleSentence ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const trimmed = (value: string) => (value.trim() === '' ? null : value.trim());
+
+  async function save() {
+    setSaving(true);
+    await onSave({
+      wordEn: wordEn.trim(),
+      meaningAr: trimmed(meaningAr),
+      partOfSpeech: trimmed(partOfSpeech),
+      exampleSentence: trimmed(exampleSentence),
+    });
+    setSaving(false);
+  }
+
+  return (
+    <div className="stack" data-testid="word-editor">
+      <div className="row" style={{ alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 10rem' }}>
+          <label htmlFor={`w-${item.id}`}>English word</label>
+          <input
+            id={`w-${item.id}`}
+            value={wordEn}
+            onChange={(e) => setWordEn(e.target.value)}
+            data-testid="edit-wordEn"
+          />
+        </div>
+        <div style={{ flex: '1 1 10rem' }}>
+          <label htmlFor={`m-${item.id}`}>Arabic meaning</label>
+          {/* Arabic reads right-to-left; the interface around it stays English. */}
+          <input
+            id={`m-${item.id}`}
+            value={meaningAr}
+            onChange={(e) => setMeaningAr(e.target.value)}
+            dir="rtl"
+            lang="ar"
+            data-testid="edit-meaningAr"
+          />
+        </div>
+      </div>
+
+      <div className="row" style={{ alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 8rem' }}>
+          <label htmlFor={`p-${item.id}`}>Part of speech</label>
+          <input
+            id={`p-${item.id}`}
+            value={partOfSpeech}
+            onChange={(e) => setPartOfSpeech(e.target.value)}
+            placeholder="noun, verb, adjective…"
+            data-testid="edit-partOfSpeech"
+          />
+        </div>
+        <div style={{ flex: '2 1 14rem' }}>
+          <label htmlFor={`e-${item.id}`}>Example sentence</label>
+          <input
+            id={`e-${item.id}`}
+            value={exampleSentence}
+            onChange={(e) => setExampleSentence(e.target.value)}
+            data-testid="edit-exampleSentence"
+          />
+        </div>
+      </div>
+
+      <p className="muted" style={{ margin: 0 }}>
+        Enter the material exactly as it appears in the curriculum. Do not reword or correct it.
+      </p>
+
+      <div className="row">
+        <button
+          className="primary"
+          onClick={save}
+          disabled={saving || wordEn.trim() === ''}
+          data-testid="save-word"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   );
 }

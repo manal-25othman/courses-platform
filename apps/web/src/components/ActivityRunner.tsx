@@ -206,6 +206,7 @@ export function ActivityRunner({
           key={question.answerId}
           question={question}
           number={index + 1}
+          total={attempt.questions.length}
           finished={finished}
           response={responses[question.answerId]}
           onAnswer={(value) =>
@@ -276,12 +277,14 @@ function PastTries({
 function QuestionCard({
   question,
   number,
+  total,
   finished,
   response,
   onAnswer,
 }: {
   question: AttemptQuestion;
   number: number;
+  total: number;
   finished: boolean;
   response: unknown;
   onAnswer: (value: unknown) => void;
@@ -320,15 +323,26 @@ function QuestionCard({
   return (
     <div className="card stack" data-testid="activity-question">
       <div className="between">
-        <strong>
-          {number}. {question.prompt}
-        </strong>
+        {/*
+          Where she is, kept clear of the question itself. The imported text
+          carries the worksheet's own numbering ("6) The jungle is …"), which
+          is the curriculum's wording and is not ours to rewrite — but putting
+          our count in front of it read as "1. 6)". The count moves here, and
+          the question is shown exactly as the teacher approved it.
+        */}
+        <span className="muted" style={{ fontSize: '.8rem' }} data-testid="question-position">
+          Question {number} of {total}
+        </span>
         {finished && (
           <span className={`badge ${question.isCorrect ? 'active' : 'deleted'}`}>
             {question.isCorrect ? 'Right' : 'Wrong'}
           </span>
         )}
       </div>
+
+      <strong style={{ display: 'block' }} data-testid="question-prompt">
+        {question.prompt}
+      </strong>
 
       {options.length > 0 && (
         <div className="stack" style={{ gap: '.4rem' }}>

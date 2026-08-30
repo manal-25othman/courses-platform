@@ -3,13 +3,13 @@
 import { api, LearnSection } from '@/lib/api';
 
 /**
- * The teaching parts of a unit: grammar, reading, writing.
+ * The grammar for a unit.
  *
- * There is nothing to answer here, so opening one is all there is to record.
- * Whether a section counts towards her progress is decided by the section's
- * own type — data set by the teacher, not a rule written into this screen.
+ * There is nothing to answer here, so reading one is all there is to record.
+ * The API sends only the sections that belong in her flow, so this screen has
+ * no filtering to get wrong.
  */
-export function ReadingSections({
+export function GrammarSections({
   sections,
   onChanged,
 }: {
@@ -19,7 +19,7 @@ export function ReadingSections({
   if (sections.length === 0) {
     return (
       <div className="card">
-        <p className="muted">There are no lessons in this unit yet.</p>
+        <p className="muted">Your teacher has not added the grammar for this unit yet.</p>
       </div>
     );
   }
@@ -40,9 +40,6 @@ export function ReadingSections({
               <span className="muted">· {section.type.displayName}</span>
             </div>
             <div className="row">
-              {section.type.isPaperBased && (
-                <span className="badge disabled">Do this on paper</span>
-              )}
               {section.viewed ? (
                 <span className="badge active" data-testid="section-read">
                   Read
@@ -59,17 +56,11 @@ export function ReadingSections({
             </div>
           </div>
 
-          {section.type.isPaperBased && (
-            <p className="muted" style={{ margin: 0 }}>
-              This one is practised in your exercise book. It is here so you can see what to do.
-            </p>
-          )}
-
           {section.body ? (
             <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{section.body}</p>
           ) : (
             <p className="muted" style={{ margin: 0 }}>
-              Your teacher has not added the text for this lesson yet.
+              Your teacher has not added the text for this grammar lesson yet.
             </p>
           )}
 

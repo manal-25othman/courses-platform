@@ -419,6 +419,59 @@ describe('LearningService marks from the frozen copy, not the live question', ()
   });
 });
 
+/**
+ * Her flow is Words, Grammar, Activity — nothing else (client, 2026-08-30).
+ *
+ * Writing, Handwriting, Reading and the rest are excluded in the query, so
+ * they are absent from what she is sent rather than hidden by the screen. The
+ * test below asserts on the filter the service builds, because that is where
+ * the exclusion has to live to be real.
+ */
+describe('LearningService serves only the grammar step', () => {
+  function serviceCapturingSectionFilter(captured: { where?: Record<string, unknown> }) {
+    const tx = {
+      unit: { findFirst: async () => ({ id: 'u1', title: 'Unit', description: null }) },
+      unitSection: {
+        findMany: async (args: { where: Record<string, unknown> }) => {
+          captured.where = args.where;
+          return [];
+        },
+        findFirst: async (args: { where: Record<string, unknown> }) => {
+          captured.where = args.where;
+          return null;
+        },
+      },
+      vocabularyItem: { findMany: async () => [] },
+      question: { count: async () => 0 },
+      vocabularyProgress: { findMany: async () => [] },
+      sectionProgress: { findMany: async () => [] },
+    };
+
+    const prisma = {
+      forSchool: async <T>(_s: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+    } as unknown as PrismaService;
+
+    return new LearningService(prisma, settingsWith(), new QuestionEngineService());
+  }
+
+  it('asks only for sections that belong to the grammar step', async () => {
+    const captured: { where?: Record<string, unknown> } = {};
+    const service = serviceCapturingSectionFilter(captured);
+
+    await service.getUnit(student, 'u1');
+
+    expect(captured.where?.type).toEqual({ progressComponent: 'grammar' });
+  });
+
+  it('refuses to record a read against a section outside that step', async () => {
+    const captured: { where?: Record<string, unknown> } = {};
+    const service = serviceCapturingSectionFilter(captured);
+
+    await expect(service.markSectionViewed(student, 's1')).rejects.toThrow(/not found/i);
+    expect(captured.where?.type).toEqual({ progressComponent: 'grammar' });
+  });
+});
+
 describe('LearningService access', () => {
   it('refuses a teacher, who has her own preview', async () => {
     const service = serviceOver({});

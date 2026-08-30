@@ -11,7 +11,7 @@ import {
   UnitProgress,
 } from '@/lib/api';
 import { VocabularyCards } from '@/components/VocabularyCards';
-import { ReadingSections } from '@/components/ReadingSections';
+import { GrammarSections } from '@/components/GrammarSections';
 import { ActivityRunner } from '@/components/ActivityRunner';
 
 type Tab = 'vocabulary' | 'grammar' | 'activity';
@@ -91,9 +91,9 @@ export default function LearnUnitPage() {
     );
   }
 
-  // Sections that teach rather than test. Handwriting and the like are shown
-  // for reference, marked so she knows they belong on paper.
-  const readingSections = unit.sections;
+  // The grammar the teacher has approved. The API sends nothing else: her
+  // flow is Words, Grammar, Activity.
+  const grammarSections = unit.sections;
 
   return (
     <main className="page stack">
@@ -138,7 +138,7 @@ export default function LearnUnitPage() {
           onClick={() => setTab('grammar')}
           data-testid="tab-grammar"
         >
-          Lessons ({readingSections.length})
+          Grammar ({grammarSections.length})
         </button>
         <button
           role="tab"
@@ -155,7 +155,7 @@ export default function LearnUnitPage() {
       )}
 
       {tab === 'grammar' && (
-        <ReadingSections sections={readingSections} onChanged={load} />
+        <GrammarSections sections={grammarSections} onChanged={load} />
       )}
 
       {tab === 'activity' && (

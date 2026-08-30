@@ -16,6 +16,18 @@ import { ComponentProgress, QuestionSnapshot, UnitProgress } from './learning.ty
 type ProgressWeights = Record<string, number>;
 
 /**
+ * The one kind of teaching section a student is given.
+ *
+ * Her flow is Words, Grammar, Activity — nothing else (client, 2026-08-30).
+ * This is matched against `section_types.progress_component` rather than
+ * against a section key, so a school that later decides another kind of
+ * section belongs in the grammar step changes that column instead of this
+ * file. The rule stays: what she is shown and what counts towards her grammar
+ * progress are the same set, never two lists that can drift apart.
+ */
+const STUDENT_SECTION_COMPONENT = 'grammar';
+
+/**
  * The student's own journey through a unit.
  *
  * Two rules run through everything here:
@@ -107,7 +119,14 @@ export class LearningService {
 
       const [sections, vocabulary, questionCount] = await Promise.all([
         tx.unitSection.findMany({
-          where: { unitId, status: ContentStatus.PUBLISHED },
+          where: {
+            unitId,
+            status: ContentStatus.PUBLISHED,
+            // Writing, Handwriting, Reading and the rest are not part of her
+            // flow. They are excluded here rather than hidden by the screen,
+            // so they are absent from the answer, not merely unrendered.
+            type: { progressComponent: STUDENT_SECTION_COMPONENT },
+          },
           orderBy: { orderIndex: 'asc' },
           include: { type: true, media: true },
         }),
@@ -240,7 +259,11 @@ export class LearningService {
 
     return this.prisma.forSchool(schoolId, async (tx) => {
       const section = await tx.unitSection.findFirst({
-        where: { id: sectionId, status: ContentStatus.PUBLISHED },
+        where: {
+          id: sectionId,
+          status: ContentStatus.PUBLISHED,
+          type: { progressComponent: STUDENT_SECTION_COMPONENT },
+        },
       });
 
       if (!section) throw new NotFoundException('Section not found.');
@@ -564,7 +587,9 @@ export class LearningService {
         : 0;
 
       // Which sections count is a property of the section type, held as data.
-      const grammarSections = sections.filter((s) => s.type.progressComponent === 'grammar');
+      const grammarSections = sections.filter(
+        (s) => s.type.progressComponent === STUDENT_SECTION_COMPONENT,
+      );
       const grammarIds = grammarSections.map((s) => s.id);
       const grammarViewed = grammarIds.length
         ? await tx.sectionProgress.count({
