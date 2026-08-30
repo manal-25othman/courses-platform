@@ -68,9 +68,11 @@ This is what makes "80%", "2 attempts", "progress weights", "does a game count t
 
 ---
 
-## 2. Recommended Technology Stack **[D — requires your approval]**
+## 2. Technology Stack — **[C] CONFIRMED (client-approved)**
 
-The SRS does not name any technology. This is therefore a proposal, not a requirement.
+The SRS does not name any technology, so this was a technical decision requiring client approval under §59.4. **Approved by the client: Option A — Next.js + NestJS + PostgreSQL, separate web and API deployments, token-based authentication, API designed for future mobile reuse (§43).**
+
+Client context recorded with the decision: the client is a beginner and asked for the simplest maintainable approach. Option A carries more operational overhead than Option B, so the following simplifications are part of the approved decision: a single monorepo (not two repositories), managed hosting for both apps (no server administration), Prisma-managed migrations, and a shared types package to prevent web/API drift.
 
 ### 2.1 Primary recommendation
 
@@ -95,7 +97,7 @@ The SRS does not name any technology. This is therefore a proposal, not a requir
 | **A — Separate API (recommended)** | NestJS API deployed separately; Next.js consumes it | Mobile app (§43) consumes the *identical* API with zero refactor; clean security boundary; easiest to reason about tenant isolation | Two deployables, slightly more DevOps |
 | **B — Next.js fullstack** | API routes inside Next.js | One deployable, faster initial setup, lower hosting cost | Mobile readiness becomes a later refactor risk; business logic tends to leak into UI code |
 
-**My recommendation: Option A.** §43 is an explicit requirement, and Option B tends to satisfy it only on paper. However Option B is genuinely cheaper to run and is defensible for a single-school MVP.
+**CONFIRMED: Option A**, approved by the client. §43 is an explicit requirement, and Option B tends to satisfy it only on paper.
 
 **Reversibility note:** Option B → A later is a real refactor (weeks). Option A → B is trivial. This is why I recommend A: it is the *less* irreversible choice. This decision needs your sign-off before Phase 0.
 
@@ -1127,7 +1129,7 @@ Each phase is independently reviewable. **No phase begins before you approve thi
 
 | Phase | Scope | Depends on |
 |---|---|---|
-| **0. Foundation** | Repo setup, stack scaffolding, DB connection, CI, migrations baseline, settings module | Stack approval **[D §37.8]** |
+| **0. Foundation** | Repo setup, stack scaffolding, DB connection, CI, migrations baseline, settings module | ✔ Unblocked — stack confirmed (§37.8) |
 | **1. Identity & Tenancy** | Schools, users, roles, login, tokens, RBAC, tenant scoping + RLS, audit log | Student recovery decision **[T §36.1]** |
 | **2. Student Management** | Teacher CRUD over students, disable/delete, password reset, roster | Phase 1 |
 | **3. Content Model & CMS** | Courses, units, vocabulary, grammar; teacher content CRUD; publishing | Phase 1 |
@@ -1265,8 +1267,10 @@ Browser TTS (free, quality varies) vs. server-side TTS (consistent, ongoing cost
 ### 37.7 Initial content entry workflow (§56)
 Developer-run import from Word, or manual entry by the teacher through the CMS? Affects Phase 3–4 effort.
 
-### 37.8 Technology stack and deployment — **blocks Phase 0**
-Approval of §2 (stack, and Option A vs. B) and §34 (hosting target).
+### 37.8 Technology stack — **[C] CONFIRMED — no longer blocks Phase 0**
+Client approved Option A on 2026-08-30: Next.js (web) + NestJS (API) + PostgreSQL, separate web and API deployments, token-based authentication, API designed for future mobile reuse.
+
+**Still open:** the hosting *provider* (§34) is a separate decision and remains unresolved. It does not block Phase 0 — it is needed before the first deployment, around the end of Phase 1.
 
 ### 37.9 Teacher email / recovery channel
 §28 requires teacher password recovery, but no email field is specified. Confirm that teacher accounts will have an email address.
@@ -1306,7 +1310,8 @@ The TOP GOAL content has not yet been supplied. It is required before Phase 4.
 | T-24 | **Student password recovery channel** | §28 | **New — blocks Phase 1 (§37.1)** |
 | T-25 | **Teacher email/recovery channel** | §28 | **New (§37.9)** |
 | T-26 | **Content shared vs. per-school** | §34 | **New (§37.2)** |
-| T-27 | **Technology stack + hosting** | — | **New — blocks Phase 0 (§37.8)** |
+| T-27 | Technology stack (Option A) | — | **RESOLVED — client-approved, see §2 / §37.8** |
+| T-27b | Hosting provider | §34 | Open — needed before first deploy, not Phase 0 |
 | T-28 | Data retention/deletion policy for minors | §29.3 | Not specified in SRS |
 
 ---
