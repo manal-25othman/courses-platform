@@ -1,7 +1,7 @@
 # 🏗️ System Architecture & Technical Design
 # Interactive English Learning Platform — TOP GOAL
 
-**Status:** Planning / Architecture Phase — awaiting client approval
+**Status:** ✅ **ARCHITECTURE APPROVED BY CLIENT — 2026-08-30.** Implementation may proceed phase by phase.
 **Source of Truth:** `docs/SRS.md` (SRS v1.1, sections 1–60)
 **Deliverable type:** Design document only. No implementation code, no UI, no database created.
 
@@ -30,6 +30,36 @@ Every statement in this document is labelled by its authority level, following S
 
 كل هذه القيم تُقرأ من جدول إعدادات، ويمكن تعديلها لاحقًا دون إعادة بناء النظام.
 البنود المؤجلة (TBD) موضحة في القسم 36، والأسئلة التي أحتاج قرارك فيها في القسم 37.
+
+### 0.2 Confirmed Decisions Log
+
+Decisions approved by the client during architecture review. Each is now **[C] Confirmed** and is no longer open.
+
+| Date | Ref | Decision |
+|---|---|---|
+| 2026-08-30 | SRS §39 | English-only interface for **all** roles (Student, Teacher, Admin); no Arabic UI text anywhere. Arabic permitted in educational *content* only |
+| 2026-08-30 | §37.8 / §2 | Stack: Next.js + NestJS + PostgreSQL, separate web and API deployments, token-based auth, API built for future mobile reuse |
+| 2026-08-30 | SRS §28.1–28.4 | Dual password recovery: student self-service by email **and** teacher-assisted reset. Student email **optional**. No phone or guardian contact. Username alone never resets a password |
+| 2026-08-30 | SRS §28.6 | Generic "Forgot Password" response for all students; teacher-issued passwords are temporary and force a change at first login; all resets audit-logged |
+| 2026-08-30 | SRS §28.5 | Teacher email **required**; teacher uses the same secure self-service recovery mechanism |
+| 2026-08-30 | SRS §27.1 | Delete Student = reversible hide. Records preserved, account restorable. Disable Student stays a separate action. Permanent erasure out of scope |
+| 2026-08-30 | §4.1 | Tenant isolation via `school_id` + database-level protection |
+| 2026-08-30 | §9.4 | UUIDs / non-sequential public identifiers |
+| 2026-08-30 | §4.3 | Assessment attempt snapshots — historical results stay tied to the exact questions shown |
+| 2026-08-30 | §7 | Roles stored as data for scalability; permissions centrally enforced and not user-editable |
+| 2026-08-30 | §55 | Randomization: shuffle question order and answer options on each attempt; matching questions shuffle **both** columns |
+| 2026-08-30 | §36, §53 | No Admin screens in v1; data model stays Admin-ready for future expansion |
+| 2026-08-30 | §31 | Excel import remains out of scope |
+| **2026-08-30** | **whole document** | ✅ **Architecture approved as a whole by the client**, based on all confirmed decisions recorded in SRS.md and ARCHITECTURE.md |
+| 2026-08-30 | §7 | Pronunciation uses the browser's built-in voice for v1; swappable later |
+| 2026-08-30 | §22 | A vocabulary word is learned when the student has seen it **and** played its audio |
+| 2026-08-30 | §19 | **Highest** assessment score is the official result |
+| 2026-08-30 | §21 | Progress weighted equally: 25% vocabulary / 25% grammar / 25% activities / 25% assessment |
+| 2026-08-30 | §9 | Activities may be retried without limit; §18's 2-attempt cap applies to assessments only |
+| 2026-08-30 | §13.1 | Games do **not** affect unit completion, assessment scoring or progress — resolves the §16 vs §56 conflict |
+| 2026-08-30 | §37.7 | Content import: client supplies TOP GOAL Word files; developer converts and imports without inventing, changing or adding curriculum material; client reviews and approves before students use it |
+| 2026-08-30 | §37.2 | Shared content library. Master TOP GOAL content owned and controlled by the client; other schools may use it but not modify it; school-specific customisation via a separate copy that leaves the master untouched |
+| 2026-08-30 | §34 | Hosting: **Railway** (Next.js + NestJS API), **Supabase** (PostgreSQL), **Resend** (password-reset email). Supabase **Free** during development with test data; plan, backups and Saudi data requirements to be reviewed and upgraded if necessary **before** the pilot with real student data |
 
 ---
 
@@ -172,9 +202,9 @@ A **modular monolith**, not microservices. Rationale: the SRS describes one scho
 
 ## 4. Database Architecture
 
-### 4.1 Strategy **[P]**
+### 4.1 Strategy — **[C] CONFIRMED (client-approved)**
 
-**Single database, shared schema, tenant discriminator column (`school_id`).**
+**Single database, shared schema, tenant discriminator column (`school_id`), with database-level protection.**
 
 Alternatives considered:
 
@@ -196,8 +226,8 @@ If a future client demands physical separation, the `school_id` design migrates 
 
 ### 4.3 Data lifecycle notes
 
-- **Deletion (§27 "Delete Student"):** soft delete by default — hard deletion would orphan attempts, messages and progress history. Hard delete offered as an explicit, audited action. **[P]**
-- **Content edits vs. history (§30):** attempts store a *snapshot* of the question as answered. Editing a question later must never retroactively change a past result. This is a correctness requirement I am flagging because the SRS allows content editing (§30) and requires stored results (§46) simultaneously.
+- **Deletion (§27.1 "Delete Student"):** **[C] CONFIRMED — reversible soft delete.** Deleting a student hides her from normal teacher lists and blocks her login, while preserving assessment results, progress, answers, messages and feedback; the account can be restored later. **Permanent erasure is explicitly out of scope at this stage** (§27.1). "Disable Student" remains a separate action: it blocks login but keeps her visible in teacher lists. Restore and delete actions are written to `audit_log`.
+- **Content edits vs. history (§30):** **[C] CONFIRMED (client-approved).** Attempts store a *snapshot* of each question exactly as it was shown to the student. Editing a question later must never retroactively change a past result. Required because the SRS allows content editing (§30) and requires stored results (§46) simultaneously.
 - **Timestamps:** all tables carry `created_at` / `updated_at`; UTC storage.
 
 ---
@@ -266,12 +296,22 @@ Notation: `PK` primary key, `FK` foreign key, `JSONB` flexible structured column
 
 ### 5.2 Content (§29–§32, §45)
 
-**`courses`** — container for the curriculum (currently: TOP GOAL, Grade 6)
+**`courses`** — container for the curriculum (currently: TOP GOAL, Grade 6). **[C] CONFIRMED shared-library model (§37.2)**
 | Field | Notes |
 |---|---|
 | id `PK`, title, description | |
-| owner_school_id `FK` | **nullable** — null = shared library. See §37 open decision |
+| is_master | true for the original TOP GOAL master content |
+| owner_user_id `FK` | the content owner (the client). Only this owner may edit master content |
+| source_course_id `FK` | **nullable** — set on a derived school-specific copy, pointing at the master it was copied from |
+| owner_school_id `FK` | **nullable** — null = shared master library; set on a school-specific copy |
 | status | draft / published |
+
+**`school_courses`** — which schools use which course (shared master, or their own copy)
+| Field | Notes |
+|---|---|
+| id `PK`, school_id `FK`, course_id `FK` | a school consuming a course |
+
+**Confirmed rules (§37.2):** the master content is owned and controlled by the client. Other schools may **use** the shared curriculum but **cannot modify the master**. Write access to a master course is restricted to its `owner_user_id`; every other school's access is read-only. Future school-specific customisation is done by **copying** the master into a new course row (`source_course_id` set, `owner_school_id` set), never by editing the master.
 
 **`units`** — §6. **Count is data, not code.**
 | Field | Notes |
@@ -499,7 +539,7 @@ User    ──1:N── Notification / PushSubscription
 
 ## 7. User Roles & Permissions
 
-Roles are **data** (`users.role` + a permission map), so a future role (e.g. School Admin, Parent) does not require restructuring (§44).
+**[C] CONFIRMED (client-approved).** Roles are **data** (`users.role` + a permission map), so a future role (e.g. a second teacher, a School Admin) does not require restructuring (§44). **Permissions themselves remain centrally enforced in the API and cannot be altered by any user** — storing roles as data makes the *set of roles* extensible, it does **not** make permissions user-editable. Only an authorised platform-level change may alter what a role is permitted to do.
 
 | Capability | Student | Teacher | Admin |
 |---|:--:|:--:|:--:|
@@ -549,10 +589,18 @@ This design is the reason a mobile app needs **zero** authentication rework late
 | Flow | Status |
 |---|---|
 | Teacher resets a student's password from the dashboard | **[C]** Fully specified in §28. Generates a single-use token or a temporary password; forces change at next login **[P]**; written to `audit_log`. |
-| Teacher recovers her own password | **[C]** required by §28. Standard email-based reset — **but no teacher email field is specified in the SRS** → see §36. |
-| **Student self-service recovery** | **[T] BLOCKED — see §36.1.** §28 grants students self-recovery, but §27 defines a student account as Name + Username + Password only, with **no email or phone**. There is no channel to deliver a reset. This needs your decision. |
+| Teacher recovers her own password | **[C] CONFIRMED (§28.5).** Teacher email is **required** (not optional, unlike students). She uses the same secure self-service reset mechanism as §28.1. `users.email` is non-null for role `teacher`, enforced at the model level. |
+| **Student self-service recovery** | **[C] CONFIRMED (§28.1).** Student selects "Forgot Password"; if an email is associated with her account, a secure single-use reset link/code is sent to it and she sets a new password. Student email is **optional** (§28.3) — accounts without one fall back to teacher-assisted recovery. Username alone never triggers a reset (§28.4). |
 
-I have **not** invented a recovery channel for students. The architecture supports several (see §36.1) and the decision is yours.
+**Design consequences of the confirmed §28 behaviour:**
+
+- `users.email` is **nullable** for students — an account is valid without one (§28.3).
+- Both paths converge on the same `password_reset_tokens` mechanism: single-use, short-lived, stored hashed, with `issued_by` recording `self` or the teacher's user id.
+- **[C]** **Username alone never resets a password** (§28.4). The "Forgot Password" screen returns the *same* generic response whether or not an email exists on the account (§28.6.1, client-approved), so it cannot be used to discover which students have email addresses.
+- Because the response is neutral, the screen always shows both routes: a reset email is sent if one is registered, and the student is told to ask her teacher if no email arrives. This satisfies §28.1 and §28.2 without leaking account information.
+- **[C]** A teacher-issued password is **temporary** and **forces a password change at first login** (§28.6.2, client-approved). **[C]** All reset actions are written to `audit_log` (§28.6.3, client-approved).
+- **[P]** Token lifetime, single-use enforcement and rate limiting on the reset endpoint are standard security implementation details, configurable via Settings; the SRS does not fix these values.
+- No phone number and no guardian contact is collected anywhere in the model (§28.4).
 
 ### 8.4 Anti-abuse **[P]**
 
@@ -590,7 +638,7 @@ Every endpoint declares its required role and policy. An endpoint with no declar
 
 Object IDs are never trusted. Every fetch is `WHERE id = ? AND school_id = ? AND <ownership>` — a student requesting another student's attempt ID receives **404**, not 403 (avoids confirming the record exists). This is the direct implementation of the §37 example.
 
-**[P]** Recommendation: UUIDs rather than sequential integers for public identifiers, so IDs are not guessable/enumerable.
+**[C] CONFIRMED (client-approved):** UUIDs / non-sequential identifiers for all public identifiers, so IDs are not guessable or enumerable. This is a second layer behind the ownership checks above, not a replacement for them.
 
 ---
 
@@ -1130,7 +1178,7 @@ Each phase is independently reviewable. **No phase begins before you approve thi
 | Phase | Scope | Depends on |
 |---|---|---|
 | **0. Foundation** | Repo setup, stack scaffolding, DB connection, CI, migrations baseline, settings module | ✔ Unblocked — stack confirmed (§37.8) |
-| **1. Identity & Tenancy** | Schools, users, roles, login, tokens, RBAC, tenant scoping + RLS, audit log | Student recovery decision **[T §36.1]** |
+| **1. Identity & Tenancy** | Schools, users, roles, login, tokens, RBAC, tenant scoping + RLS, audit log | ✔ Unblocked — recovery confirmed for students (§28.1–28.4) and teacher (§28.5) |
 | **2. Student Management** | Teacher CRUD over students, disable/delete, password reset, roster | Phase 1 |
 | **3. Content Model & CMS** | Courses, units, vocabulary, grammar; teacher content CRUD; publishing | Phase 1 |
 | **4. Question Engine** | Type registry, handlers for the 9 current types, authoring, validation, randomization | Phase 3 · Curriculum material |
@@ -1180,15 +1228,24 @@ These are **not optional**, because §37 states the requirement in adversarial t
 
 ---
 
-## 34. Deployment **[D — target not yet chosen]**
+## 34. Deployment — **[C] CONFIRMED (client-approved)**
 
-The SRS does not specify hosting. Options, to be decided with you:
+Client decision (2026-08-30): fully managed services, no server administration.
 
-| Option | Fit |
-|---|---|
-| Managed platforms (e.g. Vercel + a managed Node host + managed PostgreSQL) | Fastest to operate, low maintenance, good default for this size |
-| Single VPS with containers | Cheapest at small scale, more manual operations, full control |
-| Regional hosting | May matter if data residency is required — **not stated in the SRS** |
+| Component | Provider | Plan |
+|---|---|---|
+| Web (Next.js) | **Railway** | Hobby |
+| API (NestJS) | **Railway** | Hobby (same project) |
+| Database (PostgreSQL) | **Supabase** | **Free during development/testing with fake data** |
+| Password-reset email | **Resend** | Free tier |
+
+**Approved staging of cost:** development and testing run on Supabase Free (~$5/month total, Railway only). **Before the pilot with real student data**, the client will review the Supabase plan, backup requirements and applicable **Saudi data/privacy requirements**, and upgrade if necessary (Supabase Pro is ~$25/month and adds daily backups with 7-day retention and no project pausing).
+
+**Rationale recorded:** Supabase was chosen over Neon because the client already knows it, and its Row-Level-Security-first design directly serves §12 tenant isolation and §37 database-level protection. Vercel was excluded on two grounds: its Hobby tier prohibits commercial use (which covers a paid developer writing the code), and it is a poor host for the separate NestJS API confirmed in §37.8.
+
+**Supabase is used as the database only.** Supabase Auth is **not** used — authentication remains the custom implementation in §8, because §27/§28 require username-first login with an optional email, which does not fit an email-centric auth provider.
+
+⚠️ **Open risk:** none of these providers host data in Saudi Arabia. A pilot with 90 real students *is* real student data, so the residency check must complete **before the pilot begins**, not before a later production date.
 
 Regardless of target, the following are **[P]** requirements of the deployment design:
 
@@ -1240,40 +1297,74 @@ Stated explicitly so you can correct any of them. **None of these is treated as 
 
 These are **not** design gaps; they are points where the SRS is deliberately open (§55, §56) or silent, and where §57 forbids me to decide silently. Development can begin before all are answered, except where noted.
 
-### 37.1 Student password recovery channel — **blocks Phase 1**
-§28 grants students self-service recovery, but §27 defines student accounts with **no email or phone**. Options:
-- (a) Teacher-only reset — students always ask the teacher (§28 already grants this; simplest and safest for minors).
-- (b) Add an optional student email field.
-- (c) Add a guardian email field.
-- (d) Security-question style recovery.
+### 37.1 Student password recovery — **[C] CONFIRMED — no longer blocks Phase 1**
 
-*My recommendation: (a) for the MVP, with (b) available later.* But this is your call, since (a) narrows a Confirmed requirement.
+Client decision (2026-08-30): **both** recovery methods are required, per SRS §28.
 
-### 37.2 Is content shared across schools or copied per school?
-Affects whether a future School B sees the same TOP GOAL content, and whether one teacher's edits affect another school. *Recommendation: shared course library for now, since only one school exists — the model supports per-school copies later.*
+1. **Self-service (§28.1)** — "Forgot Password" sends a secure reset link/code to the student's email, if one is associated with her account.
+2. **Teacher-assisted (§28.2)** — the teacher resets a student's password from her dashboard; always available, and the route used when the student has no email or cannot complete self-service.
 
-### 37.3 Official result policy (§19) — highest vs. latest
-Both scores are stored either way. A default must be selected so assessments can run. **Which do you want as the interim default?**
+Student email is **optional** (§28.3). No phone numbers and no parent/guardian contact information are collected (§28.4). A username alone must never trigger a password reset (§28.4).
 
-### 37.4 Progress weights (§21)
-No weighting is proposed here. A placeholder distribution is needed to render a progress bar. **Do you want to decide the weights now, or approve a clearly-labelled provisional split until you decide?**
+See §8.3 for the design consequences.
 
-### 37.5 Audio approach (§7, §55)
-Browser TTS (free, quality varies) vs. server-side TTS (consistent, ongoing cost). **Is there a budget for per-word TTS?**
+### 37.2 Content sharing model — **[C] CONFIRMED**
 
-### 37.6 Games (§13, §56) — and a conflict to resolve
-§16 lists unit completion as Vocabulary + Grammar + Activity + Assessment — **games are not among them**. But §56 lists "whether games affect unit completion" as still open. **These two statements are in tension.** I have implemented §16 as written (games do **not** gate completion) and left the flag configurable — please confirm this reading. Also open: game types, count per unit, effect on score/progress.
+Client decision (2026-08-30):
 
-### 37.7 Initial content entry workflow (§56)
-Developer-run import from Word, or manual entry by the teacher through the CMS? Affects Phase 3–4 effort.
+- The TOP GOAL curriculum uses a **shared content library**.
+- The original/master content is **owned and controlled by the client**.
+- Schools may **use** the shared curriculum but **cannot modify the master content**.
+- Future school-specific customisation is possible by creating a **separate copy/version**, leaving the master untouched.
+- The model stays flexible for future expansion.
+
+Enforced at the API layer by ownership policy (§9.3), not only by UI. See §5.2 for the `courses` / `school_courses` structure.
+
+### 37.3 Official result policy — **[C] CONFIRMED**
+
+Client decision (2026-08-30): **the highest score is the official result** (§19). All attempts and their scores remain stored. The policy stays pluggable and changeable without a rebuild.
+
+### 37.4 Progress weights — **[C] CONFIRMED**
+
+Client decision (2026-08-30): **equal weighting — 25% vocabulary, 25% grammar, 25% activities, 25% assessment** (§21). Stored as editable configuration, not hard-coded. Completion (§16) remains a separate, stricter rule than the displayed percentage.
+
+### 37.5 Audio approach — **[C] CONFIRMED for v1**
+
+Client decision (2026-08-30): the initial version uses the **browser's built-in voice** (free, no setup, no per-word cost). The `AudioProvider` adapter (§17) allows a later switch to a server-side voice service without rework.
+
+⚠️ **Pilot action:** browser voice quality varies by device, and some Android handsets have weak English voices. Test on the devices the students actually use, early in the pilot.
+
+### 37.6 Games — **[C] CONFIRMED (conflict resolved)**
+
+The SRS contained a genuine contradiction: §16 lists unit completion as Vocabulary + Grammar + Activity + Assessment, with games absent, while §56 listed "whether games affect unit completion" as still open.
+
+Client decision (2026-08-30), now recorded as SRS §13.1: **games do not affect unit completion, assessment scoring, or progress.** They exist for motivation only. §16 stands as written.
+
+**Still TBD:** game types and the number of games per unit (Phase 11).
+
+### 37.7 Initial content entry workflow — **[C] CONFIRMED**
+
+Client decision (2026-08-30): **developer-run import, client-reviewed.**
+
+- The client provides the TOP GOAL Word files when the content-import phase is reached.
+- The developer converts and imports the content **without inventing, changing or adding any curriculum material** (§32, §57).
+- The client **reviews and approves** the imported content **before students use it**. Nothing reaches students unapproved.
+- Imported content stays in `draft` status until the client approves it for publication.
+
+**Dependency:** answer keys are required for every question, including accepted alternative answers for typed responses (spelling, short answer, grammar transformation). If the Word files do not contain them, they must be supplied separately before Phase 4 grading can be validated.
 
 ### 37.8 Technology stack — **[C] CONFIRMED — no longer blocks Phase 0**
 Client approved Option A on 2026-08-30: Next.js (web) + NestJS (API) + PostgreSQL, separate web and API deployments, token-based authentication, API designed for future mobile reuse.
 
 **Still open:** the hosting *provider* (§34) is a separate decision and remains unresolved. It does not block Phase 0 — it is needed before the first deployment, around the end of Phase 1.
 
-### 37.9 Teacher email / recovery channel
-§28 requires teacher password recovery, but no email field is specified. Confirm that teacher accounts will have an email address.
+### 37.9 Teacher account email — **[C] CONFIRMED**
+
+Client decision (2026-08-30): **teacher email is required**, and teacher self-service recovery uses the same secure mechanism confirmed for students in §28.1.
+
+Rationale recorded with the decision: the teacher has no higher role to reset her password in the MVP (§36, §53 keep Admin structural only), so an email channel is her only recovery route. Asymmetry with §28.3 (optional student email) is deliberate — students have the teacher as a fallback; the teacher has none.
+
+**Deferred by the client:** the **email delivery service/provider** is a separate implementation and hosting decision, to be taken with §34. It is not a Phase 0 or Phase 1 design blocker, but it must be in place before either §28.1 or §28.5 self-service recovery can actually deliver mail. Tracked as T-29.
 
 ### 37.10 Curriculum material
 The TOP GOAL content has not yet been supplied. It is required before Phase 4.
@@ -1284,34 +1375,36 @@ The TOP GOAL content has not yet been supplied. It is required before Phase 4.
 
 | ID | Item | SRS | Status |
 |---|---|---|---|
-| T-01 | Highest vs. latest official score | §19, §56 | Open — pluggable policy ready |
-| T-02 | Progress weights (Vocabulary/Grammar/Activity/Assessment) | §21, §56 | Open — configurable formula ready |
-| T-03 | Overall progress formula | §21, §56 | Open |
+| T-01 | Highest vs. latest official score | §19, §56 | **RESOLVED — HIGHEST score is official (§19)** |
+| T-02 | Progress weights | §21, §56 | **RESOLVED — equal 25/25/25/25, stored as config (§21)** |
+| T-03 | Overall progress formula | §21, §56 | **RESOLVED — aggregate of unit progress using the equal weighting (§21)** |
 | T-04 | Points calculation | §14, §56 | Open — ledger ready |
 | T-05 | Stars calculation | §14, §56 | Open — threshold-based |
 | T-06 | Final game types | §13, §56 | Open — container ready |
 | T-07 | Games per unit | §13, §56 | Open |
-| T-08 | Whether games affect completion/score/progress | §13, §56 | Open — **see §37.6 conflict** |
+| T-08 | Whether games affect completion/score/progress | §13.1, §56 | **RESOLVED — games do NOT affect completion, scoring or progress (§13.1); §16/§56 conflict closed** |
 | T-09 | Branding: logo, colors, typography | §41, §56 | Open — design tokens ready |
-| T-10 | Admin dashboard scope | §36, §56 | Open — structure ready |
-| T-11 | School/teacher management workflows | §56 | Open |
-| T-12 | Initial content entry workflow | §56 | Open — see §37.7 |
-| T-13 | Excel import in MVP | §31, §56 | Deferred, extension point ready |
+| T-10 | Admin dashboard scope | §36, §56 | **RESOLVED — no Admin screens in v1; data model stays Admin-ready (§36, §53)** |
+| T-11 | School/teacher management workflows | §56 | **RESOLVED — deferred with Admin UI; architecture remains ready** |
+| T-12 | Initial content entry workflow | §56 | **RESOLVED — developer import, client review before student use (§37.7)** |
+| T-13 | Excel import in MVP | §31, §56 | **RESOLVED — out of scope, client-confirmed (§31)** |
 | T-14 | Content import format | §56 | Open — canonical format proposed |
 | T-15 | Push notification provider | §25, §56 | Open — adapter ready |
 | T-16 | Notification permission flow | §56 | Open |
 | T-17 | Notification settings | §56 | Open |
-| T-18 | Exact randomization behaviour | §55 | Configurable |
-| T-19 | Matching items randomized independently | §55 | Configurable flag |
-| T-20 | Activity retry behaviour | §55 | Configurable |
-| T-21 | Audio implementation technique | §7, §55 | Open — adapter ready, see §37.5 |
+| T-18 | Exact randomization behaviour | §55 | **RESOLVED — shuffle question order AND answer options on each attempt; per-set configurable** |
+| T-19 | Matching items randomized independently | §55 | **RESOLVED — BOTH columns shuffled so pairs never align** |
+| T-20 | Activity retry behaviour | §9, §55 | **RESOLVED — unlimited on activities; §18's 2-attempt cap is assessments only** |
+| T-21 | Audio implementation technique | §7, §55 | **RESOLVED for v1 — browser built-in voice; adapter allows later switch (§7)** |
 | T-22 | WhatsApp message wording | §26, §55 | Template in Settings |
-| T-23 | Vocabulary completion rule (viewed vs. audio played) | §22 | Both signals captured |
-| T-24 | **Student password recovery channel** | §28 | **New — blocks Phase 1 (§37.1)** |
-| T-25 | **Teacher email/recovery channel** | §28 | **New (§37.9)** |
-| T-26 | **Content shared vs. per-school** | §34 | **New (§37.2)** |
+| T-23 | Vocabulary completion rule | §22 | **RESOLVED — learned when SEEN and audio PLAYED (§22)** |
+| T-24 | Student password recovery | §28 | **RESOLVED — client-confirmed, dual method, optional email (§28)** |
+| T-25 | Teacher email/recovery channel | §28 | **RESOLVED — required, client-confirmed (§28.5)** |
+| T-26 | Content shared vs. per-school | §34 | **RESOLVED — shared master library, client-owned, copy-to-customise (§37.2)** |
+| T-29 | Email delivery service/provider | §28.1, §28.5 | **RESOLVED — Resend, client-confirmed (§34)** |
+| T-30 | **Saudi data/privacy requirements + Supabase plan review** | §34, §29.3 | **Open — must complete BEFORE the pilot with real student data** |
 | T-27 | Technology stack (Option A) | — | **RESOLVED — client-approved, see §2 / §37.8** |
-| T-27b | Hosting provider | §34 | Open — needed before first deploy, not Phase 0 |
+| T-27b | Hosting provider | §34 | **RESOLVED — Railway + Supabase + Resend, client-confirmed (§34)** |
 | T-28 | Data retention/deletion policy for minors | §29.3 | Not specified in SRS |
 
 ---
@@ -1368,13 +1461,28 @@ No classes/sections entity · no parent/guardian role · no analytics platform �
 
 ## 41. Status & Next Step
 
-**This document contains no implementation code, no UI, and no database.** Per SRS §52 and §60, implementation begins only after your approval.
+**Status: ✅ ARCHITECTURE APPROVED — 2026-08-30.**
 
-**Awaiting from you:**
-1. Approval (or correction) of this architecture.
-2. Answers to the blocking decisions: **§37.8** (stack/hosting) and **§37.1** (student password recovery).
-3. The TOP GOAL curriculum material (needed by Phase 4).
+The client has approved this architecture as a whole, based on all confirmed decisions recorded in `docs/SRS.md` and in the Confirmed Decisions Log (§0.2). The requirement of SRS §52 and §60 — architecture prepared and approved before implementation — is satisfied.
 
-Decisions you approve will be recorded as ADRs in `docs/decisions/`, so that the reasoning behind each binding choice remains visible and reversible where possible (§57, §59).
+### Implementation authorisation
 
-**I am stopping here and awaiting your approval before writing any code.**
+| Phase | Authorised |
+|---|---|
+| **Phase 0 — Foundation** | ✅ **Authorised to begin** |
+| Phase 1 onward | ⛔ Not yet — requires separate client approval |
+
+Phase 0 covers repository and stack scaffolding, the two applications, database connectivity, CI, migration baseline and the settings module. **No user-facing features and no Phase 1 work.**
+
+### Still open, blocking nothing
+
+Points and stars formulas · push notification provider, permission flow and settings · branding (logo, colours, typography) · game types and count per unit · WhatsApp message wording · data retention policy.
+
+### Open action with a deadline
+
+**T-30 — Saudi data/privacy requirements and Supabase plan review.** Must complete **before** the pilot with real student data. A pilot with 90 real students *is* real student data.
+
+### Awaited from the client
+
+- TOP GOAL curriculum Word files, with answer keys and accepted alternative answers (needed by Phase 4).
+- Railway, Supabase and Resend account access when Phase 0 reaches deployment.

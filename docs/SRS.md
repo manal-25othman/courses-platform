@@ -168,6 +168,8 @@ Unit
 
 ## Audio
 
+**Status: CONFIRMED**
+
 يتم توفير نطق الكلمة آليًا.
 
 لا تحتاج المعلمة إلى:
@@ -176,6 +178,13 @@ Unit
 - رفع ملفات صوتية.
 
 الطالبة تستطيع الضغط على زر الاستماع لسماع نطق الكلمة.
+
+### Initial Implementation
+
+- تستخدم النسخة الأولى صوت المتصفح المدمج (browser built-in voice).
+- The initial version uses the **browser's built-in voice**.
+- يمكن استبدال طريقة النطق لاحقًا بخدمة صوت أخرى دون إعادة بناء النظام.
+- The pronunciation method can be replaced later with another voice service without rebuilding the system.
 
 ---
 
@@ -217,6 +226,15 @@ Unit
 يجب ألا يتم Hard-code لعدد معين من الأسئلة.
 
 يجب أن يكون Question Engine Data-Driven بحيث يمكن إضافة عدد غير محدود عمليًا من الأسئلة دون الحاجة إلى تعديل الكود.
+
+## Activity Retry
+
+**Status: CONFIRMED**
+
+- يمكن إعادة محاولة الأنشطة التفاعلية دون حد أقصى.
+- Interactive activities can be **retried without limit**.
+- حد المحاولتين في §18 يخص **اختبار الوحدة فقط**، ولا ينطبق على الأنشطة.
+- The 2-attempt limit in §18 applies to **unit assessments only** and does **not** apply to activities.
 
 ---
 
@@ -294,6 +312,27 @@ Question 5 → Missing Letter
 - Sentence Builder
 
 يجب تصميم النظام بطريقة تسمح بإضافة ألعاب جديدة مستقبلًا.
+
+## 13.1 Effect on Completion, Scoring and Progress
+
+**Status: CONFIRMED**
+
+الألعاب التعليمية لا تؤثر على:
+
+Educational games do **NOT** affect:
+
+- إكمال الوحدة / **Unit completion** (§16 remains: Vocabulary, Grammar, Activity, Assessment only)
+- درجة الاختبار / **Assessment scoring**
+- نسبة التقدم / **Progress percentage** (§21)
+
+الألعاب مخصصة للتحفيز والمتعة فقط في هذه المرحلة.
+Games are for motivation and enjoyment only at this stage.
+
+ملاحظة: هذا يحسم التعارض بين §16 و §56.
+**Note:** this resolves the open item in §56 regarding whether games affect completion, score or progress.
+
+أنواع الألعاب وعددها لكل وحدة تبقى **TBD**.
+Game types and the number of games per unit remain **TBD**.
 
 ---
 
@@ -392,17 +431,25 @@ Unit 4 → Assessment 4
 
 # 19. Highest Score Policy
 
-لم يتم تأكيد سياسة اعتماد الدرجة النهائية بعد.
+**Status: CONFIRMED**
 
-يوجد احتمال أن يتم اعتماد:
+تم اعتماد سياسة الدرجة النهائية:
 
 **Highest Score**
 
-لكن القرار النهائي:
+- إذا أدت الطالبة الاختبار مرتين، تُعتمد **أعلى درجة** كنتيجتها الرسمية.
+- If the student sits the assessment twice, the **highest score** is her official result.
 
-**TBD**
+مثال / Example:
 
-يجب تصميم Assessment System بحيث يمكن تغيير هذه السياسة دون إعادة بناء النظام.
+- Attempt 1 = 75%, Attempt 2 = 85% → Official result = **85%** → Pass
+- Attempt 1 = 90%, Attempt 2 = 70% → Official result = **90%** → Pass
+
+يجب تخزين جميع المحاولات ودرجاتها.
+All attempts and their scores are stored.
+
+يجب أن تبقى هذه السياسة قابلة للتغيير دون إعادة بناء النظام.
+This policy must remain changeable without rebuilding the system.
 
 ---
 
@@ -447,23 +494,50 @@ Unit 4 → Assessment 4
 - Activity
 - Assessment
 
-## Important
+## Confirmed Weighting
 
-الوزن الدقيق لكل مكوّن في نسبة الإنجاز:
+**Status: CONFIRMED**
 
-**TBD**
+الأوزان المعتمدة متساوية:
 
-لذلك لا يجب Hard-Code لنسب معينة قبل اعتمادها.
+The approved weighting is **equal across all four components**:
+
+| Component | Weight |
+|---|---|
+| Vocabulary | 25% |
+| Grammar | 25% |
+| Interactive Activities | 25% |
+| Assessment | 25% |
+
+يجب تخزين هذه الأوزان كـConfiguration قابلة للتعديل، وليس Hard-Coded.
+These weights are stored as editable configuration, **not** hard-coded, and can be changed later without rebuilding the system.
+
+ملاحظة مهمة: نسبة التقدم منفصلة عن شرط إكمال الوحدة في §16.
+**Important:** the progress *percentage* is separate from the unit *completion* rule in §16. A unit is complete only when all four components are done **and** the assessment is passed, regardless of the displayed percentage.
 
 ---
 
 # 22. Vocabulary Completion
+
+**Status: CONFIRMED**
 
 يجب اعتبار Vocabulary مكتملة وفق آلية تتبع واضحة.
 
 الطالبة يجب أن تمر على محتوى Vocabulary وتستمع إلى النطق المطلوب حسب آلية النظام.
 
 يجب تسجيل حالة الإكمال لكل Vocabulary Item.
+
+## Confirmed Completion Rule
+
+تُعتبر الكلمة مكتملة عندما:
+
+A vocabulary word is considered **learned** when the student has:
+
+1. شاهدت الكلمة ومحتواها. / **Seen** the word and its content, **and**
+2. شغّلت النطق الصوتي للكلمة. / **Played** its audio pronunciation.
+
+يجب تسجيل كلا الحدثين لكل كلمة على حدة.
+Both events are recorded per vocabulary item.
 
 ---
 
@@ -572,6 +646,12 @@ Hello Teacher, this is Sara. I need your help.
 - Student Name
 - Username
 - Password
+- Email (**Optional** — اختياري وليس إلزاميًا)
+
+البريد الإلكتروني اختياري. يمكن إنشاء حساب الطالبة بدون بريد إلكتروني.
+
+Email is optional. A student account can be created without an email address.
+يُستخدم البريد الإلكتروني — إن وُجد — لاستعادة كلمة المرور ذاتيًا (§28.1).
 
 المعلمة تستطيع:
 
@@ -581,21 +661,129 @@ Hello Teacher, this is Sara. I need your help.
 - Delete Student
 - Reset Student Password
 
+## 27.1 Disable vs Delete
+
+**Status: CONFIRMED**
+
+الإجراءان منفصلان ولهما سلوك مختلف.
+
+These are **two separate actions** with different behaviour.
+
+### Disable Student
+
+- يمنع الطالبة من تسجيل الدخول مؤقتًا.
+- تبقى الطالبة ظاهرة في قوائم المعلمة.
+
+- Temporarily prevents the student from logging in.
+- The student **remains visible** in the teacher's lists.
+
+### Delete Student
+
+الحذف قابل للعكس ولا يمسح البيانات.
+
+Deletion is **reversible** and does **not** erase data. When a student is deleted:
+
+- تُخفى الطالبة من قوائم المعلمة العادية.
+  The student is **hidden from normal teacher lists**.
+- تُمنع الطالبة من تسجيل الدخول.
+  The student is **prevented from logging in**.
+- يتم الاحتفاظ بجميع بياناتها: نتائج الاختبارات، التقدم، الإجابات، الرسائل، والتغذية الراجعة.
+  All of her data is **preserved**: assessment results, progress, answers, messages, and feedback.
+- يمكن استعادة حساب الطالبة لاحقًا.
+  The student account **can be restored later**.
+
+### Not In Scope
+
+- لا يوجد حذف نهائي أو مسح دائم للبيانات في هذه المرحلة.
+- **Permanent deletion / erasure is NOT included at this stage.**
+
 ---
 
 # 28. Password Recovery
 
-## Student
+**Status: CONFIRMED**
+
+يدعم النظام طريقتين لاستعادة كلمة مرور الطالبة.
+
+The system supports **two** password recovery methods for students. Both are required.
+
+## 28.1 Student Self-Service Recovery
 
 يمكن للطالبة استعادة كلمة المرور.
 
-## Teacher
+- الطالبة تختار "Forgot Password".
+- إذا كان هناك بريد إلكتروني مرتبط بحساب الطالبة، يرسل النظام رابطًا أو رمزًا آمنًا لإعادة تعيين كلمة المرور إلى ذلك البريد.
+- تستطيع الطالبة بعد ذلك إنشاء كلمة مرور جديدة.
+
+- The student can select **"Forgot Password"**.
+- If an email address is associated with the student account, the system sends a **secure password-reset link/code** to that email.
+- The student can then create a new password.
+
+## 28.2 Teacher-Assisted Recovery
+
+يمكن للمعلمة إعادة تعيين كلمة مرور أي طالبة من داخل لوحة التحكم لتسهيل الدعم.
+
+- المعلمة تستطيع إعادة تعيين كلمة مرور الطالبة مباشرة من لوحة تحكم المعلمة.
+- هذا متاح عندما لا تستطيع الطالبة الوصول إلى بريدها الإلكتروني، أو لا تستطيع إكمال الاستعادة الذاتية.
+- المعلمة تستطيع تزويد الطالبة بكلمة المرور الجديدة أو المؤقتة.
+
+- The teacher can reset a student's password **directly from the teacher dashboard**.
+- This is available when the student **cannot access her email** or **cannot complete self-service recovery**.
+- The teacher can provide the new/temporary password to the student.
+
+## 28.3 Student Email Is Optional
+
+البريد الإلكتروني للطالبة اختياري وليس إلزاميًا.
+
+**Student email is OPTIONAL, not mandatory.**
+
+- يمكن إنشاء حساب الطالبة بدون بريد إلكتروني.
+- إذا لم يكن هناك بريد إلكتروني مرتبط بالحساب، تتم الاستعادة عن طريق المعلمة وفق §28.2.
+
+- A student account can be created without an email address.
+- If no email is associated with the account, recovery is performed by the teacher per §28.2.
+- Teacher-assisted recovery (§28.2) is **always** available, regardless of whether an email exists.
+
+## 28.4 Not Permitted
+
+- لا يُطلب رقم هاتف للطالبة.
+- لا تُطلب بيانات تواصل ولي الأمر.
+- لا يُسمح بإعادة تعيين كلمة المرور بناءً على إدخال اسم المستخدم فقط.
+
+- **No phone number** is required or collected for password recovery.
+- **No parent/guardian contact information** is required or collected.
+- Password reset **MUST NOT** be permitted based only on entering a username. Entering a username alone must never grant a password change.
+
+## 28.5 Teacher Password Recovery
+
+**Status: CONFIRMED**
 
 يمكن للمعلمة استعادة كلمة المرور لحسابها.
 
-## Teacher Reset
+The teacher can recover the password for her own account.
 
-يمكن للمعلمة أيضًا إعادة تعيين كلمة مرور أي طالبة من داخل لوحة التحكم لتسهيل الدعم.
+- البريد الإلكتروني للمعلمة **إلزامي** (بخلاف بريد الطالبة الاختياري في §28.3).
+- تستخدم المعلمة نفس آلية الاستعادة الذاتية الآمنة المعتمدة للطالبات في §28.1.
+
+- Teacher email is **REQUIRED** (unlike the student email, which is optional per §28.3).
+- The teacher uses the **same secure self-service password recovery mechanism** confirmed for students in §28.1: she selects "Forgot Password", a secure single-use reset link/code is sent to her registered email, and she creates a new password.
+- المعلمة ليس لديها دور أعلى يعيد تعيين كلمة مرورها في النسخة الأولى، لذلك البريد الإلكتروني إلزامي.
+  The teacher has no higher role to reset her password for her in the first version, which is why her email is mandatory.
+
+## 28.6 Confirmed Recovery Behaviour
+
+القرارات التالية معتمدة من العميلة:
+
+The following behaviours are **CONFIRMED** (client-approved):
+
+1. **Generic response.** شاشة "Forgot Password" تعرض نفس الرسالة لجميع الطالبات، سواء كان هناك بريد إلكتروني مرتبط بالحساب أو لا.
+   The "Forgot Password" screen returns the **same generic message for all students**, whether or not an email is associated with the account. The screen must not reveal whether a given account has an email address.
+
+2. **Temporary teacher-provided passwords.** كلمة المرور التي توفرها المعلمة مؤقتة، ويجب على الطالبة تعيين كلمة مرور جديدة عند أول تسجيل دخول.
+   A password provided by the teacher is **temporary**. The student is **required to set a new password on first login** with it.
+
+3. **Audit logging.** يتم تسجيل جميع عمليات إعادة تعيين كلمة المرور في سجل التدقيق.
+   All password reset actions are **recorded in the audit log**.
 
 ---
 
