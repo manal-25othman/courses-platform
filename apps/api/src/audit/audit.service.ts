@@ -59,13 +59,27 @@ export class AuditService {
 
     try {
       // Entries belonging to a school are written inside that school's scope.
-      // Entries without one — a failed sign-in for an unknown username, say —
-      // are permitted by the policy because they belong to no school.
       if (entry.schoolId) {
         await this.prisma.forSchool(entry.schoolId, (tx) => tx.auditLog.create({ data }));
-      } else {
-        await this.prisma.auditLog.create({ data });
+        return;
       }
+
+      // Entries without a school — a sign-out, or a failed sign-in for an
+      // unknown username — belong to nobody, and the policy allows exactly
+      // that: school_id IS NULL with no school set.
+      //
+      // It has to be written as plain SQL. Prisma always appends RETURNING,
+      // and PostgreSQL makes a returned row pass the table's read rule as
+      // well as its write rule. That read rule is `school_id =
+      // current_school_id()`, which for two NULLs is NULL rather than true —
+      // so every school-less entry was refused and quietly dropped, sign-outs
+      // included. Nothing here reads the row back, so nothing is lost by not
+      // asking for it.
+      await this.prisma.$executeRaw`
+        INSERT INTO audit_log (id, action, school_id, actor_user_id, target_type, target_id, metadata, created_at)
+        VALUES (gen_random_uuid(), ${data.action}, NULL, ${data.actorUserId}::uuid,
+                ${data.targetType}, ${data.targetId}::uuid, ${(data.metadata ?? null) as Prisma.InputJsonValue}, now())
+      `;
     } catch (error) {
       this.logger.error(`Could not write audit entry "${entry.action}"`, error as Error);
     }

@@ -106,3 +106,70 @@ describe('ContentService draft visibility', () => {
     expect(result).toEqual({ sections: 3, words: 5 });
   });
 });
+
+/**
+ * A word a unit already has is a mistake the teacher can fix, so it has to
+ * come back as a clear refusal. Left to the database's unique index it
+ * surfaced as an unhandled error and the screen showed a server fault.
+ */
+describe('ContentService duplicate vocabulary', () => {
+  function serviceWithWords(existing: { id: string; unitId: string; wordEn: string }[]) {
+    const tx = {
+      unit: { findUnique: async () => ({ id: 'u1', courseId: 'course-1', orderIndex: 0 }) },
+      course: { findFirst: async () => ({ id: 'course-1', ownerSchoolId: SCHOOL }) },
+      vocabularyItem: {
+        findFirst: async (args: { where: { unitId: string; wordEn?: string } }) => {
+          if (args.where.wordEn === undefined) {
+            return existing[existing.length - 1] ?? null;
+          }
+          return existing.find((w) => w.unitId === args.where.unitId && w.wordEn === args.where.wordEn) ?? null;
+        },
+        findUnique: async (args: { where: { id: string } }) =>
+          existing.find((w) => w.id === args.where.id) ?? null,
+        create: async (args: { data: Record<string, unknown> }) => ({ id: 'new', ...args.data }),
+        update: async (args: { data: Record<string, unknown> }) => ({ id: 'v1', ...args.data }),
+      },
+    };
+
+    const prisma = {
+      forSchool: async <T>(_schoolId: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+    } as unknown as PrismaService;
+
+    return new ContentService(prisma, { record: vi.fn() } as unknown as AuditService);
+  }
+
+  it('refuses a word the unit already has', async () => {
+    const service = serviceWithWords([{ id: 'v1', unitId: 'u1', wordEn: 'lion' }]);
+
+    await expect(
+      service.addVocabulary(teacher, 'u1', { wordEn: 'lion' }),
+    ).rejects.toThrow(/already in this unit/i);
+  });
+
+  it('accepts a word the unit does not have', async () => {
+    const service = serviceWithWords([{ id: 'v1', unitId: 'u1', wordEn: 'lion' }]);
+
+    const added = await service.addVocabulary(teacher, 'u1', { wordEn: 'mountain' });
+
+    expect((added as { wordEn: string }).wordEn).toBe('mountain');
+  });
+
+  it('refuses renaming a word onto one already there', async () => {
+    const service = serviceWithWords([
+      { id: 'v1', unitId: 'u1', wordEn: 'lion' },
+      { id: 'v2', unitId: 'u1', wordEn: 'mountain' },
+    ]);
+
+    await expect(
+      service.updateVocabulary(teacher, 'v1', { wordEn: 'mountain' }),
+    ).rejects.toThrow(/already in this unit/i);
+  });
+
+  it('allows saving a word without changing its spelling', async () => {
+    const service = serviceWithWords([{ id: 'v1', unitId: 'u1', wordEn: 'lion' }]);
+
+    await expect(
+      service.updateVocabulary(teacher, 'v1', { wordEn: 'lion', meaningAr: 'أسد' }),
+    ).resolves.toBeDefined();
+  });
+});

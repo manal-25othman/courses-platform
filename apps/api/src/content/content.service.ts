@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ContentStatus, UserRole } from '@prisma/client';
 import { PrismaService, TenantClient } from '../prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
@@ -309,6 +314,17 @@ export class ContentService {
         orderBy: { orderIndex: 'desc' },
       });
 
+      // A unit holds each word once. Adding one that is already there is an
+      // ordinary mistake, not a server fault, so it gets a message the
+      // teacher can act on rather than an error page.
+      const duplicate = await tx.vocabularyItem.findFirst({
+        where: { unitId, wordEn: dto.wordEn },
+      });
+
+      if (duplicate) {
+        throw new ConflictException('That word is already in this unit.');
+      }
+
       return tx.vocabularyItem.create({
         data: {
           unitId,
@@ -327,6 +343,15 @@ export class ContentService {
     return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
       const item = await tx.vocabularyItem.findUnique({ where: { id: itemId } });
       if (!item) throw new NotFoundException('Word not found.');
+
+      // Renaming a word onto one the unit already has, same as adding one.
+      if (dto.wordEn && dto.wordEn !== item.wordEn) {
+        const clash = await tx.vocabularyItem.findFirst({
+          where: { unitId: item.unitId, wordEn: dto.wordEn },
+        });
+
+        if (clash) throw new ConflictException('That word is already in this unit.');
+      }
 
       return tx.vocabularyItem.update({
         where: { id: itemId },

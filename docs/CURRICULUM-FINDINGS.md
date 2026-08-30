@@ -72,3 +72,66 @@ through the platform should be confirmed with the client before any import.
   without them.
 - This is a revision worksheet pack, not the textbook. Whether it is the
   primary source or a supplement is for the client to say.
+
+---
+
+# Phase 4 — what the import actually produced
+
+Extraction is deterministic: two runs over the same file produce byte-identical
+output apart from the timestamp.
+
+## Counts
+
+79 questions, every one imported as a DRAFT.
+
+| Kind | Count |
+|---|---|
+| Multiple choice | 30 |
+| Complete the sentence | 24 |
+| Odd one out | 16 |
+| True / false | 9 |
+
+| Block | Questions |
+|---|---|
+| Welcome | 8 |
+| Living Things | 21 |
+| Lifestyles | 8 |
+| Interests | 21 |
+| Professions | 14 |
+| Grammar Review | 7 |
+
+256 further parts of the file could not be read as questions at all — reading
+passages, handwriting and copying exercises, and picture tasks whose meaning is
+in the image. They are reported, not guessed at, and stay for manual entry.
+
+## Further mismatches found during the import
+
+| # | Finding | SRS reference | Status |
+|---|---|---|---|
+| 9 | "Circle the odd one out" is a real exercise kind in the file — 4 distinct instructions, 16 questions — but §10 does not list it | §10 | Handled — added as a question type; it is a row, not code |
+| 10 | Grammar Transformation is named in §10 but does not occur anywhere in the file | §10 | Registered and left unused. No content was invented to fill it |
+| 11 | The file has no matching, ordering, spelling, short-answer, picture-matching or missing-letter exercises, though §10 names them | §10 | Registered and supported by the engine; zero imported |
+
+## The three questions a teacher must check
+
+All three are the same fault: Word split a word across formatting runs, so the
+highlighted answer is a fragment that matches no option. None was guessed at.
+
+| Source | Prompt | Highlighted | Options |
+|---|---|---|---|
+| p104 | How ………. is the English lesson? | `ong` | long / much / many |
+| p1140 | Circle the odd one out of family group | `invite` | correction / education / "reaction- invite" |
+| p1168 | What do drums make? | `ounds` | pictures / games / sounds |
+
+The middle one is ambiguous in the source itself: the third option and the
+highlighted answer have run together, so what the exercise intends cannot be
+read from the file. It is flagged rather than resolved.
+
+## What the import will not do
+
+- It never invents an accepted alternative for a typed answer. Where the source
+  gives one answer, one answer is stored.
+- It never files a question under a unit it could not read. 79 of 79 were
+  placed; anything unplaceable would have been reported and left out.
+- A question whose answer could not be read is imported without one, marked,
+  and refused publication until a teacher confirms it.

@@ -17,8 +17,22 @@ const OWNER_URL = process.env.OWNER_DATABASE_URL ?? process.env.DIRECT_URL;
 const SCHOOL_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const SCHOOL_B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
+// Content owned by school A, used by the write-protection tests below.
+const COURSE_A = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const UNIT_A = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const QUESTION_A = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+const SET_A = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+const SECTION_A = '11111111-1111-1111-1111-111111111111';
+const VOCAB_A = '22222222-2222-2222-2222-222222222222';
+const MEDIA_A = '33333333-3333-3333-3333-333333333333';
+const QUESTION_A2 = '44444444-4444-4444-4444-444444444444';
+const ITEM_A = '55555555-5555-5555-5555-555555555555';
+
 const owner = new PrismaClient({ datasourceUrl: OWNER_URL });
 const app = new PrismaClient({ datasourceUrl: APP_URL });
+
+/** Thrown to roll a transaction back once an attempt has been observed. */
+class RollBack extends Error {}
 
 /** Runs work with the current school fixed for one transaction. */
 async function forSchool<T>(schoolId: string, work: (tx: PrismaClient) => Promise<T>): Promise<T> {
@@ -49,6 +63,84 @@ beforeAll(async () => {
       });
     }
   }
+
+  // Shared content owned by school A. It is deliberately readable by school B,
+  // which is exactly what made the write paths worth testing separately.
+  await owner.course.upsert({
+    where: { id: COURSE_A },
+    update: {},
+    create: {
+      id: COURSE_A,
+      title: 'Isolation Test Course',
+      ownerSchoolId: SCHOOL_A,
+      isSharedMaster: true,
+    },
+  });
+  await owner.unit.upsert({
+    where: { id: UNIT_A },
+    update: {},
+    create: { id: UNIT_A, courseId: COURSE_A, title: 'Isolation Test Unit', orderIndex: 0 },
+  });
+  await owner.question.upsert({
+    where: { id: QUESTION_A },
+    update: {},
+    create: {
+      id: QUESTION_A,
+      unitId: UNIT_A,
+      typeKey: 'multiple_choice',
+      prompt: 'Isolation test question',
+      payload: { options: [{ id: 'a', text: 'x' }] },
+      answerKey: { correctOptionId: 'a' },
+    },
+  });
+  await owner.question.upsert({
+    where: { id: QUESTION_A2 },
+    update: {},
+    create: {
+      id: QUESTION_A2,
+      unitId: UNIT_A,
+      typeKey: 'true_false',
+      prompt: 'Isolation test question two',
+      payload: {},
+      answerKey: { correct: true },
+      orderIndex: 1,
+    },
+  });
+  await owner.questionSet.upsert({
+    where: { id: SET_A },
+    update: {},
+    create: { id: SET_A, unitId: UNIT_A, title: 'Isolation Test Set' },
+  });
+
+  // Every content table needs at least one row owned by school A, otherwise a
+  // "nothing was deleted" assertion would pass simply because there was
+  // nothing there to delete.
+  await owner.questionSetItem.upsert({
+    where: { id: ITEM_A },
+    update: {},
+    create: { id: ITEM_A, setId: SET_A, questionId: QUESTION_A, orderIndex: 0 },
+  });
+  await owner.unitSection.upsert({
+    where: { id: SECTION_A },
+    update: {},
+    create: {
+      id: SECTION_A,
+      unitId: UNIT_A,
+      typeKey: 'reading',
+      orderIndex: 0,
+      title: 'Isolation Test Section',
+    },
+  });
+  await owner.vocabularyItem.upsert({
+    where: { id: VOCAB_A },
+    update: {},
+    create: { id: VOCAB_A, unitId: UNIT_A, orderIndex: 0, wordEn: 'isolation' },
+  });
+  await owner.mediaAsset.upsert({
+    where: { id: MEDIA_A },
+    update: {},
+    create: { id: MEDIA_A, sectionId: SECTION_A, url: 'https://example.invalid/a.png', mimeType: 'image/png' },
+  });
 });
 
 const TENANT_TABLES = [
@@ -64,9 +156,21 @@ const TENANT_TABLES = [
   'unit_sections',
   'vocabulary_items',
   'media_assets',
+  // Questions, added in Phase 4. These hold the answer keys.
+  'questions',
+  'question_sets',
+  'question_set_items',
 ] as const;
 
 afterAll(async () => {
+  await owner.mediaAsset.deleteMany({ where: { id: MEDIA_A } });
+  await owner.vocabularyItem.deleteMany({ where: { unitId: UNIT_A } });
+  await owner.unitSection.deleteMany({ where: { unitId: UNIT_A } });
+  await owner.questionSetItem.deleteMany({ where: { setId: SET_A } });
+  await owner.questionSet.deleteMany({ where: { id: SET_A } });
+  await owner.question.deleteMany({ where: { unitId: UNIT_A } });
+  await owner.unit.deleteMany({ where: { id: UNIT_A } });
+  await owner.course.deleteMany({ where: { id: COURSE_A } });
   await owner.user.deleteMany({ where: { schoolId: { in: [SCHOOL_A, SCHOOL_B] } } });
   await owner.school.deleteMany({ where: { id: { in: [SCHOOL_A, SCHOOL_B] } } });
 
@@ -93,6 +197,28 @@ describe('the database enforces tenant isolation', () => {
     const users = await app.user.findMany({ where: { username: { startsWith: 'iso-' } } });
 
     expect(users).toHaveLength(0);
+  });
+
+  /**
+   * Content tables were the exception that proved this rule worth testing.
+   * Shared curriculum is readable by every school on purpose, and the policy
+   * said so in a way that was also true when NO school was set — so an
+   * unscoped query saw every course, unit and question, answer keys included.
+   * These check the whole set, not just `users`.
+   */
+  it.each([
+    'courses',
+    'units',
+    'unit_sections',
+    'vocabulary_items',
+    'questions',
+    'question_sets',
+  ])('returns nothing from %s when no school is set', async (table) => {
+    const [row] = await app.$queryRawUnsafe<{ count: bigint }[]>(
+      `SELECT count(*)::bigint AS count FROM "${table}"`,
+    );
+
+    expect(Number(row.count)).toBe(0);
   });
 
   it('shows a school only its own rows', async () => {
@@ -157,6 +283,155 @@ describe('the database enforces tenant isolation', () => {
     );
 
     expect(runs.every(Boolean)).toBe(true);
+  });
+});
+
+/**
+ * Shared content is READABLE by every school on purpose (the approved shared
+ * library). Writing is a different matter, and PostgreSQL treats it
+ * differently too: WITH CHECK never applies to DELETE, so the read allowance
+ * silently made another school's curriculum deletable. These tests hold that
+ * line — read yes, change no.
+ */
+describe('only the owning school may change shared content', () => {
+  it.each([
+    'courses',
+    'units',
+    'unit_sections',
+    'vocabulary_items',
+    'media_assets',
+    'questions',
+    'question_sets',
+    'question_set_items',
+  ])('refuses a delete of %s by another school', async (table) => {
+    // The attempt runs inside a transaction that always rolls back, and what
+    // is asserted is the number of rows the DELETE itself reported. Comparing
+    // row counts afterwards would not do: deleting a course cascades to its
+    // units and questions, so one unprotected table would hide the state of
+    // every table below it.
+    let deleted = -1;
+
+    await forSchool(SCHOOL_B, async (tx) => {
+      deleted = await tx.$executeRawUnsafe(`DELETE FROM "${table}"`);
+      throw new RollBack();
+    }).catch((error: unknown) => {
+      if (!(error instanceof RollBack)) throw error;
+    });
+
+    expect(deleted, `another school deleted ${deleted} rows from ${table}`).toBe(0);
+  });
+
+  it("lets another school read school A's shared curriculum", async () => {
+    const seen = await forSchool(SCHOOL_B, (tx) =>
+      tx.question.findMany({ where: { unitId: UNIT_A } }),
+    );
+
+    expect(seen).toHaveLength(2);
+  });
+
+  it("refuses to add an item to another school's question set", async () => {
+    await expect(
+      forSchool(SCHOOL_B, (tx) =>
+        tx.questionSetItem.create({
+          data: { setId: SET_A, questionId: QUESTION_A2, orderIndex: 1 },
+        }),
+      ),
+    ).rejects.toThrow();
+
+    const added = await owner.questionSetItem.count({
+      where: { setId: SET_A, questionId: QUESTION_A2 },
+    });
+    expect(added).toBe(0);
+  });
+
+  it("refuses to change another school's question", async () => {
+    await expect(
+      forSchool(SCHOOL_B, (tx) =>
+        tx.$executeRawUnsafe(`UPDATE questions SET prompt = 'hijacked' WHERE id = '${QUESTION_A}'`),
+      ),
+    ).rejects.toThrow();
+
+    const q = await owner.question.findUnique({ where: { id: QUESTION_A } });
+    expect(q?.prompt).toBe('Isolation test question');
+  });
+
+  it('still lets the owning school delete its own content', async () => {
+    let deleted = -1;
+
+    await forSchool(SCHOOL_A, async (tx) => {
+      deleted = await tx.$executeRawUnsafe(
+        `DELETE FROM question_set_items WHERE set_id = '${SET_A}'`,
+      );
+      throw new RollBack();
+    }).catch((error: unknown) => {
+      if (!(error instanceof RollBack)) throw error;
+    });
+
+    expect(deleted).toBe(1);
+  });
+});
+
+/**
+ * Some audit entries belong to no school at all — a sign-out, or a failed
+ * sign-in for a username nobody has. They must still be recorded (SRS 37,
+ * 28.6.3), and the policy allows exactly that shape. What did not work was
+ * writing one through an ORM: PostgreSQL makes a RETURNING row satisfy the
+ * table's read rule too, and that rule compares school_id to the current
+ * school — NULL against NULL, which is not true. Every such entry was refused
+ * and silently dropped.
+ */
+describe('audit entries that belong to no school', () => {
+  const APP_USER = process.env.APP_DB_USER ?? 'app_user';
+
+  it('can be written with no school set', async () => {
+    const action = `test.schoolless.${Date.now()}`;
+
+    await app.$executeRawUnsafe(
+      `INSERT INTO audit_log (id, action, school_id, created_at)
+       VALUES (gen_random_uuid(), '${action}', NULL, now())`,
+    );
+
+    const rows = await owner.auditLog.findMany({ where: { action } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].schoolId).toBeNull();
+
+    await owner.auditLog.deleteMany({ where: { action } });
+  });
+
+  /**
+   * The shape the ORM produces, kept as a test so the reason for the raw
+   * insert in AuditService is not lost and quietly undone later.
+   */
+  it('is refused when the row is asked for back', async () => {
+    const action = `test.returning.${Date.now()}`;
+
+    await expect(
+      app.$executeRawUnsafe(
+        `INSERT INTO audit_log (id, action, school_id, created_at)
+         VALUES (gen_random_uuid(), '${action}', NULL, now())
+         RETURNING id`,
+      ),
+    ).rejects.toThrow();
+
+    const rows = await owner.auditLog.findMany({ where: { action } });
+    expect(rows).toHaveLength(0);
+    expect(APP_USER).toBeTruthy();
+  });
+
+  it('still refuses an entry claiming another school', async () => {
+    const action = `test.otherschool.${Date.now()}`;
+
+    await expect(
+      forSchool(SCHOOL_A, (tx) =>
+        tx.$executeRawUnsafe(
+          `INSERT INTO audit_log (id, action, school_id, created_at)
+           VALUES (gen_random_uuid(), '${action}', '${SCHOOL_B}', now())`,
+        ),
+      ),
+    ).rejects.toThrow();
+
+    const rows = await owner.auditLog.findMany({ where: { action } });
+    expect(rows).toHaveLength(0);
   });
 });
 

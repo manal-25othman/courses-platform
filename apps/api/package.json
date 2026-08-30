@@ -15,7 +15,8 @@
     "db:studio": "prisma studio",
     "test:watch": "vitest",
     "db:bootstrap": "ts-node prisma/bootstrap.ts",
-    "test:db": "vitest run --config vitest.integration.config.ts"
+    "test:db": "vitest run --config vitest.integration.config.ts",
+    "db:import-questions": "ts-node prisma/import-questions.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

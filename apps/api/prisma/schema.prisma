@@ -284,6 +284,8 @@ model Unit {
   course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
   sections        UnitSection[]
   vocabularyItems VocabularyItem[]
+  questions       Question[]
+  questionSets    QuestionSet[]
 
   @@unique([courseId, orderIndex])
   @@index([courseId])
@@ -328,9 +330,10 @@ model UnitSection {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
-  unit  Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  type  SectionType  @relation(fields: [typeKey], references: [key])
-  media MediaAsset[]
+  unit      Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  type      SectionType  @relation(fields: [typeKey], references: [key])
+  media     MediaAsset[]
+  questions Question[]
 
   @@unique([unitId, orderIndex])
   @@index([unitId])
@@ -384,4 +387,142 @@ model MediaAsset {
 
   @@index([sectionId])
   @@map("media_assets")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Question Engine
+//
+// Question kinds are rows, not code. Adding one is a row plus a handler; no
+// table changes, and nothing else in the system needs to know (SRS 10, 44).
+//
+// The kinds registered here are the ones actually present in the supplied TOP
+// GOAL material, plus those SRS 10 requires. "Odd one out" appears eight times
+// in the file but is not named in SRS 10; grammar transformation is named in
+// SRS 10 but does not appear in the file. Both are recorded rather than
+// forced into a neighbouring kind.
+// ---------------------------------------------------------------------------
+
+model QuestionType {
+  key                   String  @id
+  displayName           String  @map("display_name")
+  description           String?
+  /// Whether shuffling the answer options makes sense for this kind.
+  supportsOptionShuffle Boolean @default(true) @map("supports_option_shuffle")
+  /// Whether the student types an answer rather than choosing one. Typed
+  /// answers are compared as text, which is why they need accepted
+  /// alternatives and are the likeliest to need a teacher's eye.
+  isTyped               Boolean @default(false) @map("is_typed")
+  /// Whether the question needs its picture to make sense (SRS 10).
+  needsMedia            Boolean @default(false) @map("needs_media")
+  /// False for a kind the platform supports but the supplied material does
+  /// not use, so nothing is invented to fill it.
+  presentInSource       Boolean @default(true) @map("present_in_source")
+  isActive              Boolean @default(true) @map("is_active")
+  orderIndex            Int     @map("order_index")
+
+  questions Question[]
+
+  @@map("question_types")
+}
+
+/// One question.
+///
+/// `payload` holds what this kind needs to be shown, and `answerKey` what it
+/// needs to be marked. Neither has a fixed shape, so a new kind stores what it
+/// needs without a schema change. The answer key never leaves the server.
+model Question {
+  id        String  @id @default(uuid()) @db.Uuid
+  unitId    String  @map("unit_id") @db.Uuid
+  sectionId String? @map("section_id") @db.Uuid
+  typeKey   String  @map("type_key")
+
+  /// The question as written in the curriculum. Never reworded.
+  prompt     String
+  payload    Json
+  answerKey  Json   @map("answer_key")
+  points     Int    @default(1)
+  orderIndex Int    @default(0) @map("order_index")
+
+  /// True when the import could not be certain of something. Such a question
+  /// is held back from publication until a teacher has looked at it.
+  needsReview Boolean @default(false) @map("needs_review")
+  /// What exactly was uncertain, in plain words for the teacher.
+  reviewNotes String? @map("review_notes")
+  /// Where in the source document this came from, so it can be checked.
+  sourceRef   String? @map("source_ref")
+
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  unit    Unit              @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  section UnitSection?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  type    QuestionType      @relation(fields: [typeKey], references: [key])
+  sets    QuestionSetItem[]
+
+  @@index([unitId])
+  @@index([sectionId])
+  @@index([typeKey])
+  @@index([needsReview])
+  @@map("questions")
+}
+
+/// What a set of questions is for.
+enum QuestionSetPurpose {
+  ACTIVITY
+  ASSESSMENT
+  PRACTICE
+
+  @@map("question_set_purpose")
+}
+
+/// How many questions a set draws.
+enum SelectionMode {
+  ALL
+  RANDOM_N
+
+  @@map("selection_mode")
+}
+
+/// A group of questions used together.
+///
+/// The count is never fixed in code: a set either uses everything it holds or
+/// draws a given number at random (SRS 9, 46).
+model QuestionSet {
+  id      String             @id @default(uuid()) @db.Uuid
+  unitId  String             @map("unit_id") @db.Uuid
+  purpose QuestionSetPurpose @default(ACTIVITY)
+  title   String
+
+  selectionMode SelectionMode @default(ALL) @map("selection_mode")
+  /// Used with RANDOM_N. Null means every question in the set.
+  questionCount Int?          @map("question_count")
+
+  /// Defaults come from the settings store; these override for one set.
+  shuffleQuestions Boolean @default(true) @map("shuffle_questions")
+  shuffleOptions   Boolean @default(true) @map("shuffle_options")
+
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  unit  Unit              @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  items QuestionSetItem[]
+
+  @@index([unitId])
+  @@map("question_sets")
+}
+
+model QuestionSetItem {
+  id         String @id @default(uuid()) @db.Uuid
+  setId      String @map("set_id") @db.Uuid
+  questionId String @map("question_id") @db.Uuid
+  orderIndex Int    @map("order_index")
+
+  set      QuestionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([setId, questionId])
+  @@index([setId])
+  @@map("question_set_items")
 }

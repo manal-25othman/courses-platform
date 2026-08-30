@@ -55,6 +55,22 @@ export default tseslint.config(
     },
   },
 
+  // --- Tooling: plain Node scripts, run by hand, not part of either app ----
+  {
+    files: ['tooling/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        URL: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+
   // --- Web: Next.js and React hooks rules ----------------------------------
   {
     files: ['apps/web/**/*.{ts,tsx}'],

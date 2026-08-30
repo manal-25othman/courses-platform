@@ -11,6 +11,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { SettingsModule } from './settings/settings.module';
 import { StudentsModule } from './students/students.module';
 import { ContentModule } from './content/content.module';
+import { QuestionsModule } from './questions/questions.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ContentModule } from './content/content.module';
     AuthModule,
     StudentsModule,
     ContentModule,
+    QuestionsModule,
     HealthModule,
   ],
   providers: [
