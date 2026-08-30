@@ -791,22 +791,62 @@ School
 
 # 39. UI / UX Language
 
+**Status: CONFIRMED**
+
 واجهة النظام بالكامل تكون:
 
 **English**
+
+## 39.1 Applies Equally to All Roles
+
+هذا المتطلب ينطبق بالتساوي على جميع أدوار المستخدمين:
+
+This requirement applies **equally** to ALL user roles:
+
+- Student
+- Teacher
+- Admin
+
+لا يوجد استثناء لأي دور. لا توجد واجهة عربية لأي مستخدم.
+
+There is no exception for any role. No role receives an Arabic interface.
+
+## 39.2 Scope
 
 ويشمل ذلك:
 
 - Navigation
 - Buttons
 - Dashboard
+- Menus
 - Labels
 - Notifications
 - Messages
+- Error Messages
+- Validation Messages
 - Forms
+- Authentication Screens
+- Settings
+- Reports
+- Progress Screens
+- Assessment Screens
+- Activity Screens
+- Game Interfaces
 - System UI
 
+**لا يوجد أي نص عربي في واجهة المنصة إطلاقًا.**
+
+**There must be NO Arabic UI text anywhere in the platform.**
+
+## 39.3 Educational Content Exception
+
 أما المحتوى التعليمي فيعرض حسب المحتوى الموجود في المنهج.
+
+المحتوى التعليمي قد يحتوي على معانٍ أو ترجمات عربية حسب ما يحدده منهج TOP GOAL.
+
+هذا الاستثناء يخص المحتوى التعليمي فقط، ولا يعني إطلاقًا أن واجهة المنصة تكون بالعربية.
+
+The educational content itself may contain Arabic meanings/translations where specified by the TOP GOAL curriculum. This exception covers educational content **only** and does NOT mean that the platform interface should be Arabic.
 
 ---
 
@@ -1136,7 +1176,7 @@ Notification System يجب أن يكون قابلًا للتوسع.
 - Push Notifications
 - WhatsApp Contact
 - Responsive Web Application
-- English UI
+- English UI for all roles (Student / Teacher / Admin) — no Arabic UI text anywhere
 - Teacher Attribution
 - Auto Save
 - Future scalability
