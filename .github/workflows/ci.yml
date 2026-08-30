@@ -24,6 +24,9 @@ jobs:
       - name: Generate database client
         run: npm run db:generate
 
+      - name: Lint
+        run: npm run lint
+
       - name: Type check
         run: npm run typecheck
 

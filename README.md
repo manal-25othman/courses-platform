@@ -79,11 +79,17 @@ You should see `"status": "ok"` and `"database": "connected"`.
 |---|---|
 | `npm run dev:api` | Start the API with auto-reload |
 | `npm run dev:web` | Start the website with auto-reload |
+| `npm test` | Run the tests |
+| `npm run lint` | Check code style and common mistakes |
+| `npm run lint:fix` | Fix the style problems that can be fixed automatically |
 | `npm run typecheck` | Check for type errors everywhere |
 | `npm run build` | Build everything for production |
 | `npm run db:migrate` | Apply database changes |
 | `npm run db:seed` | Load the confirmed configuration values |
 | `npm run db:studio` | Browse the database in your browser |
+
+These same commands run automatically on every push, in GitHub Actions
+(`.github/workflows/ci.yml`). If they pass here, they pass there.
 
 ## Why there are no hard-coded rules
 
@@ -93,6 +99,21 @@ the database**, not written into the code. They are loaded by `npm run db:seed`
 and read through the settings service.
 
 Changing the passing score is an update to one row. It is never a code change.
+
+## Tests
+
+Tests live next to the code they cover, named `*.spec.ts`, and run with
+[Vitest](https://vitest.dev).
+
+The settings tests deliberately use an in-memory stand-in for the database
+rather than a real one, so they run in a second and CI needs no PostgreSQL.
+They cover the rule that matters most: **a narrower scope always wins**, so an
+assessment can override its school, which can override the global default.
+
+```bash
+npm test                        # run once
+npm run test:watch -w @courses/api   # re-run as you edit
+```
 
 ## Security
 

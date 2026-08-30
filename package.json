@@ -2,7 +2,7 @@
   "name": "courses-platform",
   "version": "0.1.0",
   "private": true,
-  "description": "Interactive English Learning Platform — TOP GOAL",
+  "description": "Interactive English Learning Platform \u2014 TOP GOAL",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -12,13 +12,21 @@
     "dev:web": "npm run dev -w @courses/web",
     "build": "npm run build -w @courses/shared-types && npm run build -w @courses/api && npm run build -w @courses/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
+    "lint": "eslint .",
     "test": "npm run test --workspaces --if-present",
     "db:generate": "npm run db:generate -w @courses/api",
     "db:migrate": "npm run db:migrate -w @courses/api",
-    "db:seed": "npm run db:seed -w @courses/api"
+    "db:seed": "npm run db:seed -w @courses/api",
+    "lint:fix": "eslint . --fix"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@next/eslint-plugin-next": "^16.3.3",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "typescript-eslint": "^8.68.0"
   }
 }
