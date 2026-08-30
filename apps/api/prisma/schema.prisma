@@ -215,3 +215,173 @@ model AuditLog {
   @@index([action])
   @@map("audit_log")
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Content model
+//
+// Shaped against the supplied TOP GOAL material rather than assumed. That file
+// organises each unit into NINE numbered sections: General Question,
+// Controlled Writing, Reading, Grammar, Vocabulary, Orthography, Handwriting,
+// Writing, and a Reading passage. SRS 6 names only Vocabulary, Grammar,
+// Activity, Games and Assessment, so section types are stored as DATA rather
+// than fixed in code — the same approach used for question types (SRS 44, 45).
+// ---------------------------------------------------------------------------
+
+/// Whether content is visible to students yet.
+///
+/// Everything imported or newly written starts as DRAFT and reaches students
+/// only after the teacher approves it (client decision, SRS 37.7).
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("content_status")
+}
+
+/// A curriculum. Currently one: TOP GOAL, Grade 6.
+model Course {
+  id             String  @id @default(uuid()) @db.Uuid
+  title          String
+  description    String?
+  /// The school that owns and may edit this content.
+  ownerSchoolId  String  @map("owner_school_id") @db.Uuid
+  /// True for the master library every school may read but only the owner may
+  /// change. A school-specific version is a copy with this false (SRS 37.2).
+  isSharedMaster Boolean @default(true) @map("is_shared_master")
+  /// Set on a copy, pointing at the master it came from.
+  sourceCourseId String? @map("source_course_id") @db.Uuid
+
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  units Unit[]
+
+  @@index([ownerSchoolId])
+  @@map("courses")
+}
+
+/// A unit of the curriculum.
+///
+/// The supplied file has a Welcome unit, four themed units (Living Things,
+/// Lifestyles, Interests, Professions) and a Grammar Review section. Ordering
+/// is by orderIndex; nothing counts units or refers to "unit 1" in code.
+model Unit {
+  id          String  @id @default(uuid()) @db.Uuid
+  courseId    String  @map("course_id") @db.Uuid
+  orderIndex  Int     @map("order_index")
+  title       String
+  /// e.g. "Welcome", "Grammar Review". Kept so preliminary and revision
+  /// material can be distinguished from the themed units without a code rule.
+  kind        String?
+  description String?
+
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sections        UnitSection[]
+  vocabularyItems VocabularyItem[]
+
+  @@unique([courseId, orderIndex])
+  @@index([courseId])
+  @@map("units")
+}
+
+/// The kinds of section a unit can contain.
+///
+/// A row per kind, so a curriculum that introduces another one needs data, not
+/// a code change. Seeded from what the supplied file actually contains.
+model SectionType {
+  key          String  @id
+  displayName  String  @map("display_name")
+  description  String?
+  /// True where the section is a list of vocabulary rather than prose.
+  isVocabulary Boolean @default(false) @map("is_vocabulary")
+  /// True where the material is inherently on paper (handwriting practice),
+  /// so it is presented for reference rather than answered on screen.
+  isPaperBased Boolean @default(false) @map("is_paper_based")
+  isActive     Boolean @default(true) @map("is_active")
+  orderIndex   Int     @map("order_index")
+
+  sections UnitSection[]
+
+  @@map("section_types")
+}
+
+/// One numbered section within a unit.
+model UnitSection {
+  id         String  @id @default(uuid()) @db.Uuid
+  unitId     String  @map("unit_id") @db.Uuid
+  typeKey    String  @map("type_key")
+  orderIndex Int     @map("order_index")
+  title      String?
+  /// The teaching text: an explanation, a reading passage, a writing prompt.
+  body       String?
+  /// Room for what one kind of section needs and another does not, without a
+  /// column per kind.
+  config     Json?
+
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  unit  Unit         @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  type  SectionType  @relation(fields: [typeKey], references: [key])
+  media MediaAsset[]
+
+  @@unique([unitId, orderIndex])
+  @@index([unitId])
+  @@map("unit_sections")
+}
+
+/// A word in a unit's vocabulary list (SRS 7).
+///
+/// The supplied file gives every word an Arabic meaning, so meaningAr carries
+/// it. Pronunciation is generated at display time and is not stored (SRS 7).
+model VocabularyItem {
+  id              String  @id @default(uuid()) @db.Uuid
+  unitId          String  @map("unit_id") @db.Uuid
+  orderIndex      Int     @map("order_index")
+  wordEn          String  @map("word_en")
+  meaningAr       String? @map("meaning_ar")
+  partOfSpeech    String? @map("part_of_speech")
+  exampleSentence String? @map("example_sentence")
+  /// Only set if a specific recording is ever supplied; normally empty,
+  /// because pronunciation is produced automatically (SRS 7).
+  audioUrl        String? @map("audio_url")
+
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, wordEn])
+  @@index([unitId])
+  @@map("vocabulary_items")
+}
+
+/// A picture belonging to a section.
+///
+/// The supplied file is image-heavy: 92 pictures, used by the reading,
+/// writing, orthography and handwriting sections, and needed by the
+/// picture-matching question type in SRS 10.
+model MediaAsset {
+  id         String   @id @default(uuid()) @db.Uuid
+  sectionId  String?  @map("section_id") @db.Uuid
+  /// Where the file is stored. No binary data is kept in the database.
+  url        String
+  mimeType   String   @map("mime_type")
+  /// Describes the picture for a student using a screen reader.
+  altText    String?  @map("alt_text")
+  orderIndex Int      @default(0) @map("order_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  section UnitSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId])
+  @@map("media_assets")
+}

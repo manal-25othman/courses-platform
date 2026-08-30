@@ -58,6 +58,12 @@ const TENANT_TABLES = [
   'student_profiles',
   'audit_log',
   'settings',
+  // Content, added in Phase 3.
+  'courses',
+  'units',
+  'unit_sections',
+  'vocabulary_items',
+  'media_assets',
 ] as const;
 
 afterAll(async () => {

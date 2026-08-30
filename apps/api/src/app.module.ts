@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SettingsModule } from './settings/settings.module';
 import { StudentsModule } from './students/students.module';
+import { ContentModule } from './content/content.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { StudentsModule } from './students/students.module';
     AuditModule,
     AuthModule,
     StudentsModule,
+    ContentModule,
     HealthModule,
   ],
   providers: [

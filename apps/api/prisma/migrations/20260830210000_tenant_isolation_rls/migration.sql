@@ -57,6 +57,7 @@ $$;
 -- schools: a school may only see itself.
 ALTER TABLE "schools" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "schools" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "schools";
 CREATE POLICY tenant_isolation ON "schools"
   USING (id = current_school_id())
   WITH CHECK (id = current_school_id());
@@ -64,6 +65,7 @@ CREATE POLICY tenant_isolation ON "schools"
 -- users: the roster, and the table that matters most.
 ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "users" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "users";
 CREATE POLICY tenant_isolation ON "users"
   USING (school_id = current_school_id())
   WITH CHECK (school_id = current_school_id());
@@ -73,12 +75,14 @@ CREATE POLICY tenant_isolation ON "users"
 -- visible when its user is.
 ALTER TABLE "teacher_profiles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "teacher_profiles" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "teacher_profiles";
 CREATE POLICY tenant_isolation ON "teacher_profiles"
   USING (EXISTS (SELECT 1 FROM "users" u WHERE u.id = user_id))
   WITH CHECK (EXISTS (SELECT 1 FROM "users" u WHERE u.id = user_id));
 
 ALTER TABLE "student_profiles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "student_profiles" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "student_profiles";
 CREATE POLICY tenant_isolation ON "student_profiles"
   USING (EXISTS (SELECT 1 FROM "users" u WHERE u.id = user_id))
   WITH CHECK (EXISTS (SELECT 1 FROM "users" u WHERE u.id = user_id));
@@ -86,6 +90,7 @@ CREATE POLICY tenant_isolation ON "student_profiles"
 -- audit_log: entries belong to the school they were recorded for.
 ALTER TABLE "audit_log" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "audit_log" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "audit_log";
 CREATE POLICY tenant_isolation ON "audit_log"
   USING (school_id = current_school_id())
   WITH CHECK (school_id IS NOT DISTINCT FROM current_school_id());
@@ -94,6 +99,7 @@ CREATE POLICY tenant_isolation ON "audit_log"
 -- everyone; a value scoped to a school belongs to that school alone.
 ALTER TABLE "settings" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "settings" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON "settings";
 CREATE POLICY tenant_isolation ON "settings"
   USING (scope <> 'SCHOOL' OR scope_id = current_school_id())
   WITH CHECK (scope <> 'SCHOOL' OR scope_id = current_school_id());

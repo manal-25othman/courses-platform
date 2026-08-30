@@ -17,6 +17,11 @@ export const AUDIT_ACTIONS = {
   STUDENT_DELETED: 'student.deleted',
   STUDENT_RESTORED: 'student.restored',
   STUDENT_PASSWORD_RESET: 'student.password_reset',
+  CONTENT_CREATED: 'content.created',
+  CONTENT_UPDATED: 'content.updated',
+  CONTENT_DELETED: 'content.deleted',
+  CONTENT_PUBLISHED: 'content.published',
+  CONTENT_UNPUBLISHED: 'content.unpublished',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

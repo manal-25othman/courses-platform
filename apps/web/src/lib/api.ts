@@ -118,6 +118,53 @@ export interface Student {
   createdAt: string;
 }
 
+export type ContentStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+export interface SectionType {
+  key: string;
+  displayName: string;
+  description: string | null;
+  isVocabulary: boolean;
+  isPaperBased: boolean;
+  orderIndex: number;
+}
+
+export interface UnitSummary {
+  id: string;
+  title: string;
+  kind: string | null;
+  description: string | null;
+  orderIndex: number;
+  status: ContentStatus;
+  _count: { sections: number; vocabularyItems: number };
+}
+
+export interface Section {
+  id: string;
+  typeKey: string;
+  title: string | null;
+  body: string | null;
+  orderIndex: number;
+  status: ContentStatus;
+  type: SectionType;
+  media: { id: string; url: string; altText: string | null }[];
+}
+
+export interface VocabularyItem {
+  id: string;
+  wordEn: string;
+  meaningAr: string | null;
+  partOfSpeech: string | null;
+  exampleSentence: string | null;
+  orderIndex: number;
+  status: ContentStatus;
+}
+
+export interface UnitDetail extends Omit<UnitSummary, '_count'> {
+  sections: Section[];
+  vocabularyItems: VocabularyItem[];
+}
+
 /** Where a signed-in user belongs, by role. */
 export function homeFor(user: Me): string {
   if (user.mustChangePassword) return '/change-password';
