@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"no tests yet (Phase 1)\" && exit 0"
+    "test": "echo \"No web tests yet - the web app has no features until Phase 3\" && exit 0"
   },
   "dependencies": {
     "@courses/shared-types": "*",

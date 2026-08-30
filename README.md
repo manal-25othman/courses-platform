@@ -2,9 +2,9 @@
 
 An educational web platform for Grade 6 English, built around the TOP GOAL curriculum.
 
-> **Current status: Phase 0 — foundation only.**
-> No features are built yet. The applications start, connect to the database and
-> serve a health check. Everything else is Phase 1 onward.
+> **Current status: Phase 1 — identity and tenancy.**
+> Sign-in works. There are no screens yet: the website is still a placeholder,
+> and creating students, password recovery and lessons come in later phases.
 
 ## Documentation
 
@@ -61,6 +61,23 @@ npm run db:migrate    # creates the tables
 npm run db:seed       # loads the confirmed settings (passing score, etc.)
 ```
 
+**4. Create the first school and teacher account**
+
+Nobody can sign in yet, because accounts are created by the teacher (SRS §27)
+and the first teacher has nobody to create her. This one-off command does it.
+Choose a long password — it is the account that manages everyone else:
+
+```bash
+SCHOOL_NAME="Your School" \
+TEACHER_USERNAME=teacher \
+TEACHER_EMAIL=you@example.com \
+TEACHER_NAME="Your Name" \
+TEACHER_PASSWORD='choose-a-long-password' \
+npm run db:bootstrap -w @courses/api
+```
+
+Running it twice is safe: it will not touch an account that already exists.
+
 **4. Start it**
 
 Open two terminals:
@@ -72,6 +89,30 @@ npm run dev:web    # the website, on http://localhost:3000
 
 Check it works by visiting <http://localhost:3001/api/v1/health>.
 You should see `"status": "ok"` and `"database": "connected"`.
+
+To check signing in works:
+
+```bash
+curl -X POST http://localhost:3001/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"teacher","password":"your-password"}'
+```
+
+## How sign-in works
+
+- Passwords are stored hashed with Argon2id. The real password is never
+  stored, never written to a log, and never returned by any endpoint.
+- A failed sign-in always says the same thing, whether the username was wrong,
+  the password was wrong, or the account is disabled. Anything more specific
+  would let someone discover which usernames exist.
+- The website receives its tokens in cookies that JavaScript cannot read. A
+  future mobile app receives the same tokens in the response body instead, so
+  both use one mechanism (SRS §43).
+- Sessions renew themselves quietly. If a token that was already used is
+  presented again — which usually means it was stolen — every session in that
+  chain is ended immediately.
+- **Every endpoint is closed unless it says otherwise.** An endpoint that
+  forgets to declare who may use it is refused, not left open.
 
 ## Useful commands
 

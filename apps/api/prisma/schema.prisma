@@ -55,3 +55,163 @@ model Setting {
   @@index([key])
   @@map("settings")
 }
+
+// ---------------------------------------------------------------------------
+// Phase 1 — Identity & Tenancy
+// See ARCHITECTURE.md sections 5.1, 8, 9, 10, 11, 12.
+// ---------------------------------------------------------------------------
+
+/// The three roles from SRS sections 3, 4 and 5.
+///
+/// Stored as data so a future role can be added without restructuring
+/// (SRS 44). What each role is *allowed to do* is enforced centrally in the
+/// API and is never editable by a user (client decision, 2026-08-30).
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+
+  @@map("user_role")
+}
+
+/// Whether an account may currently sign in.
+enum UserStatus {
+  ACTIVE
+  DISABLED
+
+  @@map("user_status")
+}
+
+/// A school. Present from day one even though the first version has one,
+/// because adding a tenant column to a live database later is the most
+/// expensive migration in this kind of system (SRS 34, ARCHITECTURE 10).
+model School {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("schools")
+}
+
+/// A sign-in identity. One row per person, whatever their role.
+model User {
+  id       String   @id @default(uuid()) @db.Uuid
+  /// Null ONLY for a platform admin, who sits above every school (SRS 3.1).
+  /// Every other user belongs to exactly one school.
+  schoolId String?  @map("school_id") @db.Uuid
+  role     UserRole
+
+  /// Students sign in with a username, not an email (SRS 27).
+  username String
+  /// Optional for students (SRS 28.3), required for teachers (SRS 28.5).
+  /// The difference is enforced in the API, since it depends on the role.
+  email    String?
+
+  passwordHash       String  @map("password_hash")
+  /// True after a teacher-issued temporary password, until the student
+  /// chooses her own (SRS 28.6.2).
+  mustChangePassword Boolean @default(false) @map("must_change_password")
+
+  status      UserStatus @default(ACTIVE)
+  /// Set when the account is deleted. Deletion is a reversible hide: the
+  /// account stops working and disappears from normal lists, but all of her
+  /// results, progress, answers and messages are preserved (SRS 27.1).
+  deletedAt   DateTime?  @map("deleted_at")
+  lastLoginAt DateTime?  @map("last_login_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  school         School?         @relation(fields: [schoolId], references: [id])
+  teacherProfile TeacherProfile?
+  studentProfile StudentProfile?
+  refreshTokens  RefreshToken[]
+
+  // A username is unique within its school, so two schools may each have a
+  // student called "sara".
+  // NOTE: PostgreSQL treats NULLs as distinct, so this does not constrain
+  // platform admins (school_id null). Admin accounts are created deliberately
+  // and are few; a partial unique index can be added if that changes.
+  @@unique([schoolId, username])
+  @@index([schoolId, role])
+  @@index([email])
+  @@map("users")
+}
+
+/// The teacher's own details. Her name is stored here and read from here —
+/// never written into the interface — so changing it updates every place it
+/// appears (SRS 33).
+model TeacherProfile {
+  userId        String  @id @map("user_id") @db.Uuid
+  /// Shown as "Prepared and presented by Teacher [Name]" (SRS 33).
+  displayName   String  @map("display_name")
+  /// Used to build the Contact Teacher link (SRS 26). Not hard-coded.
+  whatsappPhone String? @map("whatsapp_phone")
+  title         String?
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students StudentProfile[]
+
+  @@map("teacher_profiles")
+}
+
+/// The student's own details.
+model StudentProfile {
+  userId            String  @id @map("user_id") @db.Uuid
+  fullName          String  @map("full_name")
+  /// The teacher responsible for her (SRS 35). A teacher sees her own
+  /// students, not the whole school.
+  assignedTeacherId String? @map("assigned_teacher_id") @db.Uuid
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedTeacher TeacherProfile? @relation(fields: [assignedTeacherId], references: [userId])
+
+  @@index([assignedTeacherId])
+  @@map("student_profiles")
+}
+
+/// A long-lived token that can mint new short-lived access tokens.
+///
+/// Only the hash is stored, so a database leak does not hand out sessions.
+/// Each login starts a family; refreshing rotates within it. Presenting a
+/// token that was already used means it was probably stolen, so the whole
+/// family is revoked (ARCHITECTURE 8.2).
+model RefreshToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  familyId    String    @map("family_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  /// Which device this session belongs to, for the user's own reference.
+  deviceLabel String?   @map("device_label")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+/// A record of sensitive actions, so it is always possible to answer
+/// "who reset this student's password, and when?" (SRS 37, 28.6.3).
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String?  @map("school_id") @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  /// e.g. "auth.login", "auth.login_failed", "student.password_reset"
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id") @db.Uuid
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([schoolId, createdAt])
+  @@index([actorUserId])
+  @@index([action])
+  @@map("audit_log")
+}

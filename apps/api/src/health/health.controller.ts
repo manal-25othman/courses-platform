@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { Public } from '../auth/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -11,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
+  @Public()
   @Get()
   async check(): Promise<{ status: string; database: string; timestamp: string }> {
     let database = 'unreachable';
