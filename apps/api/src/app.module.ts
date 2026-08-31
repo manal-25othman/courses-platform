@@ -13,6 +13,8 @@ import { StudentsModule } from './students/students.module';
 import { ContentModule } from './content/content.module';
 import { QuestionsModule } from './questions/questions.module';
 import { LearningModule } from './learning/learning.module';
+import { ProgressModule } from './progress/progress.module';
+import { MessagesModule } from './messages/messages.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { LearningModule } from './learning/learning.module';
     ContentModule,
     QuestionsModule,
     LearningModule,
+    ProgressModule,
+    MessagesModule,
     HealthModule,
   ],
   providers: [

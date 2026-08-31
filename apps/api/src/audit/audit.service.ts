@@ -22,6 +22,7 @@ export const AUDIT_ACTIONS = {
   CONTENT_DELETED: 'content.deleted',
   CONTENT_PUBLISHED: 'content.published',
   CONTENT_UNPUBLISHED: 'content.unpublished',
+  MESSAGE_SENT: 'message.sent',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

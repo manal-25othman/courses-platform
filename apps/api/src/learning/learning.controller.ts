@@ -13,7 +13,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUser as Actor } from '../auth/auth.types';
 import { LearningService } from './learning.service';
-import { SubmitAttemptDto } from './dto/learning.dto';
+import { AnswerCheckDto, SubmitAttemptDto } from './dto/learning.dto';
 
 /**
  * The student's own screens.
@@ -55,6 +55,22 @@ export class LearningController {
   @HttpCode(HttpStatus.OK)
   async vocabularyAudio(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
     return this.learning.markVocabulary(actor, id, 'audio');
+  }
+
+  /** The check on a word she has read and heard. */
+  @Get('vocabulary/:id/check')
+  async vocabularyCheck(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.learning.getVocabularyCheck(actor, id);
+  }
+
+  @Post('vocabulary/:id/check')
+  @HttpCode(HttpStatus.OK)
+  async answerCheck(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AnswerCheckDto,
+  ) {
+    return this.learning.answerVocabularyCheck(actor, id, dto.answer);
   }
 
   @Post('sections/:id/viewed')

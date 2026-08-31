@@ -2,7 +2,17 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useState, FormEvent } from 'react';
-import { api, ApiError, homeFor, Me, Section, SectionType, UnitDetail, VocabularyItem } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  apiUrl,
+  homeFor,
+  Me,
+  Section,
+  SectionType,
+  UnitDetail,
+  VocabularyItem,
+} from '@/lib/api';
 import { QuestionList } from '@/components/QuestionList';
 
 /** One unit: its sections and its word list. */
@@ -151,7 +161,13 @@ function SectionList({
         <p className="muted">No sections yet. Choose a type above to add one.</p>
       ) : (
         unit.sections.map((section) => (
-          <div key={section.id} className="card" style={{ background: 'var(--bg)' }}>
+          <div
+            key={section.id}
+            className="card"
+            style={{ background: 'var(--bg)' }}
+            data-section-id={section.id}
+            data-section-type={section.typeKey}
+          >
             <div className="between">
               <div>
                 <strong>{section.title ?? section.type.displayName}</strong>{' '}
@@ -191,9 +207,10 @@ function SectionList({
               <SectionEditor
                 section={section}
                 onCancel={() => setEditing(null)}
-                onSave={(title, body) =>
+                onChanged={() => onRun(async () => undefined, 'Picture updated.')}
+                onSave={(changes) =>
                   onRun(
-                    () => api.patch(`/content/sections/${section.id}`, { title, body }),
+                    () => api.patch(`/content/sections/${section.id}`, changes),
                     'Section saved.',
                   ).then(() => setEditing(null))
                 }
@@ -214,51 +231,156 @@ function SectionEditor({
   section,
   onSave,
   onCancel,
+  onChanged,
 }: {
   section: Section;
-  onSave: (title: string, body: string) => Promise<void>;
+  onSave: (changes: Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
+  onChanged: () => Promise<void>;
 }) {
   const [title, setTitle] = useState(section.title ?? '');
   const [body, setBody] = useState(section.body ?? '');
+  // One example per line, which is how a teacher would type a list.
+  const [examples, setExamples] = useState((section.examples ?? []).join('\n'));
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    await onSave(title, body);
+    await onSave({
+      title,
+      body,
+      examples: examples
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== ''),
+    });
     setBusy(false);
+  }
+
+  /**
+   * Attaches a picture.
+   *
+   * Read in the browser and sent as text, so there is no upload endpoint of a
+   * different shape to secure separately. What may be sent, and how large, is
+   * decided by the API — this only reports what it says.
+   */
+  async function upload(file: File) {
+    setProblem(null);
+    setUploading(true);
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+      });
+
+      await api.post(`/content/sections/${section.id}/images`, {
+        data,
+        mimeType: file.type,
+        altText: file.name.replace(/\.[^.]+$/, ''),
+      });
+      await onChanged();
+    } catch (caught) {
+      setProblem(
+        caught instanceof ApiError ? caught.message : 'That picture could not be added.',
+      );
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
     <form onSubmit={submit} style={{ marginTop: '.75rem' }}>
-      <label htmlFor={`t-${section.id}`}>Title</label>
-      <input id={`t-${section.id}`} value={title} onChange={(e) => setTitle(e.target.value)} />
+      {problem && (
+        <p className="alert error" role="alert">
+          {problem}
+        </p>
+      )}
 
-      <label htmlFor={`b-${section.id}`}>Content</label>
+      <label htmlFor={`t-${section.id}`}>Title</label>
+      <input
+        id={`t-${section.id}`}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        data-testid="section-title"
+      />
+
+      <label htmlFor={`b-${section.id}`}>Explanation</label>
       <textarea
         id={`b-${section.id}`}
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        rows={8}
-        style={{
-          width: '100%',
-          padding: '.6rem .7rem',
-          fontSize: '1rem',
-          fontFamily: 'inherit',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
+        rows={6}
+        data-testid="section-body"
+      />
+
+      <label htmlFor={`x-${section.id}`}>Examples — one per line</label>
+      <textarea
+        id={`x-${section.id}`}
+        value={examples}
+        onChange={(e) => setExamples(e.target.value)}
+        rows={4}
+        data-testid="section-examples"
+      />
+
+      <label htmlFor={`i-${section.id}`}>Picture (optional)</label>
+      <input
+        id={`i-${section.id}`}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        disabled={uploading}
+        data-testid="section-image"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void upload(file);
+          e.target.value = '';
         }}
       />
+      <p className="muted">
+        PNG, JPEG, WEBP or GIF, up to 2 MB. Much of this curriculum is pictures, so a grammar
+        page can be a scan of the page from the book.
+      </p>
+
+      {section.media.length > 0 && (
+        <div className="row" style={{ marginTop: '.5rem' }}>
+          {section.media.map((image) => (
+            <div key={image.id} className="stack" style={{ gap: '.3rem' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={apiUrl(image.url)}
+                alt={image.altText ?? ''}
+                data-testid="section-image-preview"
+                style={{ maxWidth: '10rem', borderRadius: 6, border: '1px solid var(--border)' }}
+              />
+              <button
+                type="button"
+                className="small danger"
+                data-testid="remove-image"
+                onClick={async () => {
+                  await api.del(`/content/images/${image.id}`).catch(() => undefined);
+                  await onChanged();
+                }}
+              >
+                Remove picture
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <p className="muted">
         Enter the material exactly as it appears in the curriculum. Do not reword or correct it.
       </p>
 
-      <div className="row" style={{ marginTop: '.75rem' }}>
-        <button className="primary small" type="submit" disabled={busy}>
+      <div className="row">
+        <button className="primary" type="submit" disabled={busy} data-testid="save-section">
           {busy ? 'Saving…' : 'Save'}
         </button>
-        <button className="small" type="button" onClick={onCancel} disabled={busy}>
+        <button type="button" onClick={onCancel}>
           Cancel
         </button>
       </div>

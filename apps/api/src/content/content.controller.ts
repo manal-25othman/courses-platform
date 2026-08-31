@@ -9,7 +9,9 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -23,6 +25,7 @@ import {
   UpdateSectionDto,
   UpdateUnitDto,
   UpdateVocabularyDto,
+  UploadImageDto,
 } from './dto/content.dto';
 
 const TEACHER = [UserRole.TEACHER, UserRole.ADMIN];
@@ -138,6 +141,50 @@ export class ContentController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteSection(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
     await this.content.deleteSection(actor, id);
+  }
+
+  // --- Pictures ------------------------------------------------------------
+
+  @Roles(...TEACHER)
+  @Post('sections/:id/images')
+  async addSectionImage(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UploadImageDto,
+  ) {
+    return this.content.addSectionImage(actor, id, dto);
+  }
+
+  /**
+   * Serves a picture.
+   *
+   * Students may fetch one too, which is how a grammar page shows its image —
+   * the service only returns pictures on sections they are allowed to see.
+   * The headers are deliberate: the browser is told exactly what the file is
+   * and never to guess, and to display it rather than treat it as a page.
+   */
+  @Roles(...EVERYONE)
+  @Get('images/:id')
+  async getImage(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() response: Response,
+  ) {
+    const image = await this.content.getImage(actor, id);
+
+    response.setHeader('Content-Type', image.mimeType);
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Content-Disposition', 'inline');
+    response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    response.setHeader('Cache-Control', 'private, max-age=300');
+    response.send(image.data);
+  }
+
+  @Roles(...TEACHER)
+  @Delete('images/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeSectionImage(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    await this.content.removeSectionImage(actor, id);
   }
 
   // --- Vocabulary ----------------------------------------------------------

@@ -58,10 +58,23 @@ button {
   padding: .55rem .9rem; border-radius: 8px;
   border: 1px solid var(--border); background: #fff; color: var(--text);
 }
+/*
+ * The plain hover, and then the coloured buttons put back.
+ *
+ * `button:hover:not(:disabled)` is more specific than `button.primary`, so on
+ * its own it repainted every primary button light grey while the text stayed
+ * white — unreadable, on every "Sign in", "Save" and "Send" in the platform.
+ * The coloured rules below are written with matching specificity so they win
+ * on hover rather than losing to it.
+ */
 button:hover:not(:disabled) { background: #f3f4f6; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
-button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.primary:hover:not(:disabled) {
+  background: var(--primary);
+  filter: brightness(1.08);
+}
+button.danger:hover:not(:disabled) { background: var(--danger-bg); }
 button.danger { color: var(--danger); border-color: #f3c4c0; }
 button.small { padding: .35rem .6rem; font-size: .8125rem; }
 
@@ -181,3 +194,24 @@ fieldset input[type='radio'], input[type='checkbox'] { width: auto; }
   background: none; padding: .6rem .8rem;
 }
 .tabs button[aria-selected='true'] { border-bottom-color: var(--primary); color: var(--primary); }
+
+/* The three parts of a unit, on its card. */
+.parts { display: flex; gap: 1.25rem; margin: 0; }
+.parts > div { min-width: 0; }
+.parts dt {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); margin: 0 0 .1rem;
+}
+.parts dd { margin: 0; font-weight: 700; font-size: .95rem; }
+
+/* Worked examples under a grammar explanation. */
+.examples { margin: .5rem 0 0; padding-inline-start: 1.1rem; }
+.examples li { margin-bottom: .25rem; }
+
+/* A message in a conversation. */
+.msg { padding: .7rem .85rem; border-radius: 10px; max-width: 44ch; }
+.msg.from-them { background: #fff; border: 1px solid var(--border); }
+.msg.from-me { background: var(--primary); color: var(--primary-text); margin-inline-start: auto; }
+.msg .who { font-size: .72rem; opacity: .8; margin-bottom: .2rem; }
+.msg .when { font-size: .7rem; opacity: .7; margin-top: .3rem; }
+.thread { display: flex; flex-direction: column; gap: .5rem; }

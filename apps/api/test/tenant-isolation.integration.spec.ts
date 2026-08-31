@@ -218,6 +218,8 @@ const TENANT_TABLES = [
   'section_progress',
   'activity_attempts',
   'attempt_answers',
+  // Feedback, added after Phase 5. Personal data about a named child.
+  'messages',
 ] as const;
 
 afterAll(async () => {
@@ -546,6 +548,63 @@ describe("a student's progress never leaves her school", () => {
         tx.$executeRawUnsafe(
           `INSERT INTO activity_attempts (id, student_id, unit_id, seed, status, started_at)
            VALUES (gen_random_uuid(), '${studentA.id}', '${UNIT_A}', 'x', 'IN_PROGRESS', now())`,
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+/**
+ * Feedback is between one teacher and one child. It is not curriculum, so it
+ * has no shared allowance at all — and unlike progress, the school is on the
+ * row itself, so the check is direct rather than reached through a join.
+ */
+describe('feedback never leaves its school', () => {
+  const MESSAGE_A = 'aaaa1111-0000-0000-0000-00000000aaaa';
+
+  it('returns nothing when no school is set', async () => {
+    const [row] = await app.$queryRawUnsafe<{ count: bigint }[]>(
+      'SELECT count(*)::bigint AS count FROM messages',
+    );
+
+    expect(Number(row.count)).toBe(0);
+  });
+
+  it("does not show one school another school's messages", async () => {
+    const teacherA = await owner.user.findFirstOrThrow({ where: { username: 'iso-a-1' } });
+    const studentA = await owner.user.findFirstOrThrow({ where: { username: 'iso-a-2' } });
+
+    await owner.message.upsert({
+      where: { id: MESSAGE_A },
+      update: {},
+      create: {
+        id: MESSAGE_A,
+        schoolId: SCHOOL_A,
+        teacherId: teacherA.id,
+        studentId: studentA.id,
+        senderId: teacherA.id,
+        body: 'Well done this week.',
+      },
+    });
+
+    const mine = await forSchool(SCHOOL_A, (tx) => tx.message.findMany({ where: { id: MESSAGE_A } }));
+    const theirs = await forSchool(SCHOOL_B, (tx) => tx.message.findMany({ where: { id: MESSAGE_A } }));
+
+    expect(mine).toHaveLength(1);
+    expect(theirs).toHaveLength(0);
+
+    await owner.message.deleteMany({ where: { id: MESSAGE_A } });
+  });
+
+  it("refuses to write a message into another school", async () => {
+    const teacherA = await owner.user.findFirstOrThrow({ where: { username: 'iso-a-1' } });
+    const studentA = await owner.user.findFirstOrThrow({ where: { username: 'iso-a-2' } });
+
+    await expect(
+      forSchool(SCHOOL_B, (tx) =>
+        tx.$executeRawUnsafe(
+          `INSERT INTO messages (id, school_id, teacher_id, student_id, sender_id, body, created_at)
+           VALUES (gen_random_uuid(), '${SCHOOL_A}', '${teacherA.id}', '${studentA.id}', '${teacherA.id}', 'x', now())`,
         ),
       ),
     ).rejects.toThrow();

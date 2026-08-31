@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -15,6 +16,7 @@ import {
   UpdateSectionDto,
   UpdateUnitDto,
   UpdateVocabularyDto,
+  UploadImageDto,
 } from './dto/content.dto';
 
 /**
@@ -28,6 +30,14 @@ import {
  * Nothing here writes curriculum content of its own. Everything is entered or
  * imported and then approved by the teacher (SRS 32, 37.7).
  */
+/** The examples a teacher entered on a section, if any. */
+function readExamples(config: unknown): string[] {
+  if (!config || typeof config !== 'object') return [];
+  const examples = (config as { examples?: unknown }).examples;
+  if (!Array.isArray(examples)) return [];
+  return examples.filter((e): e is string => typeof e === 'string');
+}
+
 @Injectable()
 export class ContentService {
   constructor(
@@ -118,7 +128,16 @@ export class ContentService {
       });
 
       if (!unit) throw new NotFoundException('Unit not found.');
-      return unit;
+
+      // Examples are held inside `config`; they are lifted out here so every
+      // caller reads them the same way rather than each unpacking the JSON.
+      return {
+        ...unit,
+        sections: unit.sections.map((section) => ({
+          ...section,
+          examples: readExamples(section.config),
+        })),
+      };
     });
   }
 
@@ -273,14 +292,26 @@ export class ContentService {
       const section = await tx.unitSection.findUnique({ where: { id: sectionId } });
       if (!section) throw new NotFoundException('Section not found.');
 
+      // Examples live in `config`, which is where a section keeps what one
+      // kind needs and another does not — the alternative was a column that
+      // only grammar would ever use.
+      const config =
+        dto.examples === undefined
+          ? undefined
+          : {
+              ...((section.config as Record<string, unknown>) ?? {}),
+              examples: dto.examples.map((e) => e.trim()).filter((e) => e !== ''),
+            };
+
       return tx.unitSection.update({
         where: { id: sectionId },
         data: {
           ...(dto.title !== undefined ? { title: dto.title || null } : {}),
           ...(dto.body !== undefined ? { body: dto.body || null } : {}),
+          ...(config !== undefined ? { config: config as never } : {}),
           ...(dto.orderIndex !== undefined ? { orderIndex: dto.orderIndex } : {}),
         },
-        include: { type: true },
+        include: { type: true, media: { orderBy: { orderIndex: 'asc' } } },
       });
     });
   }
@@ -300,6 +331,139 @@ export class ContentService {
       if (!section) throw new NotFoundException('Section not found.');
 
       await tx.unitSection.delete({ where: { id: sectionId } });
+    });
+  }
+
+  // --- Pictures ------------------------------------------------------------
+
+  /**
+   * The kinds of picture that may be uploaded.
+   *
+   * An allowlist, not a blocklist. SVG is deliberately absent: an SVG is a
+   * document that can carry script, and this one would be served from the
+   * API's own origin.
+   */
+  private static readonly ALLOWED_IMAGE_TYPES = [
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'image/gif',
+  ] as const;
+
+  /** Two megabytes. Large enough for a worksheet scan, small enough to serve. */
+  private static readonly MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+  /**
+   * Attaches a picture to a section.
+   *
+   * The file is kept in the database for the pilot. That needs no new service,
+   * works the moment the API is deployed, and can be moved to object storage
+   * later behind the same `url`, which is the only thing anything reads. It is
+   * a choice for the size of this pilot, not a permanent one — see
+   * docs/CURRICULUM-FINDINGS.md.
+   */
+  async addSectionImage(actor: CurrentUser, sectionId: string, dto: UploadImageDto) {
+    const schoolId = this.schoolOf(actor);
+
+    if (!ContentService.ALLOWED_IMAGE_TYPES.includes(dto.mimeType as never)) {
+      throw new BadRequestException(
+        'That kind of file cannot be used. Please upload a PNG, JPEG, WEBP or GIF picture.',
+      );
+    }
+
+    // Typed to its own ArrayBuffer, which is what Prisma's Bytes column wants.
+    let bytes: Uint8Array<ArrayBuffer>;
+    try {
+      // The browser sends "data:image/png;base64,…"; only the part after the
+      // comma is the file.
+      const base64 = dto.data.includes(',') ? dto.data.split(',')[1] : dto.data;
+      const buffer = Buffer.from(base64, 'base64');
+      // Copied into a plain byte array: Prisma's Bytes wants one backed by its
+      // own ArrayBuffer, and a Buffer is a view into a shared pool.
+      bytes = new Uint8Array(buffer.byteLength);
+      bytes.set(buffer);
+    } catch {
+      throw new BadRequestException('That picture could not be read. Please try another file.');
+    }
+
+    if (bytes.length === 0) {
+      throw new BadRequestException('That picture is empty.');
+    }
+
+    if (bytes.length > ContentService.MAX_IMAGE_BYTES) {
+      throw new BadRequestException('That picture is too large. The limit is 2 MB.');
+    }
+
+    const asset = await this.prisma.forSchool(schoolId, async (tx) => {
+      const section = await tx.unitSection.findUnique({ where: { id: sectionId } });
+      if (!section) throw new NotFoundException('Section not found.');
+
+      const last = await tx.mediaAsset.findFirst({
+        where: { sectionId },
+        orderBy: { orderIndex: 'desc' },
+      });
+
+      const created = await tx.mediaAsset.create({
+        data: {
+          sectionId,
+          // Filled in below, once the row has an id to address it by.
+          url: '',
+          mimeType: dto.mimeType,
+          altText: dto.altText?.trim() || null,
+          orderIndex: (last?.orderIndex ?? -1) + 1,
+          data: bytes,
+          byteSize: bytes.length,
+        },
+      });
+
+      return tx.mediaAsset.update({
+        where: { id: created.id },
+        data: { url: `/api/v1/content/images/${created.id}` },
+        select: { id: true, url: true, mimeType: true, altText: true, byteSize: true },
+      });
+    });
+
+    await this.audit.record({
+      action: AUDIT_ACTIONS.CONTENT_UPDATED,
+      schoolId,
+      actorUserId: actor.userId,
+      targetType: 'section_image',
+      targetId: asset.id,
+    });
+
+    return asset;
+  }
+
+  /**
+   * Serves a picture.
+   *
+   * Published pictures are open to students; a draft one is the teacher's
+   * alone, exactly like the section it belongs to.
+   */
+  async getImage(actor: CurrentUser, imageId: string) {
+    return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+      const asset = await tx.mediaAsset.findFirst({
+        where: {
+          id: imageId,
+          section: { status: { in: this.visibleStatuses(actor) } },
+        },
+      });
+
+      if (!asset?.data) throw new NotFoundException('Picture not found.');
+
+      return {
+        data: Buffer.from(asset.data),
+        mimeType: asset.mimeType,
+      };
+    });
+  }
+
+  async removeSectionImage(actor: CurrentUser, imageId: string) {
+    await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+      const asset = await tx.mediaAsset.findUnique({ where: { id: imageId } });
+      if (!asset) throw new NotFoundException('Picture not found.');
+
+      await tx.mediaAsset.delete({ where: { id: imageId } });
     });
   }
 

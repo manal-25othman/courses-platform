@@ -102,6 +102,9 @@ export default function StudentsPage() {
           <p className="muted">Signed in as {me.displayName}</p>
         </div>
         <div className="row">
+          <button onClick={() => router.push('/progress')} data-testid="nav-progress">
+            Class progress
+          </button>
           <button onClick={() => router.push('/content')}>Curriculum</button>
           <button onClick={() => router.push('/change-password')}>Change my password</button>
           <button onClick={signOut}>Sign out</button>

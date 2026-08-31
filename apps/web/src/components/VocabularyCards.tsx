@@ -1,16 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, LearnWord } from '@/lib/api';
+import { api, ApiError, CheckAnswerResult, LearnWord, VocabularyCheck } from '@/lib/api';
 import { canSpeak, speak } from '@/lib/speech';
 
 /**
  * The word list.
  *
- * A word counts as learned only once she has both looked at it and heard it
- * said (SRS 22). That is why the card reports the two separately: opening a
- * card is not finishing it, and the screen has to make that plain rather than
- * leaving her wondering why a word she has read is still outstanding.
+ * Three steps finish a word: read it, hear it, then answer a short check on
+ * it. The check is what makes the first two mean something — tapping through
+ * cards quickly is not learning, and without it that is all completing a unit
+ * would take (client, 2026-08-30).
+ *
+ * The card reports each step separately, so she is never left wondering why a
+ * word she has looked at is still outstanding.
  */
 export function VocabularyCards({
   words,
@@ -22,6 +25,9 @@ export function VocabularyCards({
   const [speaking, setSpeaking] = useState<string | null>(null);
   const [supported, setSupported] = useState(true);
   const [problem, setProblem] = useState<string | null>(null);
+  const [checking, setChecking] = useState<VocabularyCheck | null>(null);
+  const [verdict, setVerdict] = useState<CheckAnswerResult | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -72,12 +78,48 @@ export function VocabularyCards({
     await onChanged();
   }
 
+  async function openCheck(word: LearnWord) {
+    setProblem(null);
+    setVerdict(null);
+    setBusy(true);
+    try {
+      setChecking(await api.get<VocabularyCheck>(`/learn/vocabulary/${word.id}/check`));
+    } catch (caught) {
+      setProblem(caught instanceof ApiError ? caught.message : 'Could not open the check.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function answer(itemId: string, text: string) {
+    setBusy(true);
+    try {
+      const result = await api.post<CheckAnswerResult>(`/learn/vocabulary/${itemId}/check`, {
+        answer: text,
+      });
+      setVerdict(result);
+      await onChanged();
+      if (result.correct) {
+        // Right: the word is finished, so the check closes.
+        setChecking(null);
+      } else {
+        // Wrong: a fresh question, so she is not just guessing the same list.
+        setChecking(await api.get<VocabularyCheck>(`/learn/vocabulary/${itemId}/check`));
+      }
+    } catch (caught) {
+      setProblem(caught instanceof ApiError ? caught.message : 'Could not send your answer.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const learned = words.filter((w) => w.learned).length;
 
   return (
     <div className="stack">
       <p className="muted" data-testid="vocab-summary">
-        {learned} of {words.length} words learned. A word counts once you have read it and heard it.
+        {learned} of {words.length} words learned. A word counts once you have read it, heard it and
+        answered its check.
       </p>
 
       {!supported && (
@@ -142,13 +184,114 @@ export function VocabularyCards({
                   I have read this
                 </button>
               )}
+              {word.checkReady && (
+                <button
+                  className="primary small"
+                  onClick={() => openCheck(word)}
+                  disabled={busy}
+                  data-testid={`check-${word.wordEn}`}
+                >
+                  Check what I know
+                </button>
+              )}
             </div>
 
+            {checking && checking.itemId === word.id && (
+              <VocabularyCheckPanel
+                check={checking}
+                busy={busy}
+                verdict={verdict}
+                onAnswer={(text) => answer(word.id, text)}
+                onClose={() => {
+                  setChecking(null);
+                  setVerdict(null);
+                }}
+              />
+            )}
+
+            {verdict && !verdict.correct && (!checking || checking.itemId !== word.id) && null}
+
             <p className="muted" style={{ margin: 0, fontSize: '.8rem' }}>
-              Read {word.seen ? '✓' : '—'} · Heard {word.audioPlayed ? '✓' : '—'}
+              Read {word.seen ? '✓' : '—'} · Heard {word.audioPlayed ? '✓' : '—'} · Checked{' '}
+              {word.checked ? '✓' : '—'}
             </p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The check itself.
+ *
+ * The word, and Arabic meanings to choose between. Every choice is a meaning a
+ * teacher entered for some word in this unit — nothing here is written or
+ * translated by the platform. Where a unit does not hold enough for a fair
+ * question, the API says so and that message is shown instead.
+ */
+function VocabularyCheckPanel({
+  check,
+  busy,
+  verdict,
+  onAnswer,
+  onClose,
+}: {
+  check: VocabularyCheck;
+  busy: boolean;
+  verdict: CheckAnswerResult | null;
+  onAnswer: (text: string) => void;
+  onClose: () => void;
+}) {
+  if (!check.available) {
+    return (
+      <div className="alert warn" role="status" data-testid="check-unavailable">
+        {check.reason}
+        <div className="row" style={{ marginTop: '.5rem' }}>
+          <button className="small" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="stack"
+      style={{ borderTop: '1px solid var(--border)', paddingTop: '.75rem' }}
+      data-testid="vocab-check"
+    >
+      <strong style={{ fontSize: '.95rem' }}>What does “{check.wordEn}” mean?</strong>
+
+      {verdict && !verdict.correct && (
+        <p className="alert error" role="alert" data-testid="check-wrong">
+          Not quite. Look at the word again and try once more.
+        </p>
+      )}
+
+      <div className="stack" style={{ gap: '.4rem' }}>
+        {check.options.map((option) => (
+          <button
+            key={option.id}
+            className="choice"
+            disabled={busy}
+            onClick={() => onAnswer(option.text)}
+            data-testid={`check-option-${option.id}`}
+            style={{ textAlign: 'start', fontWeight: 400 }}
+          >
+            {/* The meanings are Arabic; the interface around them stays English. */}
+            <span dir="rtl" lang="ar">
+              {option.text}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="row">
+        <button className="small" onClick={onClose} disabled={busy}>
+          Not now
+        </button>
       </div>
     </div>
   );

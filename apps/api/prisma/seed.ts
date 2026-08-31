@@ -39,7 +39,10 @@ const GLOBAL_SETTINGS: Array<{ key: string; value: unknown; source: string }> = 
 
   // --- Vocabulary completion (SRS 22) ---
   // A word counts as learned once it has been seen AND its audio played.
-  { key: 'vocabulary.completion_rule', value: 'seen_and_audio_played', source: 'SRS 22' },
+  // Raised from 'seen_and_audio_played' on the client's instruction
+  // (2026-08-30): a word now also needs a short check answered correctly,
+  // because opening a card is not learning what is on it.
+  { key: 'vocabulary.completion_rule', value: 'seen_audio_and_checked', source: 'SRS 22, amended' },
 
   // --- Audio (SRS 7) ---
   { key: 'audio.provider', value: 'browser', source: 'SRS 7' },

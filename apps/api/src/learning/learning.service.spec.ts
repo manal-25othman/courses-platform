@@ -22,7 +22,7 @@ const teacher: CurrentUser = { ...student, role: UserRole.TEACHER, userId: 't1',
 
 /** The settings this client confirmed, unless a test overrides one. */
 const CONFIRMED: Record<string, unknown> = {
-  [SETTING_KEYS.VOCABULARY_COMPLETION_RULE]: 'seen_and_audio_played',
+  [SETTING_KEYS.VOCABULARY_COMPLETION_RULE]: 'seen_audio_and_checked',
   [SETTING_KEYS.ACTIVITY_MAX_ATTEMPTS]: null,
   [SETTING_KEYS.ASSESSMENT_RESULT_POLICY]: 'highest',
   [SETTING_KEYS.PROGRESS_WEIGHTS]: {
@@ -44,7 +44,7 @@ function settingsWith(overrides: Record<string, unknown> = {}): SettingsService 
 }
 
 interface Tables {
-  vocabularyItem?: { id: string; status: ContentStatus }[];
+  vocabularyItem?: { id: string; status: ContentStatus; wordEn?: string; meaningAr?: string | null; unitId?: string }[];
   vocabularyProgress?: Record<string, unknown>[];
   unitSection?: { id: string; type: { progressComponent: string | null } }[];
   sectionProgress?: Record<string, unknown>[];
@@ -115,7 +115,7 @@ function serviceOver(tables: Tables, overrides: Record<string, unknown> = {}) {
   return new LearningService(prisma, settingsWith(overrides), new QuestionEngineService());
 }
 
-describe('LearningService vocabulary completion (SRS 22)', () => {
+describe('LearningService vocabulary completion (SRS 22, amended)', () => {
   const item = [{ id: 'w1', status: ContentStatus.PUBLISHED }];
 
   /**
@@ -140,20 +140,42 @@ describe('LearningService vocabulary completion (SRS 22)', () => {
     expect((progress as { learnedAt: Date | null }).learnedAt).toBeNull();
   });
 
-  it('counts it as learned once she has both seen and heard it', async () => {
+  /**
+   * The rule the client raised on 2026-08-30. Seeing and hearing a word can
+   * both be done by tapping through the cards, so neither, nor both together,
+   * finishes it any more — the check does.
+   */
+  it('does not count it as learned from seeing AND hearing alone', async () => {
     const service = serviceOver({ vocabularyItem: item });
 
     await service.markVocabulary(student, 'w1', 'seen');
     const progress = await service.markVocabulary(student, 'w1', 'audio');
 
-    expect((progress as { learnedAt: Date | null }).learnedAt).not.toBeNull();
+    expect((progress as { learnedAt: Date | null }).learnedAt).toBeNull();
   });
 
-  it('does not care which order she does them in', async () => {
+  it('still records both steps, whichever order she does them in', async () => {
     const service = serviceOver({ vocabularyItem: item });
 
     await service.markVocabulary(student, 'w1', 'audio');
-    const progress = await service.markVocabulary(student, 'w1', 'seen');
+    const progress = await service.markVocabulary(student, 'w1', 'seen') as {
+      seenAt: Date | null;
+      audioPlayedAt: Date | null;
+    };
+
+    expect(progress.seenAt).not.toBeNull();
+    expect(progress.audioPlayedAt).not.toBeNull();
+  });
+
+  /** The older rule is still honoured where a school has it configured. */
+  it('completes on seeing and hearing when that is the configured rule', async () => {
+    const service = serviceOver(
+      { vocabularyItem: item },
+      { [SETTING_KEYS.VOCABULARY_COMPLETION_RULE]: 'seen_and_audio_played' },
+    );
+
+    await service.markVocabulary(student, 'w1', 'seen');
+    const progress = await service.markVocabulary(student, 'w1', 'audio');
 
     expect((progress as { learnedAt: Date | null }).learnedAt).not.toBeNull();
   });
@@ -171,13 +193,14 @@ describe('LearningService vocabulary completion (SRS 22)', () => {
   });
 
   /** An unreadable value must not make words easier to complete. */
-  it('falls back to the stricter reading when the rule is unrecognised', async () => {
+  it('falls back to the strictest reading when the rule is unrecognised', async () => {
     const service = serviceOver(
       { vocabularyItem: item },
       { [SETTING_KEYS.VOCABULARY_COMPLETION_RULE]: 'something_new' },
     );
 
-    const progress = await service.markVocabulary(student, 'w1', 'seen');
+    await service.markVocabulary(student, 'w1', 'seen');
+    const progress = await service.markVocabulary(student, 'w1', 'audio');
 
     expect((progress as { learnedAt: Date | null }).learnedAt).toBeNull();
   });

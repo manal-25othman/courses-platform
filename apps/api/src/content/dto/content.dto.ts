@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
@@ -80,10 +82,42 @@ export class UpdateSectionDto {
   @MaxLength(20000)
   body?: string;
 
+  /**
+   * Worked examples, one per entry.
+   *
+   * Kept apart from the explanation because a grammar page reads as a rule
+   * followed by examples of it, and the two are shown differently.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  @ArrayMaxSize(20)
+  examples?: string[];
+
   @IsOptional()
   @IsInt()
   @Min(0)
   orderIndex?: number;
+}
+
+/** A picture the teacher uploads for a section. */
+export class UploadImageDto {
+  /** The file itself, base64, as the browser read it. */
+  @IsString()
+  @IsNotEmpty()
+  data!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  mimeType!: string;
+
+  /** What the picture shows, for a student using a screen reader. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  altText?: string;
 }
 
 export class CreateVocabularyDto {

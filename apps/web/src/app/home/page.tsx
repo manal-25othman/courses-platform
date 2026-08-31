@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api, ApiError, homeFor, LearnUnitSummary, Me } from '@/lib/api';
+import { Conversation } from '@/components/Conversation';
 
 /**
  * Where a student starts: her units, and how far she has got with each.
@@ -106,16 +107,47 @@ export default function StudentHomePage() {
                 </p>
               </div>
 
-              <p className="muted" style={{ margin: 0 }}>
-                Words {unit.progress.vocabulary.done}/{unit.progress.vocabulary.total} · Activity{' '}
-                {unit.progress.bestScorePercent === null
-                  ? 'not tried'
-                  : `best ${unit.progress.bestScorePercent}%`}
-              </p>
+              {/*
+                The three parts, each read from what she has actually recorded.
+                Nothing here is something she can set herself: there is no
+                "mark this unit done".
+              */}
+              <dl className="parts" data-testid="unit-parts">
+                <div>
+                  <dt>Words</dt>
+                  <dd data-testid="part-vocabulary">
+                    {unit.progress.vocabulary.done}/{unit.progress.vocabulary.total}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Grammar</dt>
+                  <dd data-testid="part-grammar">
+                    {unit.progress.grammar.total === 0
+                      ? '—'
+                      : `${unit.progress.grammar.done}/${unit.progress.grammar.total}`}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Activity</dt>
+                  <dd data-testid="part-activity">
+                    {unit.progress.bestScorePercent === null
+                      ? 'not tried'
+                      : `${unit.progress.bestScorePercent}%`}
+                  </dd>
+                </div>
+              </dl>
             </button>
           ))}
         </div>
       )}
+
+      <Conversation
+        loadPath="/messages/mine"
+        sendPath="/messages/mine"
+        readPath="/messages/mine/read"
+        placeholder="Write to your teacher…"
+        emptyText="No messages yet. Your teacher will write here when she has something for you."
+      />
 
       <div className="card">
         <h2>Your account</h2>

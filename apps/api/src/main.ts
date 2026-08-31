@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
+import { json } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
@@ -13,6 +14,13 @@ async function bootstrap(): Promise<void> {
 
   // The website receives its tokens in httpOnly cookies, which this reads.
   app.use(cookieParser());
+
+  // A teacher's grammar picture is capped at 2 MB and arrives base64-encoded,
+  // which is about a third larger again. Express allows 100 kB by default, so
+  // the limit is raised to fit one — and no further, because a larger body is
+  // a larger thing to reject. The picture itself is checked again in the
+  // content service, which is where the real limit lives.
+  app.use(json({ limit: '4mb' }));
 
   // Reject anything that does not match its declared shape, before it reaches
   // the domain (SRS 37 input validation).

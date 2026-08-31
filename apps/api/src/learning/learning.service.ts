@@ -11,6 +11,12 @@ import { SETTING_KEYS } from '../settings/settings.types';
 import { QuestionEngineService, StoredQuestion } from '../questions/question-engine.service';
 import { CurrentUser } from '../auth/auth.types';
 import { ComponentProgress, QuestionSnapshot, UnitProgress } from './learning.types';
+import {
+  buildCheck,
+  CheckableWord,
+  explainRefusal,
+  isCorrectAnswer,
+} from './vocabulary-check';
 
 /** What the settings store holds under `progress.weights`. */
 type ProgressWeights = Record<string, number>;
@@ -26,6 +32,14 @@ type ProgressWeights = Record<string, number>;
  * progress are the same set, never two lists that can drift apart.
  */
 const STUDENT_SECTION_COMPONENT = 'grammar';
+
+/** The examples a teacher entered on a section, if any. */
+function readExamples(config: unknown): string[] {
+  if (!config || typeof config !== 'object') return [];
+  const examples = (config as { examples?: unknown }).examples;
+  if (!Array.isArray(examples)) return [];
+  return examples.filter((e): e is string => typeof e === 'string');
+}
 
 /**
  * The student's own journey through a unit.
@@ -154,6 +168,9 @@ export class LearningService {
           typeKey: section.typeKey,
           title: section.title,
           body: section.body,
+          // Worked examples, kept apart from the explanation because that is
+          // how a grammar page reads.
+          examples: readExamples(section.config),
           orderIndex: section.orderIndex,
           type: section.type,
           media: section.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText })),
@@ -170,7 +187,11 @@ export class LearningService {
             orderIndex: item.orderIndex,
             seen: Boolean(p?.seenAt),
             audioPlayed: Boolean(p?.audioPlayedAt),
+            checked: Boolean(p?.verifiedAt),
             learned: Boolean(p?.learnedAt),
+            // The check only opens once she has read and heard the word.
+            checkReady: Boolean(p?.seenAt && p?.audioPlayedAt && !p?.verifiedAt),
+            checkAttempts: p?.checkAttempts ?? 0,
           };
         }),
         activity: { questionCount },
@@ -216,7 +237,7 @@ export class LearningService {
       const audioPlayedAt =
         event === 'audio' ? (existing?.audioPlayedAt ?? now) : (existing?.audioPlayedAt ?? null);
 
-      const satisfied = this.isLearned(rule, seenAt, audioPlayedAt);
+      const satisfied = this.isLearned(rule, seenAt, audioPlayedAt, existing?.verifiedAt ?? null);
       // Never re-dated: the first time she finished it is when she finished it.
       const learnedAt = existing?.learnedAt ?? (satisfied ? now : null);
 
@@ -245,9 +266,121 @@ export class LearningService {
     rule: string | undefined,
     seenAt: Date | null,
     audioPlayedAt: Date | null,
+    verifiedAt: Date | null,
   ): boolean {
     if (rule === 'seen_only') return Boolean(seenAt);
-    return Boolean(seenAt && audioPlayedAt);
+    if (rule === 'seen_and_audio_played') return Boolean(seenAt && audioPlayedAt);
+    // The confirmed rule, and the strictest reading of anything unrecognised:
+    // she has seen it, heard it, and answered a check on it.
+    return Boolean(seenAt && audioPlayedAt && verifiedAt);
+  }
+
+  /**
+   * The check for one word.
+   *
+   * Built from what the teacher entered and nothing else: the word, her Arabic
+   * meaning for it, and other words' meanings from the same unit as the wrong
+   * choices. Where a unit does not hold enough real material to ask fairly,
+   * this says so instead of inventing a question (client, 2026-08-30).
+   */
+  async getVocabularyCheck(actor: CurrentUser, itemId: string) {
+    this.assertStudent(actor);
+    const schoolId = this.schoolOf(actor);
+
+    return this.prisma.forSchool(schoolId, async (tx) => {
+      const item = await tx.vocabularyItem.findFirst({
+        where: { id: itemId, status: ContentStatus.PUBLISHED },
+      });
+      if (!item) throw new NotFoundException('Word not found.');
+
+      const progress = await tx.vocabularyProgress.findFirst({
+        where: { studentId: actor.userId, itemId },
+      });
+
+      // The check is the last step, not the first: it is asked once she has
+      // actually read and heard the word.
+      if (!progress?.seenAt || !progress?.audioPlayedAt) {
+        throw new BadRequestException('Read and listen to the word first.');
+      }
+
+      const others = await tx.vocabularyItem.findMany({
+        where: {
+          unitId: item.unitId,
+          status: ContentStatus.PUBLISHED,
+          id: { not: itemId },
+        },
+      });
+
+      const { check, refusedBecause } = buildCheck(
+        item as CheckableWord,
+        others as CheckableWord[],
+        `${actor.userId}:${itemId}:${progress.checkAttempts}`,
+      );
+
+      if (!check) {
+        return {
+          available: false as const,
+          reason: explainRefusal(refusedBecause!),
+          itemId,
+          wordEn: item.wordEn,
+        };
+      }
+
+      return { available: true as const, ...check };
+    });
+  }
+
+  /**
+   * Marks her answer to the check.
+   *
+   * A wrong answer costs nothing but the attempt: she can look at the word
+   * again and try once more. Only a right one completes the word.
+   */
+  async answerVocabularyCheck(actor: CurrentUser, itemId: string, answer: string) {
+    this.assertStudent(actor);
+    const schoolId = this.schoolOf(actor);
+
+    const rule = await this.settings.resolve<string>(
+      SETTING_KEYS.VOCABULARY_COMPLETION_RULE,
+    );
+
+    return this.prisma.forSchool(schoolId, async (tx) => {
+      const item = await tx.vocabularyItem.findFirst({
+        where: { id: itemId, status: ContentStatus.PUBLISHED },
+      });
+      if (!item) throw new NotFoundException('Word not found.');
+
+      const existing = await tx.vocabularyProgress.findFirst({
+        where: { studentId: actor.userId, itemId },
+      });
+
+      if (!existing?.seenAt || !existing?.audioPlayedAt) {
+        throw new BadRequestException('Read and listen to the word first.');
+      }
+
+      const correct = isCorrectAnswer(item as CheckableWord, answer);
+      const now = new Date();
+      // Never re-dated: the first time she got it right is when she got it right.
+      const verifiedAt = existing.verifiedAt ?? (correct ? now : null);
+
+      const satisfied = this.isLearned(rule, existing.seenAt, existing.audioPlayedAt, verifiedAt);
+      const learnedAt = existing.learnedAt ?? (satisfied ? now : null);
+
+      const updated = await tx.vocabularyProgress.update({
+        where: { id: existing.id },
+        data: {
+          verifiedAt,
+          learnedAt,
+          checkAttempts: { increment: 1 },
+        },
+      });
+
+      return {
+        correct,
+        learned: Boolean(updated.learnedAt),
+        attempts: updated.checkAttempts,
+      };
+    });
   }
 
   // --- Teaching sections ---------------------------------------------------

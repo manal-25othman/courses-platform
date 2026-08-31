@@ -7,6 +7,18 @@
  */
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
+/**
+ * Turns an API-relative path into one the browser can fetch.
+ *
+ * A picture's address is stored as this API's own route for it, so a page
+ * needs the API's base to load it. Anything already absolute — a picture a
+ * teacher linked to rather than uploaded — is left alone.
+ */
+export function apiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  return BASE.replace(/\/api\/v1$/, '') + path;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -144,6 +156,7 @@ export interface Section {
   typeKey: string;
   title: string | null;
   body: string | null;
+  examples?: string[];
   orderIndex: number;
   status: ContentStatus;
   type: SectionType;
@@ -262,6 +275,7 @@ export interface LearnSection {
   typeKey: string;
   title: string | null;
   body: string | null;
+  examples: string[];
   orderIndex: number;
   type: SectionType & { progressComponent: string | null };
   media: { id: string; url: string; altText: string | null }[];
@@ -277,7 +291,28 @@ export interface LearnWord {
   orderIndex: number;
   seen: boolean;
   audioPlayed: boolean;
+  /** She has answered the check on this word correctly. */
+  checked: boolean;
   learned: boolean;
+  /** Read and heard, but not yet checked: the check is waiting for her. */
+  checkReady: boolean;
+  checkAttempts: number;
+}
+
+/** The check on one word, or the reason there cannot be one. */
+export type VocabularyCheck =
+  | {
+      available: true;
+      itemId: string;
+      wordEn: string;
+      options: { id: string; text: string }[];
+    }
+  | { available: false; itemId: string; wordEn: string; reason: string };
+
+export interface CheckAnswerResult {
+  correct: boolean;
+  learned: boolean;
+  attempts: number;
 }
 
 export interface LearnUnit {
@@ -324,4 +359,88 @@ export interface AttemptSummary {
   pointsAwarded: number | null;
   pointsAvailable: number | null;
   scorePercent: number | null;
+}
+
+// --- Feedback between a teacher and a student ------------------------------
+
+export interface Message {
+  id: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+  fromMe: boolean;
+  senderName: string;
+  senderRole: Role;
+}
+
+// --- The teacher's view of how her class is doing --------------------------
+
+export interface StudentUnitProgress extends UnitProgress {
+  title: string;
+}
+
+export interface ClassRow {
+  studentId: string;
+  fullName: string;
+  username: string;
+  overallPercent: number;
+  lastActivityAt: string | null;
+  unreadFromStudent: number;
+  units: StudentUnitProgress[];
+}
+
+export interface ClassOverview {
+  units: { id: string; title: string }[];
+  students: ClassRow[];
+}
+
+export interface StudentWordProgress {
+  id: string;
+  wordEn: string;
+  meaningAr: string | null;
+  seen: boolean;
+  audioPlayed: boolean;
+  checked: boolean;
+  learned: boolean;
+  checkAttempts: number;
+}
+
+export interface StudentDetail {
+  studentId: string;
+  fullName: string;
+  username: string;
+  lastLoginAt: string | null;
+  lastActivityAt: string | null;
+  units: {
+    unitId: string;
+    title: string;
+    progress: UnitProgress;
+    attempts: {
+      id: string;
+      submittedAt: string | null;
+      scorePercent: number | null;
+      correctCount: number | null;
+      incorrectCount: number | null;
+    }[];
+    words: StudentWordProgress[];
+  }[];
+}
+
+/** How long ago something happened, in words a person would use. */
+export function timeAgo(iso: string | null): string {
+  if (!iso) return 'never';
+
+  const then = new Date(iso).getTime();
+  const minutes = Math.floor((Date.now() - then) / 60000);
+
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+
+  return new Date(iso).toLocaleDateString('en-GB');
 }

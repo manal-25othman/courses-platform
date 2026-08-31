@@ -8,5 +8,6 @@ import { SettingsModule } from '../settings/settings.module';
   imports: [QuestionsModule, SettingsModule],
   controllers: [LearningController],
   providers: [LearningService],
+  exports: [LearningService],
 })
 export class LearningModule {}

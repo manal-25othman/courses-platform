@@ -1,6 +1,6 @@
 'use client';
 
-import { api, LearnSection } from '@/lib/api';
+import { api, apiUrl, LearnSection } from '@/lib/api';
 
 /**
  * The grammar for a unit.
@@ -64,9 +64,26 @@ export function GrammarSections({
             </p>
           )}
 
+          {section.examples.length > 0 && (
+            <div data-testid="grammar-examples">
+              <strong style={{ fontSize: '.9rem' }}>Examples</strong>
+              <ul className="examples">
+                {section.examples.map((example, i) => (
+                  <li key={i}>{example}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {section.media.map((image) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={image.id} src={image.url} alt={image.altText ?? ''} />
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              key={image.id}
+              src={apiUrl(image.url)}
+              alt={image.altText ?? ''}
+              data-testid="grammar-image"
+              style={{ borderRadius: 8, border: '1px solid var(--border)' }}
+            />
           ))}
         </div>
       ))}

@@ -177,3 +177,44 @@ The platform now detects this and says so plainly instead of asking her to try
 again at something that cannot work. **It does not mark the word as heard.**
 Whether a student on a voice-less device should be able to complete vocabulary
 some other way is a decision for the client, not one to take quietly.
+
+---
+
+# Additions after Phase 5, before Phase 6
+
+## Vocabulary now needs a check answered
+
+Reading a word and hearing it can both be done by tapping through the cards, so
+neither, nor both together, finishes a word any more. She must also answer a
+short check on it. SRS 22 is amended by the client's instruction of
+2026-08-30, and the setting `vocabulary.completion_rule` carries the change
+from `seen_and_audio_played` to `seen_audio_and_checked`.
+
+**The check is built only from what the teacher entered.** The word, her Arabic
+meaning for it, and — as the wrong choices — other words' meanings from the
+same unit. Nothing is written, translated or shortened by the platform.
+
+Where a unit does not hold enough real material, no question is asked:
+
+| Situation | What happens |
+|---|---|
+| The word has no Arabic meaning | No check. The teacher is told the word has nothing to check against |
+| Fewer than three words in the unit have meanings | No check. The teacher is told the unit needs at least three |
+
+In both cases the word stays at read-and-heard and **cannot be completed**.
+That is the instruction followed exactly, and it is a live consequence worth
+naming: a unit whose word list is thin cannot be finished until the teacher
+adds more meanings.
+
+## Where grammar pictures are kept
+
+Uploaded pictures are stored in the database, capped at 2 MB, and served by the
+API from its own route with `nosniff`, `Content-Disposition: inline` and a
+locked-down `Content-Security-Policy`. SVG is refused: it is a document that
+can carry script, and this one would be served from the API's own origin.
+
+This is a choice for the size of the pilot, not a permanent one. It needs no
+new service, works the moment the API is deployed, and everything that reads a
+picture reads `media_assets.url` — so moving to object storage later is a
+migration behind that column. Revisit if the picture library grows, which it
+will if the 92 curriculum images are ever extracted.

@@ -92,7 +92,8 @@ model School {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  users User[]
+  users    User[]
+  messages Message[]
 
   @@map("schools")
 }
@@ -135,6 +136,10 @@ model User {
   vocabularyProgress VocabularyProgress[]
   sectionProgress    SectionProgress[]
   activityAttempts   ActivityAttempt[]
+
+  messagesAsTeacher Message[] @relation("messagesAsTeacher")
+  messagesAsStudent Message[] @relation("messagesAsStudent")
+  messagesSent      Message[] @relation("messagesSent")
 
   // A username is unique within its school, so two schools may each have a
   // student called "sara".
@@ -304,14 +309,14 @@ model Unit {
 /// A row per kind, so a curriculum that introduces another one needs data, not
 /// a code change. Seeded from what the supplied file actually contains.
 model SectionType {
-  key          String  @id
-  displayName  String  @map("display_name")
-  description  String?
+  key               String  @id
+  displayName       String  @map("display_name")
+  description       String?
   /// True where the section is a list of vocabulary rather than prose.
-  isVocabulary Boolean @default(false) @map("is_vocabulary")
+  isVocabulary      Boolean @default(false) @map("is_vocabulary")
   /// True where the material is inherently on paper (handwriting practice),
   /// so it is presented for reference rather than answered on screen.
-  isPaperBased Boolean @default(false) @map("is_paper_based")
+  isPaperBased      Boolean @default(false) @map("is_paper_based")
   /// Which part of the progress model this kind of section counts towards
   /// (SRS 16, 21): "vocabulary", "grammar", or null for a kind that is read
   /// but not counted.
@@ -322,8 +327,8 @@ model SectionType {
   /// sit outside the four confirmed components. Changing what counts is
   /// changing this column, not changing the platform.
   progressComponent String? @map("progress_component")
-  isActive     Boolean @default(true) @map("is_active")
-  orderIndex   Int     @map("order_index")
+  isActive          Boolean @default(true) @map("is_active")
+  orderIndex        Int     @map("order_index")
 
   sections UnitSection[]
 
@@ -394,9 +399,21 @@ model VocabularyItem {
 model MediaAsset {
   id         String   @id @default(uuid()) @db.Uuid
   sectionId  String?  @map("section_id") @db.Uuid
-  /// Where the file is stored. No binary data is kept in the database.
+  /// Where to fetch the picture.
+  ///
+  /// For a picture the teacher uploaded this is this API's own route for the
+  /// asset; for one she linked to, the address she gave.
   url        String
   mimeType   String   @map("mime_type")
+  /// The file itself, for an uploaded picture.
+  ///
+  /// Kept in the database on purpose for the pilot: it needs no new service,
+  /// works the moment the API is deployed, and moving to object storage later
+  /// is a migration behind `url` rather than a change to anything that reads
+  /// a picture. Size is capped in the API. Revisit if the library grows.
+  data       Bytes?
+  /// How big the file is, so a listing does not have to load it.
+  byteSize   Int?     @map("byte_size")
   /// Describes the picture for a student using a screen reader.
   altText    String?  @map("alt_text")
   orderIndex Int      @default(0) @map("order_index")
@@ -570,6 +587,15 @@ model VocabularyProgress {
   seenAt        DateTime? @map("seen_at")
   /// When she played the pronunciation.
   audioPlayedAt DateTime? @map("audio_played_at")
+  /// When she answered the check on this word correctly.
+  ///
+  /// Seeing and hearing a word can both be done by tapping through the cards
+  /// quickly, which is not learning it. The check is the part that cannot be
+  /// got through without knowing the answer.
+  verifiedAt    DateTime? @map("verified_at")
+  /// How many times she has tried the check. Kept so a teacher can see a word
+  /// a student is struggling with, and so the shuffle differs on each try.
+  checkAttempts Int       @default(0) @map("check_attempts")
   /// Set once the configured rule is satisfied. Kept as a column so a later
   /// change to the rule does not silently rewrite what a student has already
   /// completed.
@@ -675,4 +701,36 @@ model AttemptAnswer {
   @@unique([attemptId, orderIndex])
   @@index([attemptId])
   @@map("attempt_answers")
+}
+
+/// A message between a teacher and one of her students.
+///
+/// Feedback on her work, and the student's reply. Deliberately not a chat: a
+/// message is written, read and answered, with nothing live about it. One row
+/// per message, ordered by time; a conversation is every message between the
+/// same pair.
+model Message {
+  id        String @id @default(uuid()) @db.Uuid
+  schoolId  String @map("school_id") @db.Uuid
+  /// The teacher's side of the conversation.
+  teacherId String @map("teacher_id") @db.Uuid
+  /// The student's side.
+  studentId String @map("student_id") @db.Uuid
+  /// Who wrote this one. Always one of the two above.
+  senderId  String @map("sender_id") @db.Uuid
+
+  body String
+
+  /// When the other person opened it. Null while it is still unread.
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  school  School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher User   @relation("messagesAsTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  student User   @relation("messagesAsStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  sender  User   @relation("messagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, studentId, createdAt])
+  @@index([studentId, readAt])
+  @@map("messages")
 }
