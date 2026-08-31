@@ -34,6 +34,7 @@ const CONFIRMED: Record<string, unknown> = {
     activity: 25,
     assessment: 25,
   },
+  [SETTING_KEYS.PROGRESS_EMPTY_COUNTS_AS_COMPLETE]: false,
   [SETTING_KEYS.RANDOMIZATION_SHUFFLE_QUESTIONS]: true,
   [SETTING_KEYS.RANDOMIZATION_SHUFFLE_OPTIONS]: true,
 };
@@ -269,13 +270,14 @@ describe('LearningService progress (SRS 16, 21)', () => {
 
     const progress = await service.unitProgress(student, 'u1');
 
-    expect(progress.vocabulary).toEqual({ total: 2, done: 1, percent: 50 });
-    expect(progress.grammar).toEqual({ total: 1, done: 1, percent: 100 });
+    expect(progress.vocabulary).toEqual({ total: 2, done: 1, percent: 50, empty: false });
+    expect(progress.grammar).toEqual({ total: 1, done: 1, percent: 100, empty: false });
     expect(progress.activity.percent).toBe(100);
-    // This unit has no assessment, so there is nothing there left to do.
-    expect(progress.assessment.percent).toBe(100);
-    // (50 + 100 + 100 + 100) / 4 components of equal weight
-    expect(progress.overallPercent).toBe(88);
+    // This unit has no assessment yet, so that quarter is not earned.
+    expect(progress.assessment).toEqual({ total: 0, done: 0, percent: 0, empty: true });
+    expect(progress.missingContent).toEqual(['assessment']);
+    // (50 + 100 + 100 + 0) / 4 components of equal weight
+    expect(progress.overallPercent).toBe(63);
   });
 
   /**
@@ -442,13 +444,75 @@ describe('LearningService progress (SRS 16, 21)', () => {
     expect(progress.grammar.total).toBe(1);
   });
 
-  it('treats a part with nothing in it as nothing left to do', async () => {
+  /**
+   * The defect this rule exists for.
+   *
+   * A part with nothing in it used to count as complete — "nothing left to
+   * do" — which handed out a quarter of the unit for every part the teacher
+   * had not prepared. A published unit with no words, no grammar, no activity
+   * and no assessment reported 100% and marked itself complete for a student
+   * who had never opened it.
+   */
+  it('gives nothing for a part the teacher has not filled in', async () => {
     const service = serviceOver({});
 
     const progress = await service.unitProgress(student, 'u1');
 
+    expect(progress.vocabulary).toEqual({ total: 0, done: 0, percent: 0, empty: true });
+    expect(progress.grammar.percent).toBe(0);
+    expect(progress.activity.percent).toBe(0);
+    expect(progress.assessment.percent).toBe(0);
+  });
+
+  it('does not call an empty unit finished', async () => {
+    const service = serviceOver({});
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.overallPercent).toBe(0);
+    expect(progress.isComplete).toBe(false);
+    expect(progress.missingContent).toEqual([
+      'vocabulary',
+      'grammar',
+      'activity',
+      'assessment',
+    ]);
+  });
+
+  /** Each missing part costs exactly its own weight, and no more. */
+  it('charges one quarter for each part that is missing', async () => {
+    // Words done, grammar done, no activity, no assessment: half the unit
+    // exists and she has finished all of it.
+    const service = serviceOver({
+      vocabularyItem: [{ id: 'w1', status: ContentStatus.PUBLISHED }],
+      vocabularyProgress: [{ id: 'p1', itemId: 'w1', learnedAt: new Date() }],
+      unitSection: [{ id: 's1', type: { progressComponent: 'grammar' } }],
+      sectionProgress: [{ sectionId: 's1' }],
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.overallPercent).toBe(50);
+    expect(progress.missingContent).toEqual(['activity', 'assessment']);
+    expect(progress.isComplete).toBe(false);
+  });
+
+  /**
+   * The old reading is still reachable, because whether an unprepared part
+   * counts is a decision the client may want to make differently.
+   */
+  it('can be told to treat an empty part as complete', async () => {
+    const service = serviceOver(
+      {},
+      { [SETTING_KEYS.PROGRESS_EMPTY_COUNTS_AS_COMPLETE]: true },
+    );
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.overallPercent).toBe(100);
     expect(progress.vocabulary.percent).toBe(100);
-    expect(progress.grammar.percent).toBe(100);
+    // Still reported as empty, whatever it is worth.
+    expect(progress.missingContent).toHaveLength(4);
   });
 });
 

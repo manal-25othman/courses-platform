@@ -28,6 +28,7 @@ export function VocabularyCards({
   const [checking, setChecking] = useState<VocabularyCheck | null>(null);
   const [verdict, setVerdict] = useState<CheckAnswerResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [asked, setAsked] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -125,6 +126,60 @@ export function VocabularyCards({
     }
   }
 
+  /**
+   * Asks her teacher to record the words this browser cannot say.
+   *
+   * The message names them, so the teacher knows what to record without
+   * having to work out which browser the child is using.
+   */
+  async function askTeacherToRecord() {
+    setBusy(true);
+    try {
+      const list = silentWords.map((w) => w.wordEn).join(', ');
+      await api.post('/messages/mine', {
+        body:
+          `My browser cannot read words aloud, so I cannot finish these words: ${list}. ` +
+          'Please could you record them for me?',
+      });
+      setAsked(true);
+      setProblem(null);
+    } catch (caught) {
+      setProblem(
+        caught instanceof ApiError ? caught.message : 'That message could not be sent.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Asks her teacher for what a check needs.
+   *
+   * A word with no meaning recorded, or a unit with fewer than three words
+   * that have meanings, cannot be checked — and a word that cannot be checked
+   * cannot be finished. The API refuses rather than inventing a question
+   * (client, 2026-08-30), which is right, and leaves her needing a way to say
+   * so to somebody who can fix it.
+   */
+  async function askTeacherAboutCheck(word: LearnWord) {
+    setBusy(true);
+    try {
+      await api.post('/messages/mine', {
+        body:
+          `I cannot finish the word "${word.wordEn}" because its check will not open. ` +
+          'Please could you add the Arabic meanings for this unit?',
+      });
+      setAsked(true);
+      setProblem(null);
+    } catch (caught) {
+      setProblem(
+        caught instanceof ApiError ? caught.message : 'That message could not be sent.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openCheck(word: LearnWord) {
     setProblem(null);
     setVerdict(null);
@@ -161,6 +216,8 @@ export function VocabularyCards({
   }
 
   const learned = words.filter((w) => w.learned).length;
+  /** Words she cannot hear here: no browser voice and no recording. */
+  const silentWords = words.filter((w) => !w.audioPlayed && !w.teacherAudioUrl);
 
   return (
     <div className="stack">
@@ -169,12 +226,46 @@ export function VocabularyCards({
         answered its check.
       </p>
 
+      {/*
+        A word cannot be finished until it has been heard, and she may not
+        simply say she heard it. So a browser with no voice and a word with no
+        recording is a dead end — and a dead end has to come with a way out,
+        or she is stuck with no idea why. There are exactly two ways out and
+        this names both: a browser that can speak, or her teacher recording
+        the words. The second is one tap, because "ask your teacher" is not
+        much help to an eleven-year-old on her own.
+      */}
       {!supported && (
-        <p className="alert warn" role="status" data-testid="no-voice">
-          {words.some((w) => w.teacherAudioUrl)
-            ? 'This browser has no voice installed. Words your teacher has recorded will still play; the rest cannot be played here. Open the site in Chrome, Edge or Safari to finish them.'
-            : 'This browser has no voice installed, so words cannot be played or marked as heard here. Open the site in Chrome, Edge or Safari to finish your words.'}
-        </p>
+        <div className="alert warn" role="status" data-testid="no-voice">
+          {silentWords.length === 0 ? (
+            <p style={{ margin: 0 }}>
+              This browser has no voice installed. Every word here has a recording from your
+              teacher, so you can still finish them all — use the 🎧 button.
+            </p>
+          ) : (
+            <>
+              <p style={{ margin: 0 }}>
+                This browser has no voice installed, so {silentWords.length}{' '}
+                {silentWords.length === 1 ? 'word' : 'words'} cannot be played here. A word has to
+                be heard before it counts, so there are two ways forward:
+              </p>
+              <ul style={{ margin: '.5rem 0 0', paddingInlineStart: '1.2rem' }}>
+                <li>Open this page in Chrome, Edge or Safari, which can read words aloud.</li>
+                <li>Ask your teacher to record them for you.</li>
+              </ul>
+              <div className="row" style={{ marginTop: '.6rem' }}>
+                <button
+                  className="small"
+                  onClick={askTeacherToRecord}
+                  disabled={busy || asked}
+                  data-testid="ask-for-recordings"
+                >
+                  {asked ? 'Your teacher has been asked' : 'Ask my teacher to record these words'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {problem && (
@@ -270,6 +361,8 @@ export function VocabularyCards({
                 check={checking}
                 busy={busy}
                 verdict={verdict}
+                asked={asked}
+                onAsk={() => askTeacherAboutCheck(word)}
                 onAnswer={(text) => answer(word.id, text)}
                 onClose={() => {
                   setChecking(null);
@@ -303,12 +396,16 @@ function VocabularyCheckPanel({
   check,
   busy,
   verdict,
+  asked,
+  onAsk,
   onAnswer,
   onClose,
 }: {
   check: VocabularyCheck;
   busy: boolean;
   verdict: CheckAnswerResult | null;
+  asked: boolean;
+  onAsk: () => void;
   onAnswer: (text: string) => void;
   onClose: () => void;
 }) {
@@ -316,7 +413,14 @@ function VocabularyCheckPanel({
     return (
       <div className="alert warn" role="status" data-testid="check-unavailable">
         {check.reason}
+        {/*
+          Nothing she can do on her own fixes this, so the only useful control
+          is one that reaches somebody who can.
+        */}
         <div className="row" style={{ marginTop: '.5rem' }}>
+          <button className="small" onClick={onAsk} disabled={busy || asked} data-testid="ask-about-check">
+            {asked ? 'Your teacher has been asked' : 'Tell my teacher'}
+          </button>
           <button className="small" onClick={onClose}>
             Close
           </button>

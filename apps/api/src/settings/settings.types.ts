@@ -19,6 +19,7 @@ export const SETTING_KEYS = {
   ASSESSMENT_RESULT_POLICY: 'assessment.result_policy',
   ACTIVITY_MAX_ATTEMPTS: 'activity.max_attempts',
   PROGRESS_WEIGHTS: 'progress.weights',
+  PROGRESS_EMPTY_COUNTS_AS_COMPLETE: 'progress.empty_component_counts_as_complete',
   VOCABULARY_COMPLETION_RULE: 'vocabulary.completion_rule',
   AUDIO_PROVIDER: 'audio.provider',
   RANDOMIZATION_SHUFFLE_QUESTIONS: 'randomization.shuffle_questions',

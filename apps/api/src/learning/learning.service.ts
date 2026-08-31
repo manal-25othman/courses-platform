@@ -11,7 +11,7 @@ import {
   SettingScope,
   UserRole,
 } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService, TenantClient } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { SETTING_KEYS } from '../settings/settings.types';
 import { QuestionEngineService, StoredQuestion } from '../questions/question-engine.service';
@@ -894,12 +894,32 @@ export class LearningService {
   async unitProgress(actor: CurrentUser, unitId: string): Promise<UnitProgress> {
     const schoolId = this.schoolOf(actor);
 
-    const [weights, resultPolicy] = await Promise.all([
+    return this.prisma.forSchool(schoolId, (tx) => this.progressWithin(tx, actor, unitId));
+  }
+
+  /**
+   * The same calculation, inside a transaction the caller already has open.
+   *
+   * The teacher's class view needs this for every student across every unit.
+   * Opening a transaction per unit per student ran them all at once and
+   * exhausted the connection pool — eighteen units was enough to turn her main
+   * screen into a 500. One transaction per student is what she gets now.
+   */
+  async progressWithin(
+    tx: TenantClient,
+    actor: CurrentUser,
+    unitId: string,
+  ): Promise<UnitProgress> {
+    const [weights, resultPolicy, emptyCountsAsComplete] = await Promise.all([
       this.settings.resolve<ProgressWeights>(SETTING_KEYS.PROGRESS_WEIGHTS, this.scopes(unitId)),
       this.settings.resolve<string>(SETTING_KEYS.ASSESSMENT_RESULT_POLICY, this.scopes(unitId)),
+      this.settings.resolve<boolean>(
+        SETTING_KEYS.PROGRESS_EMPTY_COUNTS_AS_COMPLETE,
+        this.scopes(unitId),
+      ),
     ]);
 
-    return this.prisma.forSchool(schoolId, async (tx) => {
+    {
       const [unit, vocabulary, sections, questionCount, attempts, assessment] =
         await Promise.all([
           tx.unit.findUnique({
@@ -963,22 +983,24 @@ export class LearningService {
           : Math.max(...scores)
         : null;
 
-      const vocabProgress = this.component(vocabIds.length, learned);
-      const grammarProgress = this.component(grammarIds.length, grammarViewed);
+      const emptyIsDone = emptyCountsAsComplete === true;
+
+      const vocabProgress = this.component(vocabIds.length, learned, emptyIsDone);
+      const grammarProgress = this.component(grammarIds.length, grammarViewed, emptyIsDone);
       // An activity counts as done once she has finished it at least once.
       // Retries are unlimited and improve the score, not the completion.
       const activityProgress = this.component(
         questionCount > 0 ? 1 : 0,
         bestScorePercent === null ? 0 : 1,
+        emptyIsDone,
       );
 
       // The assessment is done when it has been passed, not when it has been
       // sat: a failed attempt is a try used, not a quarter of the unit earned.
-      // A unit with no assessment has nothing to pass, so it counts as done —
-      // the same rule every other component here already follows.
       const assessmentProgress = this.component(
         assessment.questionCount > 0 ? 1 : 0,
         assessment.passed ? 1 : 0,
+        emptyIsDone,
       );
 
       const parts: { key: string; progress: ComponentProgress }[] = [
@@ -989,6 +1011,9 @@ export class LearningService {
       ];
 
       const notCounted: string[] = [];
+      // Parts the teacher has not filled in yet. They hold the unit below
+      // 100%, so they are named rather than showing an unexplained zero.
+      const missingContent = parts.filter((p) => p.progress.empty).map((p) => p.key);
       let weighted = 0;
       let totalWeight = 0;
 
@@ -1021,15 +1046,33 @@ export class LearningService {
         countsTowardCompletion: unit?.countsTowardCompletion ?? true,
         overallPercent,
         notCounted,
+        missingContent,
+        // Every part at 100%. With an empty part worth nothing, a unit whose
+        // preparation is unfinished cannot be completed by a student — which
+        // is the point: completion has to mean work she actually did.
         isComplete: parts.every((p) => p.progress.percent === 100),
       };
-    });
+    }
   }
 
-  /** A component with nothing in it is complete: there is nothing left to do. */
-  private component(total: number, done: number): ComponentProgress {
-    if (total === 0) return { total: 0, done: 0, percent: 100 };
-    return { total, done, percent: Math.round((done / total) * 100) };
+  /**
+   * How far one part of a unit has got.
+   *
+   * A part with nothing in it is NOT finished. It used to count as complete —
+   * "nothing left to do" — and that quietly handed out a quarter of the unit
+   * for every part a teacher had not prepared yet: a published unit with no
+   * words, no grammar, no activity and no assessment reported 100% and marked
+   * itself complete for a student who had never opened it. Measured, not
+   * argued: all sixteen combinations were read back from the API.
+   *
+   * `emptyIsDone` restores the old reading if a school ever wants it, through
+   * `progress.empty_component_counts_as_complete` in the settings store.
+   */
+  private component(total: number, done: number, emptyIsDone = false): ComponentProgress {
+    if (total === 0) {
+      return { total: 0, done: 0, percent: emptyIsDone ? 100 : 0, empty: true };
+    }
+    return { total, done, percent: Math.round((done / total) * 100), empty: false };
   }
 
   // --- Shaping -------------------------------------------------------------

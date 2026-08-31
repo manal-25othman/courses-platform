@@ -116,21 +116,24 @@ export default function StudentHomePage() {
               </div>
 
               {/*
-                The three parts, each read from what she has actually recorded.
+                The four parts, each read from what she has actually recorded.
                 Nothing here is something she can set herself: there is no
-                "mark this unit done".
+                "mark this unit done". A dash means the teacher has not added
+                that part yet, which is why the unit cannot reach 100%.
               */}
               <dl className="parts" data-testid="unit-parts">
                 <div>
                   <dt>Words</dt>
                   <dd data-testid="part-vocabulary">
-                    {unit.progress.vocabulary.done}/{unit.progress.vocabulary.total}
+                    {unit.progress.vocabulary.empty
+                      ? '—'
+                      : `${unit.progress.vocabulary.done}/${unit.progress.vocabulary.total}`}
                   </dd>
                 </div>
                 <div>
                   <dt>Grammar</dt>
                   <dd data-testid="part-grammar">
-                    {unit.progress.grammar.total === 0
+                    {unit.progress.grammar.empty
                       ? '—'
                       : `${unit.progress.grammar.done}/${unit.progress.grammar.total}`}
                   </dd>
@@ -138,12 +141,32 @@ export default function StudentHomePage() {
                 <div>
                   <dt>Activity</dt>
                   <dd data-testid="part-activity">
-                    {unit.progress.bestScorePercent === null
-                      ? 'not tried'
-                      : `${unit.progress.bestScorePercent}%`}
+                    {unit.progress.activity.empty
+                      ? '—'
+                      : unit.progress.bestScorePercent === null
+                        ? 'not tried'
+                        : `${unit.progress.bestScorePercent}%`}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Assessment</dt>
+                  <dd data-testid="part-assessment">
+                    {unit.progress.assessment.empty
+                      ? '—'
+                      : unit.progress.assessmentState.passed
+                        ? 'passed'
+                        : `${unit.progress.assessmentState.attemptsUsed} of ${
+                            unit.progress.assessmentState.maxAttempts ?? '∞'
+                          } tries`}
                   </dd>
                 </div>
               </dl>
+
+              {unit.progress.missingContent.length > 0 && (
+                <p className="muted" style={{ margin: 0, fontSize: '.8rem' }}>
+                  Not ready yet — your teacher is still preparing part of this unit.
+                </p>
+              )}
             </button>
           ))}
         </div>

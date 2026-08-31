@@ -8,11 +8,14 @@ import {
   choicesOf,
   correctChoiceId,
   Choice,
+  Pair,
+  pairsOf,
   Question,
   QuestionPurpose,
   QuestionType,
   ReviewSummary,
   Section,
+  sentenceOf,
 } from '@/lib/api';
 
 /**
@@ -192,6 +195,51 @@ const CHOICE_KINDS = [
 
 const TYPED_KINDS = ['spelling', 'short_answer', 'picture_word', 'grammar_transformation'] as const;
 
+/** Two columns and a map between them. */
+const MATCHING_KIND = 'matching';
+
+/** Words to be put in order. */
+const ORDERING_KIND = 'word_ordering';
+
+/**
+ * Turns the pairs a teacher wrote into the shape the engine marks.
+ *
+ * She writes rows — "sun goes with day". The engine wants two columns and a
+ * map, because it shuffles the columns independently so their positions carry
+ * no hint. The ids never reach her.
+ */
+export function pairsToQuestion(pairs: Pair[]): {
+  payload: Record<string, unknown>;
+  answerKey: Record<string, unknown>;
+} {
+  const filled = pairs.filter((p) => p.left.trim() !== '' && p.right.trim() !== '');
+  const left = filled.map((p, i) => ({ id: `l${i + 1}`, text: p.left.trim() }));
+  const right = filled.map((p, i) => ({ id: `r${i + 1}`, text: p.right.trim() }));
+  const map: Record<string, string> = {};
+  filled.forEach((_, i) => {
+    map[`l${i + 1}`] = `r${i + 1}`;
+  });
+
+  return { payload: { left, right }, answerKey: { pairs: map } };
+}
+
+/**
+ * Turns a sentence into words to be put in order.
+ *
+ * The teacher types the sentence the right way round; the engine shuffles it.
+ * Each word keeps its own id, so the same word twice in one sentence is two
+ * separate tiles rather than one that cannot be told apart.
+ */
+export function sentenceToQuestion(sentence: string): {
+  payload: Record<string, unknown>;
+  answerKey: Record<string, unknown>;
+} {
+  const words = sentence.trim().split(/\s+/).filter((w) => w !== '');
+  const tokens = words.map((text, i) => ({ id: `t${i + 1}`, text }));
+
+  return { payload: { tokens }, answerKey: { order: tokens.map((t) => t.id) } };
+}
+
 /**
  * Writing a new question.
  *
@@ -219,7 +267,9 @@ function NewQuestion({
     (t) =>
       (CHOICE_KINDS as readonly string[]).includes(t.key) ||
       (TYPED_KINDS as readonly string[]).includes(t.key) ||
-      t.key === 'true_false',
+      t.key === 'true_false' ||
+      t.key === MATCHING_KIND ||
+      t.key === ORDERING_KIND,
   );
 
   const [typeKey, setTypeKey] = useState(writable[0]?.key ?? 'multiple_choice');
@@ -231,12 +281,19 @@ function NewQuestion({
   const [correct, setCorrect] = useState<string | null>(null);
   const [trueFalse, setTrueFalse] = useState(true);
   const [accepted, setAccepted] = useState('');
+  const [pairs, setPairs] = useState<Pair[]>([
+    { id: 'p1', left: '', right: '' },
+    { id: 'p2', left: '', right: '' },
+  ]);
+  const [sentence, setSentence] = useState('');
   const [points, setPoints] = useState(1);
   const [sectionId, setSectionId] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
 
   const isChoice = (CHOICE_KINDS as readonly string[]).includes(typeKey);
   const isTrueFalse = typeKey === 'true_false';
+  const isMatching = typeKey === MATCHING_KIND;
+  const isOrdering = typeKey === ORDERING_KIND;
 
   async function submit() {
     setProblem(null);
@@ -263,6 +320,22 @@ function NewQuestion({
       answerKey = { correctOptionId: correct };
     } else if (isTrueFalse) {
       answerKey = { correct: trueFalse };
+    } else if (isMatching) {
+      const built = pairsToQuestion(pairs);
+      if ((built.payload.left as unknown[]).length < 2) {
+        setProblem('A matching question needs at least two complete pairs.');
+        return;
+      }
+      payload = built.payload;
+      answerKey = built.answerKey;
+    } else if (isOrdering) {
+      const built = sentenceToQuestion(sentence);
+      if ((built.payload.tokens as unknown[]).length < 2) {
+        setProblem('Write a sentence of at least two words for her to put in order.');
+        return;
+      }
+      payload = built.payload;
+      answerKey = built.answerKey;
     } else {
       const list = accepted
         .split('\n')
@@ -361,7 +434,11 @@ function NewQuestion({
         </fieldset>
       )}
 
-      {!isChoice && !isTrueFalse && (
+      {isMatching && <PairFields pairs={pairs} onChange={setPairs} />}
+
+      {isOrdering && <SentenceField value={sentence} onChange={setSentence} />}
+
+      {!isChoice && !isTrueFalse && !isMatching && !isOrdering && (
         <label>
           Answers you will accept — one per line
           <textarea
@@ -425,6 +502,110 @@ function SectionPicker({
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+/**
+ * The pairs of a matching question.
+ *
+ * One row per pair, which is how a teacher thinks about it: "sun goes with
+ * day". Two is the fewest that is still a question, which is also the engine's
+ * rule.
+ */
+function PairFields({
+  pairs,
+  onChange,
+}: {
+  pairs: Pair[];
+  onChange: (pairs: Pair[]) => void;
+}) {
+  return (
+    <fieldset className="fieldset" data-testid="pair-fields">
+      <legend>Pairs — each word on the left goes with the one on its right</legend>
+
+      {pairs.map((pair, index) => (
+        <div key={pair.id} className="row" style={{ marginBottom: '.5rem' }}>
+          <input
+            type="text"
+            value={pair.left}
+            onChange={(e) =>
+              onChange(pairs.map((p) => (p.id === pair.id ? { ...p, left: e.target.value } : p)))
+            }
+            aria-label={`Pair ${index + 1}, left`}
+            data-testid={`pair-left-${pair.id}`}
+            style={{ flex: 1 }}
+          />
+          <span aria-hidden="true">→</span>
+          <input
+            type="text"
+            value={pair.right}
+            onChange={(e) =>
+              onChange(pairs.map((p) => (p.id === pair.id ? { ...p, right: e.target.value } : p)))
+            }
+            aria-label={`Pair ${index + 1}, right`}
+            data-testid={`pair-right-${pair.id}`}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="small danger"
+            disabled={pairs.length <= 2}
+            onClick={() => onChange(pairs.filter((p) => p.id !== pair.id))}
+            aria-label={`Remove pair ${index + 1}`}
+            data-testid={`remove-pair-${pair.id}`}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+
+      <button
+        className="small"
+        onClick={() => onChange([...pairs, { id: newChoiceId(), left: '', right: '' }])}
+        data-testid="add-pair"
+      >
+        Add another pair
+      </button>
+
+      <p className="muted" style={{ margin: '.5rem 0 0', fontSize: '.85rem' }}>
+        The two columns are shuffled separately when a student sees them, so their positions never
+        give the answer away.
+      </p>
+    </fieldset>
+  );
+}
+
+/**
+ * The sentence of a word-ordering question.
+ *
+ * She types it the right way round and the engine shuffles it. One box rather
+ * than a list of words, because that is how the sentence exists in her head and
+ * in the curriculum.
+ */
+function SentenceField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const words = value.trim().split(/\s+/).filter((w) => w !== '');
+
+  return (
+    <label>
+      The sentence, written correctly
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="She likes reading books"
+        data-testid="ordering-sentence"
+      />
+      <span className="muted" style={{ fontSize: '.85rem' }} data-testid="ordering-preview">
+        {words.length < 2
+          ? 'Write at least two words.'
+          : `${words.length} words. She will see them shuffled: ${words.join(' · ')}`}
+      </span>
     </label>
   );
 }
@@ -581,10 +762,33 @@ function QuestionRow({
         </ul>
       )}
 
+      {/*
+        What the answer is, in words. A raw dump of the stored key is fine for
+        a developer and useless to a teacher checking her own work, so each
+        kind that has a shape reads it back in that shape.
+      */}
       {!isEditing && choices.length === 0 && !correct && (
-        <p className="muted" style={{ marginTop: '.5rem' }}>
-          Answer: <code>{JSON.stringify(question.answerKey)}</code>
-        </p>
+        <div className="muted" style={{ marginTop: '.5rem' }} data-testid="answer-summary">
+          {question.typeKey === 'matching' ? (
+            <ul style={{ margin: 0, paddingInlineStart: '1.2rem' }}>
+              {pairsOf(question).map((pair) => (
+                <li key={pair.id}>
+                  {pair.left} → {pair.right}
+                </li>
+              ))}
+            </ul>
+          ) : question.typeKey === 'word_ordering' ? (
+            <span>In order: {sentenceOf(question)}</span>
+          ) : question.typeKey === 'true_false' ? (
+            <span>Answer: {question.answerKey?.correct === true ? 'True' : 'False'}</span>
+          ) : Array.isArray(question.answerKey?.accepted) ? (
+            <span>Accepted: {(question.answerKey.accepted as string[]).join(', ')}</span>
+          ) : (
+            <span>
+              Answer: <code>{JSON.stringify(question.answerKey)}</code>
+            </span>
+          )}
+        </div>
       )}
 
       {isEditing && (
@@ -621,6 +825,14 @@ function QuestionEditor({
   const [prompt, setPrompt] = useState(question.prompt);
   const [choices, setChoices] = useState<Choice[]>(choicesOf(question));
   const [correct, setCorrect] = useState<string | null>(correctChoiceId(question));
+  const [pairs, setPairs] = useState<Pair[]>(pairsOf(question));
+  const [sentence, setSentence] = useState(sentenceOf(question));
+  const [trueFalse, setTrueFalse] = useState(question.answerKey?.correct === true);
+  const [accepted, setAccepted] = useState(
+    Array.isArray(question.answerKey?.accepted)
+      ? (question.answerKey.accepted as string[]).join('\n')
+      : '',
+  );
   const [points, setPoints] = useState(question.points);
   const [sectionId, setSectionId] = useState(question.sectionId ?? '');
   const [rawKey, setRawKey] = useState(JSON.stringify(question.answerKey, null, 2));
@@ -628,6 +840,13 @@ function QuestionEditor({
   const [problem, setProblem] = useState<string | null>(null);
 
   const isChoiceKind = choices.length > 0;
+  const isMatching = question.typeKey === MATCHING_KIND;
+  const isOrdering = question.typeKey === ORDERING_KIND;
+  const isTrueFalse = question.typeKey === 'true_false';
+  const isTyped = (TYPED_KINDS as readonly string[]).includes(question.typeKey);
+  // Anything with no form of its own still gets the stored answer directly, so
+  // a kind added to the engine later is correctable from the day it exists.
+  const needsRawKey = !isChoiceKind && !isMatching && !isOrdering && !isTrueFalse && !isTyped;
 
   async function submit() {
     setProblem(null);
@@ -645,6 +864,31 @@ function QuestionEditor({
       }
       body.payload = { ...question.payload, options: choices };
       body.answerKey = { correctOptionId: correct };
+    } else if (isMatching) {
+      const built = pairsToQuestion(pairs);
+      if ((built.payload.left as unknown[]).length < 2) {
+        setProblem('A matching question needs at least two complete pairs.');
+        return;
+      }
+      body.payload = built.payload;
+      body.answerKey = built.answerKey;
+    } else if (isOrdering) {
+      const built = sentenceToQuestion(sentence);
+      if ((built.payload.tokens as unknown[]).length < 2) {
+        setProblem('Write a sentence of at least two words for her to put in order.');
+        return;
+      }
+      body.payload = built.payload;
+      body.answerKey = built.answerKey;
+    } else if (isTrueFalse) {
+      body.answerKey = { correct: trueFalse };
+    } else if (isTyped) {
+      const list = accepted.split('\n').map((l) => l.trim()).filter((l) => l !== '');
+      if (list.length === 0) {
+        setProblem('Write the answer you will accept.');
+        return;
+      }
+      body.answerKey = { accepted: list };
     } else {
       try {
         body.answerKey = JSON.parse(rawKey);
@@ -679,7 +923,7 @@ function QuestionEditor({
         />
       </label>
 
-      {isChoiceKind ? (
+      {isChoiceKind && (
         <ChoiceFields
           choices={choices}
           correct={correct}
@@ -687,7 +931,45 @@ function QuestionEditor({
           onChange={setChoices}
           onCorrect={setCorrect}
         />
-      ) : (
+      )}
+
+      {isMatching && <PairFields pairs={pairs} onChange={setPairs} />}
+
+      {isOrdering && <SentenceField value={sentence} onChange={setSentence} />}
+
+      {isTrueFalse && (
+        <fieldset className="fieldset">
+          <legend>The correct answer</legend>
+          <div className="row">
+            {[true, false].map((value) => (
+              <label key={String(value)} className="row" style={{ gap: '.4rem' }}>
+                <input
+                  type="radio"
+                  name={`tf-${question.id}`}
+                  checked={trueFalse === value}
+                  onChange={() => setTrueFalse(value)}
+                  data-testid={`edit-tf-${value}`}
+                />
+                {value ? 'True' : 'False'}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      {isTyped && (
+        <label>
+          Answers you will accept — one per line
+          <textarea
+            rows={3}
+            value={accepted}
+            onChange={(e) => setAccepted(e.target.value)}
+            data-testid="edit-accepted"
+          />
+        </label>
+      )}
+
+      {needsRawKey && (
         <label>
           Answer
           <textarea

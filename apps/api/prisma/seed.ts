@@ -36,6 +36,11 @@ const GLOBAL_SETTINGS: Array<{ key: string; value: unknown; source: string }> = 
     value: { vocabulary: 25, grammar: 25, activity: 25, assessment: 25 },
     source: 'SRS 21',
   },
+  // What a part of a unit with nothing in it is worth. False means it is not
+  // done, so a unit the teacher has not finished preparing cannot be completed
+  // by a student. True was the original behaviour and handed out a free
+  // quarter per missing part, which made an empty unit read as 100% done.
+  { key: 'progress.empty_component_counts_as_complete', value: false, source: 'Phase 6.5' },
 
   // --- Vocabulary completion (SRS 22) ---
   // A word counts as learned once it has been seen AND its audio played.

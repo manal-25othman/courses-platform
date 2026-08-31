@@ -259,12 +259,56 @@ export function correctChoiceId(question: Question): string | null {
   return typeof key === 'string' ? key : null;
 }
 
+/** One row of a matching question, as a teacher writes it. */
+export interface Pair {
+  id: string;
+  left: string;
+  right: string;
+}
+
+function itemList(value: unknown): { id: string; text: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((i): i is { id: string; text: string } =>
+      Boolean(i) && typeof i === 'object' && 'id' in i && 'text' in i)
+    .map((i) => ({ id: String(i.id), text: String(i.text) }));
+}
+
+/**
+ * A matching question read back as pairs.
+ *
+ * Stored as two columns plus a map between them, because that is what the
+ * engine shuffles and marks. A teacher thinks in pairs, so the form works in
+ * pairs and this is the join between the two.
+ */
+export function pairsOf(question: Question): Pair[] {
+  const left = itemList(question.payload?.left);
+  const right = itemList(question.payload?.right);
+  const map = (question.answerKey?.pairs ?? {}) as Record<string, string>;
+  const rightById = new Map(right.map((r) => [r.id, r.text]));
+
+  return left.map((l) => ({ id: l.id, left: l.text, right: rightById.get(map[l.id]) ?? '' }));
+}
+
+/** A word-ordering question read back as the sentence it makes. */
+export function sentenceOf(question: Question): string {
+  const tokens = itemList(question.payload?.tokens);
+  const order = Array.isArray(question.answerKey?.order)
+    ? (question.answerKey.order as string[])
+    : tokens.map((t) => t.id);
+  const byId = new Map(tokens.map((t) => [t.id, t.text]));
+
+  return order.map((id) => byId.get(id) ?? '').join(' ').trim();
+}
+
 // --- Learning (student) ----------------------------------------------------
 
 export interface ComponentProgress {
   total: number;
   done: number;
   percent: number;
+  /** Nothing here yet, so this part cannot be finished. */
+  empty: boolean;
 }
 
 /** How the unit's assessment stands for one student. */
@@ -293,6 +337,8 @@ export interface UnitProgress {
   countsTowardCompletion: boolean;
   overallPercent: number;
   notCounted: string[];
+  /** Parts the teacher has not added yet, which hold the unit below 100%. */
+  missingContent: string[];
   isComplete: boolean;
 }
 
@@ -431,14 +477,17 @@ export interface ClassRow {
   studentId: string;
   fullName: string;
   username: string;
+  /** Averaged over the units that count towards the course, and no others. */
   overallPercent: number;
+  unitsComplete: number;
+  unitsCounted: number;
   lastActivityAt: string | null;
   unreadFromStudent: number;
   units: StudentUnitProgress[];
 }
 
 export interface ClassOverview {
-  units: { id: string; title: string }[];
+  units: { id: string; title: string; countsTowardCompletion: boolean }[];
   students: ClassRow[];
 }
 

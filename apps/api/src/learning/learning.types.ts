@@ -32,8 +32,19 @@ export interface ComponentProgress {
   total: number;
   /** How many she has finished. */
   done: number;
-  /** 0–100. A component with nothing in it counts as complete. */
+  /**
+   * 0–100.
+   *
+   * A component with nothing in it is NOT complete. Treating it as complete
+   * handed out a free quarter for every part a teacher had not filled in yet,
+   * so a published unit with no content at all read as 100% done — a student
+   * credited with finishing a unit she had never opened. What an empty
+   * component is worth is `progress.empty_component_counts_as_complete` in the
+   * settings store, false by default.
+   */
   percent: number;
+  /** True when there is nothing here yet, so the percent above is not earned. */
+  empty: boolean;
 }
 
 /** How an assessment stands for one student. */
@@ -81,6 +92,13 @@ export interface UnitProgress {
    */
   overallPercent: number;
   notCounted: string[];
+  /**
+   * Components with nothing in them yet.
+   *
+   * These hold the unit below 100%, so the screens say which parts the teacher
+   * has not added rather than showing a student an unexplained zero.
+   */
+  missingContent: string[];
   isComplete: boolean;
 }
 

@@ -16,6 +16,14 @@ import { ActivityRunner } from '@/components/ActivityRunner';
 
 type Tab = 'vocabulary' | 'grammar' | 'activity' | 'assessment';
 
+/** What to call each part when telling her it is missing. */
+const MISSING_LABELS: Record<string, string> = {
+  vocabulary: 'words',
+  grammar: 'grammar',
+  activity: 'activity',
+  assessment: 'assessment',
+};
+
 /**
  * One unit, as a student works through it.
  *
@@ -112,6 +120,21 @@ export default function LearnUnitPage() {
           {progress && !progress.countsTowardCompletion && (
             <p className="muted" style={{ margin: 0 }} data-testid="not-counted-unit">
               This unit is extra practice. It does not count towards your course.
+            </p>
+          )}
+          {/*
+            A part with nothing in it holds the unit below 100%. Saying which
+            part is missing is the difference between "you have not finished"
+            and "there is nothing here to finish" — she can stop looking for
+            work that does not exist yet.
+          */}
+          {progress && progress.missingContent.length > 0 && (
+            <p className="muted" style={{ margin: 0 }} data-testid="missing-content">
+              Your teacher has not added the{' '}
+              {progress.missingContent
+                .map((part) => MISSING_LABELS[part] ?? part)
+                .join(', ')}{' '}
+              for this unit yet, so it cannot be finished.
             </p>
           )}
         </div>

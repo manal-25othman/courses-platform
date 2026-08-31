@@ -48,6 +48,21 @@ export class ProgressService {
   /**
    * The class at a glance: one row per student, with how far she has got
    * across every published unit.
+   *
+   * Two things here were wrong and both were found by running it.
+   *
+   * The overall figure averaged every published unit. Welcome and Grammar
+   * Review are preliminary and revision material and must not affect course
+   * completion (client, 2026-08-31) — but the moment a teacher published
+   * Welcome, which she will, it would have moved every student's headline
+   * number. The average is now taken over the units that count; the others are
+   * still listed, so she can see how a student is getting on with them.
+   *
+   * And it opened a transaction per student per unit, all at once. Eighteen
+   * published units was enough to exhaust the connection pool and turn this
+   * screen into a 500 — a class of twenty-five would never have loaded. Each
+   * student's units are now worked out inside one transaction, and the
+   * students one after another.
    */
   async classOverview(actor: CurrentUser) {
     const schoolId = this.schoolOf(actor);
@@ -61,40 +76,49 @@ export class ProgressService {
       units: await tx.unit.findMany({
         where: { status: ContentStatus.PUBLISHED },
         orderBy: { orderIndex: 'asc' },
-        select: { id: true, title: true },
+        select: { id: true, title: true, countsTowardCompletion: true },
       }),
     }));
 
-    const rows = await Promise.all(
-      students.map(async (student) => {
-        const perUnit = await Promise.all(
-          units.map(async (unit) => ({
+    const rows = [];
+
+    for (const student of students) {
+      const asStudent = this.asStudent(actor, student.id);
+
+      const perUnit = await this.prisma.forSchool(schoolId, async (tx) => {
+        const results = [];
+        for (const unit of units) {
+          results.push({
             title: unit.title,
-            ...(await this.learning.unitProgress(
-              this.asStudent(actor, student.id),
-              unit.id,
-            )),
-          })),
-        );
+            ...(await this.learning.progressWithin(tx, asStudent, unit.id)),
+          });
+        }
+        return results;
+      });
 
-        const overall =
-          perUnit.length === 0
-            ? 0
-            : Math.round(
-                perUnit.reduce((sum, u) => sum + u.overallPercent, 0) / perUnit.length,
-              );
+      // Only the units that count towards the course. A student with no such
+      // units has no course figure to report, which is 0 rather than a
+      // division by zero.
+      const counted = perUnit.filter((u) => u.countsTowardCompletion);
 
-        return {
-          studentId: student.id,
-          fullName: student.studentProfile?.fullName ?? student.username,
-          username: student.username,
-          overallPercent: overall,
-          lastActivityAt: await this.lastActivity(schoolId, student.id),
-          unreadFromStudent: await this.unreadForTeacher(schoolId, actor.userId, student.id),
-          units: perUnit,
-        };
-      }),
-    );
+      const overall =
+        counted.length === 0
+          ? 0
+          : Math.round(counted.reduce((sum, u) => sum + u.overallPercent, 0) / counted.length);
+
+      rows.push({
+        studentId: student.id,
+        fullName: student.studentProfile?.fullName ?? student.username,
+        username: student.username,
+        overallPercent: overall,
+        /** How many of the counting units she has actually finished. */
+        unitsComplete: counted.filter((u) => u.isComplete).length,
+        unitsCounted: counted.length,
+        lastActivityAt: await this.lastActivity(schoolId, student.id),
+        unreadFromStudent: await this.unreadForTeacher(schoolId, actor.userId, student.id),
+        units: perUnit,
+      });
+    }
 
     return { units, students: rows };
   }
@@ -123,41 +147,42 @@ export class ProgressService {
 
     const asStudent = this.asStudent(actor, studentId);
 
-    const perUnit = await Promise.all(
-      units.map(async (unit) => {
-        const progress = await this.learning.unitProgress(asStudent, unit.id);
+    // One transaction for the whole page, for the same reason the class view
+    // now uses one per student: a transaction per unit ran them all at once.
+    const perUnit = await this.prisma.forSchool(schoolId, async (tx) => {
+      const results = [];
 
-        const [words, attempts] = await this.prisma.forSchool(schoolId, async (tx) => [
-          await tx.vocabularyItem.findMany({
-            where: { unitId: unit.id, status: ContentStatus.PUBLISHED },
-            orderBy: { orderIndex: 'asc' },
-            select: { id: true, wordEn: true, meaningAr: true },
-          }),
-          await tx.activityAttempt.findMany({
-            where: { studentId, unitId: unit.id, status: AttemptStatus.SUBMITTED },
-            orderBy: { submittedAt: 'desc' },
-            select: {
-              id: true,
-              purpose: true,
-              submittedAt: true,
-              scorePercent: true,
-              correctCount: true,
-              incorrectCount: true,
-              passMarkPercent: true,
-              passed: true,
-            },
-          }),
-        ]);
+      for (const unit of units) {
+        const progress = await this.learning.progressWithin(tx, asStudent, unit.id);
 
-        const wordProgress = await this.prisma.forSchool(schoolId, (tx) =>
-          tx.vocabularyProgress.findMany({
-            where: { studentId, itemId: { in: words.map((w) => w.id) } },
-          }),
-        );
+        const words = await tx.vocabularyItem.findMany({
+          where: { unitId: unit.id, status: ContentStatus.PUBLISHED },
+          orderBy: { orderIndex: 'asc' },
+          select: { id: true, wordEn: true, meaningAr: true },
+        });
+
+        const attempts = await tx.activityAttempt.findMany({
+          where: { studentId, unitId: unit.id, status: AttemptStatus.SUBMITTED },
+          orderBy: { submittedAt: 'desc' },
+          select: {
+            id: true,
+            purpose: true,
+            submittedAt: true,
+            scorePercent: true,
+            correctCount: true,
+            incorrectCount: true,
+            passMarkPercent: true,
+            passed: true,
+          },
+        });
+
+        const wordProgress = await tx.vocabularyProgress.findMany({
+          where: { studentId, itemId: { in: words.map((w) => w.id) } },
+        });
 
         const byItem = new Map(wordProgress.map((p) => [p.itemId, p]));
 
-        return {
+        results.push({
           unitId: unit.id,
           title: unit.title,
           progress,
@@ -176,9 +201,11 @@ export class ProgressService {
               checkAttempts: p?.checkAttempts ?? 0,
             };
           }),
-        };
-      }),
-    );
+        });
+      }
+
+      return results;
+    });
 
     return {
       studentId: student.id,

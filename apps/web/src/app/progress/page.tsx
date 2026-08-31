@@ -108,21 +108,45 @@ export default function ClassProgressPage() {
                       <div className="meter" style={{ minWidth: '5rem' }}>
                         <span style={{ width: `${student.overallPercent}%` }} />
                       </div>
-                      <span className="muted">{student.overallPercent}%</span>
+                      {/*
+                        Averaged over the units that count towards the course
+                        only. Welcome and Grammar Review are still listed to
+                        the right; they just do not move this number.
+                      */}
+                      <span className="muted" data-testid="overall-percent">
+                        {student.overallPercent}%
+                      </span>
+                      <div className="muted" style={{ fontSize: '.75rem' }}>
+                        {student.unitsComplete}/{student.unitsCounted} units finished
+                      </div>
                     </td>
                     {student.units.map((unit) => (
                       <td key={unit.unitId} className="hide-sm" data-label={unit.title}>
-                        <span title={`Words ${unit.vocabulary.done}/${unit.vocabulary.total}`}>
-                          {unit.overallPercent}%
-                        </span>
+                        <span>{unit.overallPercent}%</span>
                         <div className="muted" style={{ fontSize: '.75rem' }}>
-                          W {unit.vocabulary.done}/{unit.vocabulary.total} · G{' '}
-                          {unit.grammar.total === 0
+                          W {unit.vocabulary.empty ? '—' : `${unit.vocabulary.done}/${unit.vocabulary.total}`} · G{' '}
+                          {unit.grammar.empty ? '—' : `${unit.grammar.done}/${unit.grammar.total}`} · A{' '}
+                          {unit.activity.empty
                             ? '—'
-                            : `${unit.grammar.done}/${unit.grammar.total}`}{' '}
-                          · A{' '}
-                          {unit.bestScorePercent === null ? '—' : `${unit.bestScorePercent}%`}
+                            : unit.bestScorePercent === null
+                              ? 'not tried'
+                              : `${unit.bestScorePercent}%`}{' '}
+                          · X {unit.assessment.empty ? '—' : unit.assessmentState.passed ? 'pass' : 'no'}
                         </div>
+                        {/*
+                          A dash is a part she has not prepared, and the reason
+                          the unit cannot reach 100%. Saying so here is what
+                          turns a puzzling number into a to-do.
+                        */}
+                        {unit.missingContent.length > 0 && (
+                          <div
+                            className="muted"
+                            style={{ fontSize: '.72rem' }}
+                            data-testid="unit-not-ready"
+                          >
+                            needs {unit.missingContent.join(', ')}
+                          </div>
+                        )}
                       </td>
                     ))}
                     <td data-label="Last active" className="muted">
