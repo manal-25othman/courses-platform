@@ -293,3 +293,7 @@ button.match-right.used { opacity: .5; }
 
 /* Passed or not, above the score. */
 .result-verdict { align-self: flex-start; font-size: .95rem; padding: .35rem .7rem; }
+
+/* A group of related fields in the teacher's forms. */
+.fieldset { border: 1px solid var(--border); border-radius: 8px; padding: .75rem; }
+.fieldset legend { padding: 0 .4rem; font-size: .9rem; }

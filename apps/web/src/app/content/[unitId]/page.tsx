@@ -15,7 +15,16 @@ import {
 } from '@/lib/api';
 import { QuestionList } from '@/components/QuestionList';
 
-/** One unit: its sections and its word list. */
+type Tab = 'vocabulary' | 'grammar' | 'activities' | 'assessment';
+
+/**
+ * One unit, in the four parts a student meets it in.
+ *
+ * They used to be one long page. Splitting them means a teacher preparing the
+ * word list is not scrolling past every question to reach it, and — more to
+ * the point — that the unit's assessment is a place of its own rather than
+ * questions mixed in with the practice ones.
+ */
 export default function UnitPage() {
   const router = useRouter();
   const params = useParams<{ unitId: string }>();
@@ -26,6 +35,7 @@ export default function UnitPage() {
   const [types, setTypes] = useState<SectionType[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('vocabulary');
 
   const load = useCallback(async () => {
     try {
@@ -98,15 +108,70 @@ export default function UnitPage() {
       {error && <p className="alert error" role="alert">{error}</p>}
       {notice && <p className="alert ok" role="status">{notice}</p>}
 
-      <SectionList
-        unit={unit}
-        types={types}
-        onRun={run}
-      />
+      <div className="tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'vocabulary'}
+          onClick={() => setTab('vocabulary')}
+          data-testid="cms-tab-vocabulary"
+        >
+          Vocabulary ({unit.vocabularyItems.length})
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'grammar'}
+          onClick={() => setTab('grammar')}
+          data-testid="cms-tab-grammar"
+        >
+          Grammar ({unit.sections.length})
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'activities'}
+          onClick={() => setTab('activities')}
+          data-testid="cms-tab-activities"
+        >
+          Activities
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'assessment'}
+          onClick={() => setTab('assessment')}
+          data-testid="cms-tab-assessment"
+        >
+          Assessment
+        </button>
+      </div>
 
-      <VocabularyList unit={unit} onRun={run} />
+      {tab === 'vocabulary' && <VocabularyList unit={unit} onRun={run} />}
 
-      <QuestionList unitId={unit.id} onRun={run} />
+      {tab === 'grammar' && <SectionList unit={unit} types={types} onRun={run} />}
+
+      {/*
+        The same editor serves both, filtered by what the question is for.
+        Practice and assessment questions differ in nothing a teacher writes —
+        the wording, the choices, the marking are identical — so one editor
+        with a filter is one place to fix a bug rather than two.
+      */}
+      {tab === 'activities' && (
+        <QuestionList
+          key="activities"
+          unitId={unit.id}
+          purpose="ACTIVITY"
+          sections={unit.sections}
+          onRun={run}
+        />
+      )}
+
+      {tab === 'assessment' && (
+        <QuestionList
+          key="assessment"
+          unitId={unit.id}
+          purpose="ASSESSMENT"
+          sections={unit.sections}
+          onRun={run}
+        />
+      )}
     </main>
   );
 }
@@ -497,6 +562,7 @@ function VocabularyList({
                       <td colSpan={4}>
                         <WordEditor
                           item={item}
+                          onRun={onRun}
                           onCancel={() => setEditing(null)}
                           onSave={(changes) =>
                             onRun(
@@ -529,10 +595,12 @@ function WordEditor({
   item,
   onSave,
   onCancel,
+  onRun,
 }: {
   item: VocabularyItem;
   onSave: (changes: Record<string, string | null>) => Promise<void>;
   onCancel: () => void;
+  onRun: (work: () => Promise<unknown>, message: string) => Promise<void>;
 }) {
   const [wordEn, setWordEn] = useState(item.wordEn);
   const [meaningAr, setMeaningAr] = useState(item.meaningAr ?? '');
@@ -601,6 +669,8 @@ function WordEditor({
         </div>
       </div>
 
+      <WordMedia item={item} onRun={onRun} />
+
       <p className="muted" style={{ margin: 0 }}>
         Enter the material exactly as it appears in the curriculum. Do not reword or correct it.
       </p>
@@ -615,6 +685,111 @@ function WordEditor({
           {saving ? 'Saving…' : 'Save'}
         </button>
         <button onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A picture and a recording for one word.
+ *
+ * The recording is the fallback for a browser whose own voice does not work.
+ * It never lets a student say she has heard a word — she still has to play it
+ * (client, 2026-08-31) — so recording one adds a way through rather than a way
+ * round.
+ */
+function WordMedia({
+  item,
+  onRun,
+}: {
+  item: VocabularyItem;
+  onRun: (work: () => Promise<unknown>, message: string) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const media = item.media ?? [];
+  const recording = media.find((m) => m.mimeType?.startsWith('audio/'));
+  const picture = media.find((m) => m.mimeType?.startsWith('image/'));
+
+  async function upload(file: File, what: string) {
+    setBusy(true);
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('read'));
+        reader.readAsDataURL(file);
+      });
+
+      await onRun(
+        () =>
+          api.post(`/content/vocabulary/${item.id}/media`, {
+            data,
+            mimeType: file.type,
+            altText: `${what} for ${item.wordEn}`,
+          }),
+        `${what} added.`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="row" style={{ alignItems: 'flex-start' }}>
+      <div style={{ flex: '1 1 12rem' }}>
+        <label htmlFor={`audio-${item.id}`}>Your recording of this word</label>
+        <input
+          id={`audio-${item.id}`}
+          type="file"
+          accept="audio/*"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void upload(file, 'Recording');
+            e.target.value = '';
+          }}
+          data-testid="word-audio-upload"
+        />
+        {recording && (
+          <div className="row" style={{ marginTop: '.4rem' }}>
+            {/* A recording of one word: there is nothing to caption. */}
+            <audio controls src={apiUrl(recording.url)} data-testid="word-audio" />
+            <button
+              className="small danger"
+              onClick={() => onRun(() => api.del(`/content/media/${recording.id}`), 'Recording removed.')}
+            >
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex: '1 1 12rem' }}>
+        <label htmlFor={`pic-${item.id}`}>Picture for this word</label>
+        <input
+          id={`pic-${item.id}`}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void upload(file, 'Picture');
+            e.target.value = '';
+          }}
+          data-testid="word-picture-upload"
+        />
+        {picture && (
+          <div className="row" style={{ marginTop: '.4rem' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={apiUrl(picture.url)} alt={`A picture of ${item.wordEn}`} className="word-picture" />
+            <button
+              className="small danger"
+              onClick={() => onRun(() => api.del(`/content/media/${picture.id}`), 'Picture removed.')}
+            >
+              Remove
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -171,6 +171,8 @@ export interface VocabularyItem {
   exampleSentence: string | null;
   orderIndex: number;
   status: ContentStatus;
+  /** Pictures and the teacher's own recording of the word. */
+  media?: MediaFile[];
 }
 
 export interface UnitDetail extends Omit<UnitSummary, '_count'> {

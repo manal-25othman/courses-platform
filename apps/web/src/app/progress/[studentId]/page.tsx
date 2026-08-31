@@ -2,8 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { api, ApiError, homeFor, Me, StudentDetail, timeAgo } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  homeFor,
+  Me,
+  StudentDetail,
+  TeacherAttemptDetail,
+  timeAgo,
+} from '@/lib/api';
 import { Conversation } from '@/components/Conversation';
+import { AttemptReview } from '@/components/AttemptReview';
 
 /**
  * One student, unit by unit.
@@ -19,6 +28,7 @@ export default function StudentProgressPage() {
 
   const [me, setMe] = useState<Me | null>(null);
   const [detail, setDetail] = useState<StudentDetail | null>(null);
+  const [paper, setPaper] = useState<TeacherAttemptDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -46,6 +56,16 @@ export default function StudentProgressPage() {
   useEffect(() => {
     if (me) void load();
   }, [me, load]);
+
+  /** Opens one finished paper, exactly as the student was given it. */
+  async function openPaper(attemptId: string) {
+    try {
+      setPaper(await api.get<TeacherAttemptDetail>(`/progress/attempts/${attemptId}`));
+      setError(null);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Could not open that paper.');
+    }
+  }
 
   if (!me || (!detail && !error)) {
     return (
@@ -108,6 +128,18 @@ export default function StudentProgressPage() {
               </dd>
             </div>
             <div>
+              <dt>Assessment</dt>
+              <dd data-testid="assessment-state">
+                {unit.progress.assessmentState.questionCount === 0
+                  ? 'none set'
+                  : unit.progress.assessmentState.passed
+                    ? `passed (${unit.progress.assessmentState.bestScorePercent}%)`
+                    : `${unit.progress.assessmentState.attemptsUsed} of ${
+                        unit.progress.assessmentState.maxAttempts ?? '∞'
+                      } tries`}
+              </dd>
+            </div>
+            <div>
               <dt>Best score</dt>
               <dd data-testid="best-score">
                 {unit.progress.bestScorePercent === null
@@ -157,14 +189,29 @@ export default function StudentProgressPage() {
 
           {unit.attempts.length > 0 && (
             <div>
-              <strong style={{ fontSize: '.9rem' }}>Activity tries</strong>
+              <strong style={{ fontSize: '.9rem' }}>Papers she has finished</strong>
               <ul className="examples" data-testid="attempt-list">
                 {unit.attempts.map((attempt) => (
-                  <li key={attempt.id}>
-                    {attempt.scorePercent}% — {attempt.correctCount} right,{' '}
-                    {attempt.incorrectCount} wrong
-                    {attempt.submittedAt &&
-                      ` · ${new Date(attempt.submittedAt).toLocaleDateString('en-GB')}`}
+                  <li key={attempt.id} className="between" style={{ gap: '.5rem' }}>
+                    <span>
+                      {attempt.purpose === 'ASSESSMENT' ? 'Assessment' : 'Activity'} ·{' '}
+                      {attempt.scorePercent}% — {attempt.correctCount} right,{' '}
+                      {attempt.incorrectCount} wrong
+                      {attempt.submittedAt &&
+                        ` · ${new Date(attempt.submittedAt).toLocaleDateString('en-GB')}`}
+                    </span>
+                    {/*
+                      The score alone does not tell her what to teach next.
+                      This opens the paper as the student sat it: which
+                      questions she got wrong, and what she answered.
+                    */}
+                    <button
+                      className="small"
+                      onClick={() => void openPaper(attempt.id)}
+                      data-testid="open-attempt"
+                    >
+                      See her answers
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -172,6 +219,8 @@ export default function StudentProgressPage() {
           )}
         </div>
       ))}
+
+      {paper && <AttemptReview attempt={paper} onClose={() => setPaper(null)} />}
 
       <Conversation
         loadPath={`/messages/students/${studentId}`}

@@ -123,6 +123,7 @@ export class ContentService {
           vocabularyItems: {
             where: { status: { in: statuses } },
             orderBy: { orderIndex: 'asc' },
+            include: { media: { orderBy: { orderIndex: 'asc' } } },
           },
         },
       });
