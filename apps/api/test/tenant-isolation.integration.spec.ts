@@ -647,28 +647,51 @@ describe('the application role has no privileges it does not need', () => {
    * policy said `scope <> 'SCHOOL' OR ...` for both, which let any school
    * change a value governing all of them.
    */
+  /**
+   * These make their own global value rather than relying on one being
+   * seeded, because CI applies migrations without running the seed and a test
+   * that quietly passes on an empty table proves nothing.
+   */
+  const GLOBAL_KEY = 'iso.global.probe';
+
   it('can read a global setting', async () => {
+    await owner.setting.create({ data: { scope: 'GLOBAL', key: GLOBAL_KEY, value: 80 } });
+
     const rows = await forSchool(SCHOOL_A, (tx) =>
-      tx.setting.findMany({ where: { scope: 'GLOBAL' } }),
+      tx.setting.findMany({ where: { key: GLOBAL_KEY } }),
     );
 
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].value).toEqual(80);
+
+    await owner.setting.deleteMany({ where: { key: GLOBAL_KEY } });
   });
 
   it('cannot change a global setting', async () => {
-    const key = 'assessment.passing_score';
-    const before = await owner.setting.findFirst({ where: { key, scope: 'GLOBAL' } });
-
-    if (!before) return; // Nothing seeded in this database; nothing to protect.
+    await owner.setting.create({ data: { scope: 'GLOBAL', key: GLOBAL_KEY, value: 80 } });
 
     await forSchool(SCHOOL_A, (tx) =>
       tx.$executeRawUnsafe(
-        `UPDATE settings SET value = '1' WHERE key = '${key}' AND scope = 'GLOBAL'`,
+        `UPDATE settings SET value = '1' WHERE key = '${GLOBAL_KEY}' AND scope = 'GLOBAL'`,
       ),
     );
 
-    const after = await owner.setting.findFirst({ where: { key, scope: 'GLOBAL' } });
-    expect(after?.value).toEqual(before.value);
+    const after = await owner.setting.findFirst({ where: { key: GLOBAL_KEY } });
+    expect(after?.value).toEqual(80);
+
+    await owner.setting.deleteMany({ where: { key: GLOBAL_KEY } });
+  });
+
+  it('cannot delete a global setting either', async () => {
+    await owner.setting.create({ data: { scope: 'GLOBAL', key: GLOBAL_KEY, value: 80 } });
+
+    await forSchool(SCHOOL_A, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM settings WHERE key = '${GLOBAL_KEY}'`),
+    );
+
+    expect(await owner.setting.count({ where: { key: GLOBAL_KEY } })).toBe(1);
+
+    await owner.setting.deleteMany({ where: { key: GLOBAL_KEY } });
   });
 
   it("can write its own school's override", async () => {
