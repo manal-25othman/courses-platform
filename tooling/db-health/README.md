@@ -29,8 +29,10 @@ npm run test:db -w @courses/api
 ## Reading the results
 
 `structure.sql` prints a verdict per table. Every table except
-`_prisma_migrations` and `refresh_tokens` must say `ok`; those two are exempt
-for reasons written into the migrations. The application role must show
+`_prisma_migrations`, `refresh_tokens` and `password_reset_tokens` must say
+`ok`; those three are exempt for reasons written into the migrations. The two
+token tables hold a user id, a hash and timestamps, are found only by a hash
+nobody can guess, and are used before a school is known. The application role must show
 `is_superuser = f` and `can_bypass_rls = f` — a role with either ignores every
 policy, and the API now refuses to start on one.
 

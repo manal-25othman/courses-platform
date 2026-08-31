@@ -137,6 +137,8 @@ model User {
   sectionProgress    SectionProgress[]
   activityAttempts   ActivityAttempt[]
 
+  passwordResetTokens PasswordResetToken[]
+
   messagesAsTeacher Message[] @relation("messagesAsTeacher")
   messagesAsStudent Message[] @relation("messagesAsStudent")
   messagesSent      Message[] @relation("messagesSent")
@@ -288,6 +290,14 @@ model Unit {
   kind        String?
   description String?
 
+  /// Whether finishing this unit counts towards the course.
+  ///
+  /// Welcome and Grammar Review are preliminary and revision material and do
+  /// not count (client, 2026-08-31). This is a flag on the row, not a rule in
+  /// code: no unit title and no number of units is written anywhere, and a
+  /// teacher can change which units count without a deploy.
+  countsTowardCompletion Boolean @default(true) @map("counts_toward_completion")
+
   status    ContentStatus @default(DRAFT)
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
@@ -385,6 +395,7 @@ model VocabularyItem {
 
   unit     Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
   progress VocabularyProgress[]
+  media    MediaAsset[]
 
   @@unique([unitId, wordEn])
   @@index([unitId])
@@ -397,31 +408,41 @@ model VocabularyItem {
 /// writing, orthography and handwriting sections, and needed by the
 /// picture-matching question type in SRS 10.
 model MediaAsset {
-  id         String   @id @default(uuid()) @db.Uuid
-  sectionId  String?  @map("section_id") @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
+  /// Exactly one of these three is set. A picture belongs to the grammar
+  /// section, the question, or the word it illustrates; the upload, the
+  /// serving route and the row-level policies are the same for all three,
+  /// which is why they share one table rather than having one each.
+  sectionId        String?  @map("section_id") @db.Uuid
+  questionId       String?  @map("question_id") @db.Uuid
+  vocabularyItemId String?  @map("vocabulary_item_id") @db.Uuid
   /// Where to fetch the picture.
   ///
   /// For a picture the teacher uploaded this is this API's own route for the
   /// asset; for one she linked to, the address she gave.
-  url        String
-  mimeType   String   @map("mime_type")
+  url              String
+  mimeType         String   @map("mime_type")
   /// The file itself, for an uploaded picture.
   ///
   /// Kept in the database on purpose for the pilot: it needs no new service,
   /// works the moment the API is deployed, and moving to object storage later
   /// is a migration behind `url` rather than a change to anything that reads
   /// a picture. Size is capped in the API. Revisit if the library grows.
-  data       Bytes?
+  data             Bytes?
   /// How big the file is, so a listing does not have to load it.
-  byteSize   Int?     @map("byte_size")
+  byteSize         Int?     @map("byte_size")
   /// Describes the picture for a student using a screen reader.
-  altText    String?  @map("alt_text")
-  orderIndex Int      @default(0) @map("order_index")
-  createdAt  DateTime @default(now()) @map("created_at")
+  altText          String?  @map("alt_text")
+  orderIndex       Int      @default(0) @map("order_index")
+  createdAt        DateTime @default(now()) @map("created_at")
 
-  section UnitSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  section        UnitSection?    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  question       Question?       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  vocabularyItem VocabularyItem? @relation(fields: [vocabularyItemId], references: [id], onDelete: Cascade)
 
   @@index([sectionId])
+  @@index([questionId])
+  @@index([vocabularyItemId])
   @@map("media_assets")
 }
 
@@ -479,6 +500,12 @@ model Question {
   points     Int    @default(1)
   orderIndex Int    @default(0) @map("order_index")
 
+  /// Which pool this question belongs to: the unit's practice activities or
+  /// its assessment. One field rather than two tables, because everything
+  /// else about a question — authoring, the engine, marking, the frozen
+  /// snapshot — is identical for both.
+  purpose QuestionPurpose @default(ACTIVITY)
+
   /// True when the import could not be certain of something. Such a question
   /// is held back from publication until a teacher has looked at it.
   needsReview Boolean @default(false) @map("needs_review")
@@ -496,12 +523,25 @@ model Question {
   type           QuestionType      @relation(fields: [typeKey], references: [key])
   sets           QuestionSetItem[]
   attemptAnswers AttemptAnswer[]
+  media          MediaAsset[]
 
   @@index([unitId])
+  @@index([unitId, purpose])
   @@index([sectionId])
   @@index([typeKey])
   @@index([needsReview])
   @@map("questions")
+}
+
+/// What a question is for.
+///
+/// The same engine, the same marking and the same frozen snapshots serve both;
+/// only which pool a paper is drawn from, and the rules around it, differ.
+enum QuestionPurpose {
+  ACTIVITY
+  ASSESSMENT
+
+  @@map("question_purpose")
 }
 
 /// What a set of questions is for.
@@ -650,8 +690,10 @@ model ActivityAttempt {
 
   /// Fixes the shuffle for this attempt, so leaving the page and coming back
   /// shows the same questions in the same order (SRS 11, 23).
-  seed   String
-  status AttemptStatus @default(IN_PROGRESS)
+  seed    String
+  status  AttemptStatus   @default(IN_PROGRESS)
+  /// Practice, or the unit's assessment.
+  purpose QuestionPurpose @default(ACTIVITY)
 
   startedAt   DateTime  @default(now()) @map("started_at")
   submittedAt DateTime? @map("submitted_at")
@@ -659,11 +701,16 @@ model ActivityAttempt {
   /// The result, written once at submission and never recalculated. Marking
   /// again later would use whatever the questions say then, which is exactly
   /// what must not happen to a result a student has already been given.
-  correctCount    Int? @map("correct_count")
-  incorrectCount  Int? @map("incorrect_count")
-  pointsAwarded   Int? @map("points_awarded")
-  pointsAvailable Int? @map("points_available")
-  scorePercent    Int? @map("score_percent")
+  correctCount    Int?     @map("correct_count")
+  incorrectCount  Int?     @map("incorrect_count")
+  pointsAwarded   Int?     @map("points_awarded")
+  pointsAvailable Int?     @map("points_available")
+  scorePercent    Int?     @map("score_percent")
+  /// The mark she had to reach, frozen at submission alongside the result.
+  /// Lowering the pass mark later must not turn an old fail into a pass, any
+  /// more than editing a question changes what she was asked.
+  passMarkPercent Int?     @map("pass_mark_percent")
+  passed          Boolean?
 
   student User            @relation(fields: [studentId], references: [id], onDelete: Cascade)
   unit    Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
@@ -733,4 +780,25 @@ model Message {
   @@index([teacherId, studentId, createdAt])
   @@index([studentId, readAt])
   @@map("messages")
+}
+
+/// A single-use link for setting a forgotten password.
+///
+/// Only the hash is stored, so a leak of this table hands out nothing: the
+/// token itself exists only in the email. One use, then spent; expiry is short
+/// and every earlier token for the same person is spent when a new one is
+/// asked for, so a link cannot be collected and used later.
+model PasswordResetToken {
+  id        String @id @default(uuid()) @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+  tokenHash String @unique @map("token_hash")
+
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }

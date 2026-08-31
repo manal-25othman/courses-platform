@@ -29,6 +29,9 @@ const QUESTION_A2 = '44444444-4444-4444-4444-444444444444';
 const ITEM_A = '55555555-5555-5555-5555-555555555555';
 const ATTEMPT_A = '66666666-6666-6666-6666-666666666666';
 const VOCAB_PROGRESS_A = '77777777-7777-7777-7777-777777777777';
+// Phase 6: a picture may now hang off a question or a word, not only a section.
+const MEDIA_Q = 'aaaaaaaa-0000-4000-8000-000000000001';
+const MEDIA_V = 'aaaaaaaa-0000-4000-8000-000000000002';
 
 const owner = new PrismaClient({ datasourceUrl: OWNER_URL });
 const app = new PrismaClient({ datasourceUrl: APP_URL });
@@ -143,6 +146,26 @@ beforeAll(async () => {
     update: {},
     create: { id: MEDIA_A, sectionId: SECTION_A, url: 'https://example.invalid/a.png', mimeType: 'image/png' },
   });
+  await owner.mediaAsset.upsert({
+    where: { id: MEDIA_Q },
+    update: {},
+    create: {
+      id: MEDIA_Q,
+      questionId: QUESTION_A,
+      url: 'https://example.invalid/q.png',
+      mimeType: 'image/png',
+    },
+  });
+  await owner.mediaAsset.upsert({
+    where: { id: MEDIA_V },
+    update: {},
+    create: {
+      id: MEDIA_V,
+      vocabularyItemId: VOCAB_A,
+      url: 'https://example.invalid/v.mp3',
+      mimeType: 'audio/mpeg',
+    },
+  });
 
   // Progress belonging to a student of school A. These rows exist for the whole
   // run so that "an unscoped query sees nothing" is a real assertion and not
@@ -227,7 +250,7 @@ afterAll(async () => {
   await owner.activityAttempt.deleteMany({ where: { id: ATTEMPT_A } });
   await owner.vocabularyProgress.deleteMany({ where: { id: VOCAB_PROGRESS_A } });
   await owner.sectionProgress.deleteMany({ where: { sectionId: SECTION_A } });
-  await owner.mediaAsset.deleteMany({ where: { id: MEDIA_A } });
+  await owner.mediaAsset.deleteMany({ where: { id: { in: [MEDIA_A, MEDIA_Q, MEDIA_V] } } });
   await owner.vocabularyItem.deleteMany({ where: { unitId: UNIT_A } });
   await owner.unitSection.deleteMany({ where: { unitId: UNIT_A } });
   await owner.questionSetItem.deleteMany({ where: { setId: SET_A } });
@@ -432,6 +455,106 @@ describe('only the owning school may change shared content', () => {
     });
 
     expect(deleted).toBe(1);
+  });
+});
+
+/**
+ * Phase 6 gave a picture two more places to live: a question and a word.
+ *
+ * The media policies were written when a grammar section was the only parent
+ * a row could have, and their read rule began `section_id IS NULL OR ...`.
+ * That branch was harmless while a section-less row could not exist. Once one
+ * could, it would have made every picture on a question or a word readable by
+ * every school on the platform. The restrictive delete rule had the mirror
+ * problem: it required a section, so a picture on a question could never have
+ * been deleted by anyone, including the teacher who uploaded it.
+ */
+describe('pictures and audio attached to a question or a word', () => {
+  it('refuses a row that names no parent', async () => {
+    await expect(
+      forSchool(SCHOOL_A, (tx) =>
+        tx.$executeRawUnsafe(
+          `INSERT INTO media_assets (id, url, mime_type, order_index, created_at)
+           VALUES (gen_random_uuid(), 'https://example.invalid/orphan.png', 'image/png', 0, now())`,
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('refuses a row that names two parents', async () => {
+    await expect(
+      forSchool(SCHOOL_A, (tx) =>
+        tx.$executeRawUnsafe(
+          `INSERT INTO media_assets (id, section_id, question_id, url, mime_type, order_index, created_at)
+           VALUES (gen_random_uuid(), '${SECTION_A}', '${QUESTION_A}',
+                   'https://example.invalid/two.png', 'image/png', 0, now())`,
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it.each([
+    ['a question', 'question_id', QUESTION_A],
+    ['a word', 'vocabulary_item_id', VOCAB_A],
+  ])("refuses another school's attempt to attach a file to %s", async (_what, column, parentId) => {
+    await expect(
+      forSchool(SCHOOL_B, (tx) =>
+        tx.$executeRawUnsafe(
+          `INSERT INTO media_assets (id, ${column}, url, mime_type, order_index, created_at)
+           VALUES (gen_random_uuid(), '${parentId}', 'https://example.invalid/x.png',
+                   'image/png', 0, now())`,
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it.each([
+    ['a question', MEDIA_Q],
+    ['a word', MEDIA_V],
+  ])("refuses another school's attempt to delete the file on %s", async (_what, id) => {
+    let deleted = -1;
+
+    await forSchool(SCHOOL_B, async (tx) => {
+      deleted = await tx.$executeRawUnsafe(`DELETE FROM media_assets WHERE id = '${id}'`);
+      throw new RollBack();
+    }).catch((error: unknown) => {
+      if (!(error instanceof RollBack)) throw error;
+    });
+
+    expect(deleted).toBe(0);
+  });
+
+  it.each([
+    ['a question', MEDIA_Q],
+    ['a word', MEDIA_V],
+  ])('still lets the owning school delete the file on %s', async (_what, id) => {
+    let deleted = -1;
+
+    await forSchool(SCHOOL_A, async (tx) => {
+      deleted = await tx.$executeRawUnsafe(`DELETE FROM media_assets WHERE id = '${id}'`);
+      throw new RollBack();
+    }).catch((error: unknown) => {
+      if (!(error instanceof RollBack)) throw error;
+    });
+
+    expect(deleted).toBe(1);
+  });
+
+  it('lets the owning school attach a file to its own question', async () => {
+    let created = -1;
+
+    await forSchool(SCHOOL_A, async (tx) => {
+      created = await tx.$executeRawUnsafe(
+        `INSERT INTO media_assets (id, question_id, url, mime_type, order_index, created_at)
+         VALUES (gen_random_uuid(), '${QUESTION_A}', 'https://example.invalid/ok.png',
+                 'image/png', 0, now())`,
+      );
+      throw new RollBack();
+    }).catch((error: unknown) => {
+      if (!(error instanceof RollBack)) throw error;
+    });
+
+    expect(created).toBe(1);
   });
 });
 

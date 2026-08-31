@@ -9,7 +9,7 @@
 \echo ' A. TABLES AND ROW-LEVEL SECURITY'
 \echo '=============================================================='
 
--- Every table except the migration ledger and refresh_tokens must have RLS
+-- Every table except the migration ledger and the two token tables must have RLS
 -- enabled AND forced. FORCE is what binds the table owner too; without it the
 -- protection looks configured and does nothing.
 SELECT c.relname AS table_name,
@@ -17,7 +17,7 @@ SELECT c.relname AS table_name,
        c.relforcerowsecurity AS rls_forced,
        (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid) AS policies,
        CASE
-         WHEN c.relname IN ('_prisma_migrations', 'refresh_tokens') THEN 'exempt (documented)'
+         WHEN c.relname IN ('_prisma_migrations', 'refresh_tokens', 'password_reset_tokens') THEN 'exempt (documented)'
          WHEN c.relrowsecurity AND c.relforcerowsecurity
               AND (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid) > 0 THEN 'ok'
          ELSE '*** UNPROTECTED ***'
@@ -25,14 +25,14 @@ SELECT c.relname AS table_name,
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public' AND c.relkind = 'r'
-ORDER BY (CASE WHEN c.relname IN ('_prisma_migrations','refresh_tokens') THEN 1 ELSE 0 END), c.relname;
+ORDER BY (CASE WHEN c.relname IN ('_prisma_migrations','refresh_tokens','password_reset_tokens') THEN 1 ELSE 0 END), c.relname;
 
 \echo ''
 \echo '--- any table that should be protected and is not (expect 0 rows) ---'
 SELECT c.relname
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public' AND c.relkind = 'r'
-  AND c.relname NOT IN ('_prisma_migrations', 'refresh_tokens')
+  AND c.relname NOT IN ('_prisma_migrations', 'refresh_tokens', 'password_reset_tokens')
   AND NOT (c.relrowsecurity AND c.relforcerowsecurity
            AND EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid));
 

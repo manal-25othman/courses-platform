@@ -37,6 +37,11 @@ Decisions approved by the client during architecture review. Each is now **[C] C
 
 | Date | Ref | Decision |
 |---|---|---|
+| 2026-08-31 | §16, §21 | **Four core completion units: Living Things, Lifestyles, Interests, Professions.** Welcome and Grammar Review are not completion units; they may exist later as reference material and must not affect completion of the four or of the course. Closes the open decision from Phase 3 |
+| 2026-08-31 | §6, §32 | **Real vocabulary comes only from teacher- or client-supplied authorised content.** Nothing is invented, inferred, translated or generated. The CMS is the way it is entered and corrected |
+| 2026-08-31 | §6 | **Grammar carries typed content — title, explanation, examples — and an optional teacher-uploaded image or scan.** Where a curriculum page holds an exercise, that exercise is represented as a structured interactive activity rather than left inside a static image |
+| 2026-08-31 | SRS §7, §22 | **"Heard" requires real playback.** Browser speech stays; a teacher-supplied recording may be used where the browser has no voice. A student may never mark a word heard by confirming it herself |
+| 2026-08-31 | §51 | **Nothing from the supplied source file is published to students until the client confirms she holds the right to use and distribute it.** Development and testing continue on clearly marked test content; no replacement curriculum is invented |
 | 2026-08-31 | Product | **Confirmed product name: TOP GOAL 3 — Smart Shift.** Recorded here as the name; applying it to the interface belongs with the branding pass, which is deliberately not done yet. The name currently shown on screen is still "TOP GOAL" |
 | 2026-08-30 | SRS §39 | English-only interface for **all** roles (Student, Teacher, Admin); no Arabic UI text anywhere. Arabic permitted in educational *content* only |
 | 2026-08-30 | §37.8 / §2 | Stack: Next.js + NestJS + PostgreSQL, separate web and API deployments, token-based auth, API built for future mobile reuse |
