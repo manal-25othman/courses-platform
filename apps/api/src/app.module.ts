@@ -8,11 +8,13 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { EmailModule } from './email/email.module';
 import { SettingsModule } from './settings/settings.module';
 import { StudentsModule } from './students/students.module';
 import { ContentModule } from './content/content.module';
 import { QuestionsModule } from './questions/questions.module';
 import { LearningModule } from './learning/learning.module';
+import { TeachersModule } from './teachers/teachers.module';
 import { ProgressModule } from './progress/progress.module';
 import { MessagesModule } from './messages/messages.module';
 
@@ -23,6 +25,7 @@ import { MessagesModule } from './messages/messages.module';
     // of the app is never rate limited.
     ThrottlerModule.forRoot([{ name: 'auth', ttl: 60_000, limit: 10 }]),
     PrismaModule,
+    EmailModule,
     SettingsModule,
     AuditModule,
     AuthModule,
@@ -30,6 +33,7 @@ import { MessagesModule } from './messages/messages.module';
     ContentModule,
     QuestionsModule,
     LearningModule,
+    TeachersModule,
     ProgressModule,
     MessagesModule,
     HealthModule,

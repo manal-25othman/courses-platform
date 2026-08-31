@@ -122,6 +122,45 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     `;
   }
 
+  /**
+   * Finds the accounts using an e-mail address, before any school is known.
+   *
+   * Recovery begins with an address and nothing else, so like signing in it
+   * cannot be tenant-scoped. The function it calls answers only this question
+   * and returns nothing for a disabled or deleted account.
+   */
+  async findUsersByEmail(email: string): Promise<User[]> {
+    return this.$queryRaw<User[]>`
+      SELECT
+        id,
+        school_id            AS "schoolId",
+        role,
+        username,
+        email,
+        password_hash        AS "passwordHash",
+        must_change_password AS "mustChangePassword",
+        status,
+        deleted_at           AS "deletedAt",
+        last_login_at        AS "lastLoginAt",
+        created_at           AS "createdAt",
+        updated_at           AS "updatedAt"
+      FROM auth_find_users_by_email(${email})
+    `;
+  }
+
+  /**
+   * Finds a live reset token by its hash.
+   *
+   * Expired and already-used tokens return nothing, so those cases are
+   * decided in the database rather than by a caller remembering to check.
+   */
+  async findResetToken(tokenHash: string): Promise<{ id: string; userId: string } | null> {
+    const rows = await this.$queryRaw<{ id: string; userId: string }[]>`
+      SELECT id, user_id AS "userId" FROM auth_find_reset_token(${tokenHash})
+    `;
+    return rows[0] ?? null;
+  }
+
   /** Loads one account by id, for a caller who has already proved who they are. */
   async findUserForAuthentication(id: string): Promise<User | null> {
     const rows = await this.$queryRaw<User[]>`

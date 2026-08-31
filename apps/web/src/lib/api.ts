@@ -468,6 +468,21 @@ export interface StudentDetail {
   }[];
 }
 
+/** A teacher's own details, as she edits them. */
+export interface TeacherProfile {
+  displayName: string;
+  title: string | null;
+  whatsappPhone: string | null;
+}
+
+/** Her own teacher, and how to reach her. Null when she has none assigned. */
+export interface MyTeacher {
+  displayName: string;
+  title: string | null;
+  /** The address that opens WhatsApp, or null where no number is set. */
+  whatsappUrl: string | null;
+}
+
 /** One finished paper as the teacher reads it, question by question. */
 export interface TeacherAttemptDetail {
   id: string;

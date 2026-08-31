@@ -21,6 +21,8 @@ import { TokenPair, CurrentUser as CurrentUserType } from './auth.types';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/recovery.dto';
+import { RecoveryService } from './recovery.service';
 import { Public } from './decorators/public.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -35,6 +37,7 @@ export class AuthController {
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly config: ConfigService,
+    private readonly recovery: RecoveryService,
   ) {}
 
   /**
@@ -139,6 +142,43 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<void> {
     await this.auth.changePassword(user.userId, dto);
+    this.clearCookies(response);
+  }
+
+  /**
+   * Asks for a reset link.
+   *
+   * Always answers the same way, whatever was typed. Saying "no account with
+   * that address" would be a way to find out which of a school's teachers is
+   * registered and, given a list of names, which children are.
+   *
+   * Throttled like signing in, so the same address cannot be used to send
+   * somebody a stream of e-mail.
+   */
+  @Public()
+  @UseGuards(AuthThrottleGuard)
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<void> {
+    await this.recovery.requestReset(dto.email);
+  }
+
+  /**
+   * Chooses a new password from a link.
+   *
+   * The cookies are cleared whatever happens: every session the account had
+   * open has just been ended, so a browser holding one is holding something
+   * that no longer works.
+   */
+  @Public()
+  @UseGuards(AuthThrottleGuard)
+  @Post('reset-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    await this.recovery.completeReset(dto.token, dto.newPassword);
     this.clearCookies(response);
   }
 

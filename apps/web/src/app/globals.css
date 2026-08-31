@@ -297,3 +297,11 @@ button.match-right.used { opacity: .5; }
 /* A group of related fields in the teacher's forms. */
 .fieldset { border: 1px solid var(--border); border-radius: 8px; padding: .75rem; }
 .fieldset legend { padding: 0 .4rem; font-size: .9rem; }
+
+/* A link that acts as a button — an outward one, so it stays an anchor. */
+.button-link {
+  display: inline-block; font: inherit; font-weight: 600; text-decoration: none;
+  padding: .55rem .9rem; border-radius: 8px;
+  border: 1px solid var(--primary); background: var(--primary); color: var(--primary-text);
+}
+.button-link:hover { filter: brightness(1.08); }

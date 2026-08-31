@@ -10,6 +10,8 @@ export const AUDIT_ACTIONS = {
   TOKEN_REFRESHED: 'auth.token_refreshed',
   TOKEN_REUSE_DETECTED: 'auth.token_reuse_detected',
   PASSWORD_CHANGED: 'auth.password_changed',
+  PASSWORD_RESET_REQUESTED: 'auth.password_reset_requested',
+  PASSWORD_RESET_COMPLETED: 'auth.password_reset_completed',
   STUDENT_CREATED: 'student.created',
   STUDENT_UPDATED: 'student.updated',
   STUDENT_DISABLED: 'student.disabled',

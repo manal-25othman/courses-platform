@@ -79,7 +79,11 @@ function LoginForm() {
         </form>
 
         <p className="muted" style={{ marginTop: '1.25rem' }}>
-          Forgotten your password? Ask your teacher to reset it for you.
+          Forgotten your password?{' '}
+          <a href="/forgot-password" data-testid="forgot-link">
+            Send me a reset link
+          </a>
+          . If your account has no e-mail address, ask your teacher to reset it for you.
         </p>
       </div>
     </main>

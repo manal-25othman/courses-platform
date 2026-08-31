@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { api, ApiError, homeFor, LearnUnitSummary, Me } from '@/lib/api';
+import { api, ApiError, homeFor, LearnUnitSummary, Me, MyTeacher } from '@/lib/api';
 import { Conversation } from '@/components/Conversation';
 
 /**
@@ -17,6 +17,7 @@ export default function StudentHomePage() {
   const [me, setMe] = useState<Me | null>(null);
   const [units, setUnits] = useState<LearnUnitSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [teacher, setTeacher] = useState<MyTeacher | null>(null);
 
   useEffect(() => {
     api
@@ -40,6 +41,13 @@ export default function StudentHomePage() {
         setUnits([]);
         setError(caught instanceof ApiError ? caught.message : 'Could not load your units.');
       });
+
+    // Her own teacher, and only if that teacher has set a number. Not having
+    // one is ordinary, so a failure here changes nothing on the page.
+    api
+      .get<MyTeacher | null>('/teachers/mine')
+      .then(setTeacher)
+      .catch(() => setTeacher(null));
   }, [me]);
 
   async function signOut() {
@@ -149,6 +157,34 @@ export default function StudentHomePage() {
         emptyText="No messages yet. Your teacher will write here when she has something for you."
       />
 
+      {/*
+        Offered only while her own teacher has a number set. There is no
+        number anywhere in this platform's code: with none set, the button is
+        simply not here (SRS 26).
+      */}
+      {teacher?.whatsappUrl && (
+        <div className="card">
+          <h2>Ask your teacher</h2>
+          <p className="muted">
+            Message {teacher.title ? `${teacher.title} ` : ''}
+            {teacher.displayName} on WhatsApp if you are stuck on something.
+          </p>
+          <div className="row" style={{ marginTop: '.75rem' }}>
+            <a
+              className="button-link"
+              href={`${teacher.whatsappUrl}?text=${encodeURIComponent(
+                `Hello, this is ${me.displayName} from TOP GOAL.`,
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="contact-teacher-whatsapp"
+            >
+              Message my teacher on WhatsApp
+            </a>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <h2>Your account</h2>
         <p className="muted">
@@ -158,7 +194,9 @@ export default function StudentHomePage() {
           <button onClick={() => router.push('/change-password')}>Change my password</button>
         </div>
         <p className="muted" style={{ marginTop: '.75rem' }}>
-          Forgotten your password? Ask your teacher to reset it for you.
+          Forgotten your password?{' '}
+          <a href="/forgot-password">Send a reset link to your e-mail</a>, or ask your teacher to
+          reset it for you.
         </p>
       </div>
     </main>
