@@ -11,7 +11,7 @@
  * This reverses exactly that, and nothing else: only records that came from
  * the source file, and only from PUBLISHED back to DRAFT. Nothing is promoted.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../prisma-client.mjs';
 const db = new PrismaClient({ datasourceUrl: process.env.DIRECT_URL ?? process.env.DATABASE_URL });
 
 (async () => {

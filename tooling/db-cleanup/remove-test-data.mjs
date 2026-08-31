@@ -8,7 +8,7 @@
  *
  * Run with DRY=1 to list what would go without touching anything.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../prisma-client.mjs';
 const db = new PrismaClient({ datasourceUrl: process.env.DIRECT_URL ?? process.env.DATABASE_URL });
 
 const DRY = process.env.DRY === '1';

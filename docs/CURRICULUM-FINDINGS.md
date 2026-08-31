@@ -422,3 +422,336 @@ after a future test run is one command to undo.
 This is the second time a verification convenience has quietly changed
 curriculum state. Both times the platform behaved exactly as designed; it was
 the test scaffolding that overreached.
+
+---
+
+# Re-inspection of the source, 2026-08-31
+
+The client supplied the source file again and asked two things of it: put back
+the eight Lifestyles questions that Phase 6 verification destroyed, and say
+exactly what the file contains before any of it is entered in bulk.
+
+The three uploaded copies are byte-identical to each other and to the copy the
+original import ran against (`md5 176ad3f307072d4ca28fb9d77a617c67`). That
+matters more than it sounds: it means the committed extractor is still reading
+the same document that produced the seventy-one questions now in the database,
+so the two can be compared record for record rather than judged by eye.
+
+## The eight Lifestyles questions are real, and there are exactly eight
+
+`tooling/content-import/extract.mjs` was re-run unchanged. It yields 79
+questions. Seventy-one of them match rows already in the database on every
+field — type, prompt, payload, answer key and unit — and the eight that do not
+are all Lifestyles:
+
+| `source_ref` | Kind | Question |
+|---|---|---|
+| p633 | complete_sentence | 1) I have 10 …….. on my feet. |
+| p635 | complete_sentence | 2) If you are sick, you need to take some ……..…….. . |
+| p637 | complete_sentence | 3) I use ……….. to keep myself clean. |
+| p639 | complete_sentence | 4) My …….. is in the middle of my arm. |
+| p808 | odd_one_out | knife – soap – fork – dish |
+| p809 | odd_one_out | medicine – finger – toe – knee |
+| p810 | odd_one_out | helpful – write – wait – fall |
+| p811 | odd_one_out | sugar – jam – salt – eggs |
+
+The count was not aimed at. Eight is what the file yields, and it agrees with
+the eight the cleanup audit recorded as lost.
+
+`source_ref` is what made the restoration safe. The extractor derives it from
+the paragraph's position in the document, so the same file always names the
+same question the same way, and a reference already held in the database means
+that question is already there. `restore-missing.mjs` inserts only references
+the database does not hold, which is why running it twice inserts nothing the
+second time.
+
+Every answer key was read from the file's own yellow highlighting; none was
+guessed, and none of the eight needed a teacher. All eight are DRAFT, and the
+Lifestyles unit stays unpublished.
+
+## The client was right about the vocabulary, and the earlier finding was wrong
+
+The earlier conclusion — that the source carries no vocabulary list — is
+withdrawn. It was wrong, and it was wrong for a reason worth writing down: the
+vocabulary is in **tables**, and the extraction that produced that conclusion
+read the document as a stream of paragraph text. A table's rows survive that
+reading; the fact that they were a table, and which cell sat beside which, does
+not.
+
+Each unit opens with a two-language table laid out `Arabic | English | Arabic |
+English`, so every English word carries its Arabic meaning explicitly, in the
+file, written by the author. Nothing here is translated by us.
+
+| Unit | Word pairs | Arabic meaning present | Notes |
+|---|---|---|---|
+| Welcome | 18 | 16 explicit | `hundred` and `thousand` are glossed `100` and `1000` — digits, not Arabic words. Flagged for the teacher |
+| Living Things | 26 | all 26 | — |
+| Lifestyles | 36 | all 36 | Largest list in the file |
+| Interests | 26 | all 26 | — |
+| Professions | 26 | all 26 | Includes multi-word terms: `AI specialist`, `artificial intelligence`, `cybersecurity analyst`, `video message` |
+| Grammar Review | 0 | — | No vocabulary table; it is a grammar section |
+
+**132 word pairs across the five units**, 130 with an explicit Arabic meaning.
+
+No vocabulary table carries a picture, and the file contains no audio of any
+kind — no embedded media beyond images, and no pronunciation recordings. Word
+pictures and teacher recordings therefore remain something the platform
+supplies, not something the source does. Some unit exercises *do* pair pictures
+with these same words (see below), and those pictures are the natural source of
+word images later.
+
+## Grammar Review is eight full-page scans and no text at all
+
+This is the part plain-text extraction misses completely, and the part worth
+being explicit about.
+
+Grammar Review holds no extractable prose. It is eight page images,
+1024×1536 each, and everything in them — the explanations, the rules, the
+examples, the exercises and the answers — is picture, not text. Read as text
+the section looks empty. It is the densest teaching material in the file.
+
+Each sheet is a designed grammar page carrying: an English and Arabic title, a
+definition in both languages, the rule as a formula, worked example tables,
+Arabic translations of the examples, a "common mistakes" ✗/✓ panel, a mind map,
+a quick-summary box, and **practice exercises, several of which print their own
+answer key**.
+
+| Image | Topic | Belongs to |
+|---|---|---|
+| image73.png | Passive voice, present simple (المبني للمجهول في المضارع البسيط) | Living Things |
+| image74.png | Where clauses | Living Things |
+| image75.png | Conditional sentences, zero and first (الجمل الشرطية) | Lifestyles |
+| image76.png | Countable & uncountable nouns, a few / a little | Lifestyles |
+| image77.png | Present perfect (المضارع التام) | Interests |
+| image78.png | Present perfect keywords — ever, never, just, already, yet | Interests |
+| image79.png | Simple past & past progressive (الماضي البسيط والماضي المستمر) | Professions |
+| image80.png | Restrictive relative clauses — who, which, that | Professions |
+
+**The unit mapping above is read from the content, and it disagrees with the
+document's own headings.** The file groups the images under headings
+`Unit 1:` (1 image), `Unit 2:` (3), `Unit 3:` (2), `Unit 4:` (2). Every one of
+these images is a *floating anchor*, as are the headings themselves, so the
+order they appear in the file is not the order they appear on the page and the
+grouping cannot be trusted. The content settles it: image74's worked examples
+are "The jungle is where tigers hunt" and "The trees are where monkeys play",
+which are word for word the Living Things grammar exercise, not a Lifestyles
+one. Each unit's two sheets then match that unit's own grammar questions
+exactly. **A teacher should confirm the pairing visually before entry** — it is
+a minute's work against the printed pages and it is the one place in this
+inventory where the file contradicts itself.
+
+These pages are also the answer to the client's preference for video: they are
+already a complete taught explanation. A video, where one exists, supplements
+them rather than replacing them.
+
+## What each core unit holds
+
+Every core unit follows the same nine-part shape, so the inventory is the same
+shape four times over. Counts are items, not exercises.
+
+| | Living Things | Lifestyles | Interests | Professions |
+|---|---|---|---|---|
+| Vocabulary pairs | 26 | 36 | 26 | 26 |
+| Match the correct answer (5 stems ↔ 5 answers) | 1 table | 1 table | 1 table | 1 table |
+| Short answer, answers written in the file | 2 | 2 | 2 | 2 |
+| Choose and complete the sentence | 4 | 4 | 4 | 4 |
+| Order the words to make sentences | 3 | 3 | 3 | 3 |
+| Circle ✓ or × against a picture | 4 | 4 | 5 | 5 |
+| Grammar multiple choice | 6 | 6 | 6 | 6 |
+| Do as shown in brackets | 2 | 2 | 3 | 3 |
+| Missing letter | 5 | 5 | 5 | 5 |
+| Odd one out | 4 | 4 | 4 | 4 |
+| Picture ↔ word (matching / spelling / naming) | 6 | 6 | 6 | 6 |
+| Free writing, with a model answer | 1 | 1 | 1 | 1 |
+| Reading passage + questions | 4 MC + 3 T/F | 6 T/F | 4 MC + 3 T/F | 4 MC + 3 T/F |
+| Grammar sheets (scans) | 2 | 2 | 2 | 2 |
+| Images | 15 | 17 | 14 | 11 |
+
+Welcome, which is reference material and not a completion unit, holds 18
+vocabulary pairs, one matching table, 8 complete-the-sentence questions, 5
+picture true/false, one 6-item picture matching, and 11 images.
+
+**80 images in total**: 4 front matter, 11 Welcome, 15 Living Things, 17
+Lifestyles, 14 Interests, 11 Professions, 8 Grammar Review. (The archive holds
+92 media files; 12 are `.wdp` sidecars Word writes beside images with effects
+applied, not separate pictures.)
+
+Every one of these exercise kinds maps onto a question type the engine already
+has. Nothing in the file needs a type that does not exist.
+
+## What is already imported, and what is not
+
+Of the source's exercises, 79 questions are in the database. The rest are not,
+and the reason is consistent: the extractor imports a question only where the
+file makes both the question *and* its answer readable as text.
+
+| Kind | In the database | Why the rest are not |
+|---|---|---|
+| Choose and complete | 24 | — |
+| Grammar / reading multiple choice | 30 | — |
+| Odd one out | 16 | — |
+| True / false with `( T )` / `( F )` | 9 | — |
+| Match the correct answer | 0 | The pairing is table geometry; flattened text loses which stem went with which answer |
+| Order the words | 0 | The scrambled words and the model answer are separate lines with nothing linking them |
+| Picture matching / spelling / naming | 0 | The association is between a picture and a cell; there is no text that states it |
+| Circle ✓ or × | 0 | **The file never marks which is correct** |
+| Missing letter | 0 | Laid out as a table of stems above a table of letter choices |
+| Do as shown in brackets | 0 | The transformation is a free-text answer |
+| Free writing | 0 | Not automatically markable, by its nature |
+
+The extractor recorded 256 such refusals rather than guessing at any of them.
+That is the correct behaviour and it is why the remaining entry is teacher work
+rather than a bigger script.
+
+Two things need a person specifically:
+
+- **The "Circle ✓ or ×" exercises carry no answer anywhere in the file** — 18
+  items across the four core units (4 + 4 + 5 + 5), and 5 more in Welcome. A
+  teacher must supply every answer; they cannot be inferred from the picture.
+- **The Lifestyles grammar block has no highlighting at all**, so its 6
+  multiple-choice answers are unmarked where the other units' are marked. A
+  teacher must supply those 6.
+
+Three previously imported questions still await a teacher, unchanged from
+before: `p104` (Welcome), `p1140` and `p1168` (Interests), where the
+highlighting covered a word fragment that matches no option.
+
+## Seven questions are filed under the wrong unit
+
+The seven questions currently in **Grammar Review** are not grammar review
+material. They are the reading-passage questions from the end of
+**Professions** — the passage about teachers' previous jobs, asking what Mr.
+Jackson and Ms. Bryans did before teaching.
+
+They landed there because `unitAt()` attributes a question to the last unit
+heading above it in the file, and "Grammar Review" is a floating page-header
+text box that appears, in document order, before the last page of Professions.
+The same floating-anchor problem that scrambles the grammar images.
+
+This was **not** corrected. The instruction for this task was to leave the
+existing imported questions alone unless a change was needed to prevent
+duplication, and this is not that. It is recorded here so the full content
+entry can move them, and so the Professions and Grammar Review counts are read
+with it in mind: Professions really holds 21 imported questions and Grammar
+Review really holds none.
+
+## The sequential unlock flow does not exist yet
+
+The client confirmed Vocabulary → Grammar → Assessment, with grammar locked
+until vocabulary is done and the assessment locked until both are. **None of
+that is implemented, on either side.**
+
+- `AssessmentState.blockedBecause` in `apps/api/src/learning/learning.types.ts`
+  admits exactly three reasons: `no_questions`, `no_attempts_left` and
+  `already_passed`. Incomplete vocabulary or grammar is not among them, and
+  `learning.service.ts` never consults either when deciding `canStart`.
+- The student's unit page (`apps/web/src/app/learn/[unitId]/page.tsx`) renders
+  four tabs whose handlers are plain `setTab` calls. No tab is ever disabled,
+  and nothing checks progress before switching.
+
+So today a student may open any of the four sections in any order and sit the
+assessment having done nothing else. Nothing here is *wrong* against what was
+built — the gating was simply never a requirement until now.
+
+The smallest correction, for the implementation task that owns it:
+
+1. Extend `blockedBecause` with `vocabulary_incomplete` and
+   `grammar_incomplete`, and compute them in `assessmentState` from the
+   progress figures `progressWithin` already produces. The server stays the
+   authority; `startActivity` must refuse an assessment start for the same
+   reasons, exactly as it already refuses `already_passed`.
+2. Return a matching lock state for the grammar section, from the vocabulary
+   component's own progress.
+3. Have the tabs read that state and disable what is locked, saying why.
+
+The progress weighting does not change: 25/25/25/25 stands, Activity is still
+required for 100%, and gating the assessment on vocabulary and grammar leaves
+the formula untouched. Bonus Games must not appear in any of these conditions.
+
+## Two recommendations the client asked for
+
+### Optional grammar video: a URL on the section, and no new dependency
+
+The grammar section model already carries typed content and an optional
+uploaded image. The smallest honest addition is **one nullable `videoUrl`
+column on the grammar section**, entered by the teacher in the CMS and rendered
+as an embed when present.
+
+No video hosting should be bought or added. The client's material is eight
+scans and whatever she records herself; the realistic destination is YouTube
+(unlisted) or Google Drive, both free, both already how a teacher shares a
+video. A paid host would be a recurring cost for a feature that is optional by
+the client's own description.
+
+Two things this must do to stay safe, because a URL field that renders markup
+is an injection hole:
+
+- **Store the URL, never an embed snippet.** Accept a URL, parse it, and build
+  the iframe ourselves. Never render teacher-supplied HTML.
+- **Allow-list the hosts** in the settings store, the same way every other
+  policy in this system is configured — so the list is changed by
+  configuration, not by a release, and an unrecognised host is refused at entry
+  with a message rather than silently embedded.
+
+That is one nullable column, one settings key, one small parser and one player
+component. It carries no new package and no monthly bill.
+
+### Bonus games: one attempt-free runner over the content that already exists
+
+The games the client named — memory match, word ↔ meaning, word ↔ image,
+sorting, quick vocabulary challenges, grammar review games — are all the same
+shape: *pair or group things drawn from a unit's existing content, against a
+clock or a score that is never recorded.*
+
+So the recommendation is to build **no new content and no new question rows**.
+A bonus game should read what is already there:
+
+- word ↔ meaning and memory match read `VocabularyItem.wordEn` / `wordAr` —
+  132 pairs are already in the source, which is more than enough;
+- word ↔ image reads the word's picture once those are attached;
+- sorting and classification reuse the odd-one-out groups already imported (16
+  of them), whose members are by construction a category plus an outsider;
+- grammar review games reuse the Grammar Review sheets' own practice items once
+  those are entered.
+
+The framework needed is small: a `BonusGame` definition naming a unit, a game
+kind and which content pool it draws from, and a client-side runner per kind.
+What matters is what it must *not* have, and this should be enforced rather
+than documented:
+
+- **no `ActivityAttempt` row, ever** — that table is what feeds progress,
+  scoring and the assessment attempt count, and a bonus game that writes to it
+  would silently consume one of the student's two assessment attempts;
+- no contribution to any progress component;
+- a clearly separate place in the interface, so a student can tell at a glance
+  that a game does not count.
+
+The existing `randomize` helpers (`createRng`, `shuffle`) already give each
+round a fresh order, and the settings store already gives per-unit
+configuration. Neither needs extending.
+
+## Recommended scope for the full content entry task
+
+In order, because each step depends on the one before it:
+
+1. **Move the seven mis-filed questions** from Grammar Review to Professions,
+   and correct `unitAt()` so a floating heading cannot mis-file again.
+2. **Enter the 132 vocabulary pairs** from the five bilingual tables, by unit,
+   English and Arabic exactly as written. This is mechanical and scriptable
+   from the tables; it should not be typed by hand.
+3. **Attach the 8 grammar sheets** as grammar section images, two per core
+   unit, after a teacher has confirmed the pairing. Add the optional video URL
+   field in the same pass if the client wants it then.
+4. **Enter the exercises the extractor refused** — matching, ordering, picture
+   matching, missing letter, spelling — as structured questions through the
+   CMS, which already supports every one of these kinds.
+5. **Collect the missing answers**: 18 "Circle ✓ or ×" items, the 6 Lifestyles
+   grammar answers, and the 3 still-flagged imports. These need the teacher and
+   nothing else will do.
+6. **Split activity from assessment** per unit, and set the assessment pools.
+   No assessment exists in the source as such — the file is a revision
+   worksheet throughout, with no section marked as a test — so which questions
+   become the assessment is the teacher's decision, not the document's.
+7. Only then, the sequential unlock flow and the bonus game framework.
+
+Nothing in steps 1–6 may be published while the source-rights hold stands.

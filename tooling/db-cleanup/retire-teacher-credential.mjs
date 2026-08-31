@@ -10,7 +10,7 @@
  * Getting back in is the platform's own recovery flow, which is the point:
  * with no RESEND_API_KEY set, the API writes the reset link to its own log.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../prisma-client.mjs';
 import argon2 from 'argon2';
 import { randomBytes } from 'node:crypto';
 
