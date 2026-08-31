@@ -370,3 +370,55 @@ Both were explained and neither offered a way out. Each now names both routes
 forward and carries a button that messages her teacher — naming the exact words
 that cannot be played, or the word whose check will not open. "Ask your
 teacher" is not much help to an eleven-year-old sitting on her own.
+
+---
+
+# Test data cleanup — and one loss to report
+
+## The Lifestyles import was destroyed during Phase 6 verification
+
+**The eight questions imported into Lifestyles from the supplied source file no
+longer exist.** They were removed on 2026-08-31 by a verification script that
+cleared the unit before seeding test questions into it:
+
+```js
+await db.question.deleteMany({ where: { unitId: unit.id } });   // seed-kinds.js
+```
+
+That was written to make a re-runnable fixture and did not distinguish the
+fixture's own questions from the curriculum already in the unit. It is a
+mistake in the verification tooling, not in the platform.
+
+What is and is not affected:
+
+- The eight were **DRAFT throughout**. No student ever saw them, and no
+  attempt, result or frozen snapshot referred to them.
+- The other **71 imported questions are intact** — Welcome 8, Living Things 21,
+  Interests 21, Professions 14, Grammar Review 7.
+- They **cannot be restored from this environment**: the source `.docx` and the
+  extracted JSON are not in the repository, and the container that held the
+  uploaded file has since been rebuilt. Recovering them means re-supplying the
+  source file and re-running `prisma/import-questions.ts`.
+
+The lesson is narrow and worth keeping: a fixture script must delete **its own
+rows by id**, never everything under a parent it does not own. The cleanup
+scripts in `tooling/db-cleanup/` are written that way deliberately, and they
+refuse to classify a record as test data on one signal alone.
+
+## The source-rights hold had been broken by testing
+
+Confirmed decision §51 holds that nothing from the supplied source file reaches
+a student until the client confirms she holds the right to distribute it. Phase
+6 verification published Living Things so the browser suites had something to
+run against, and publishing a unit publishes its questions — so 21 imported
+questions sat PUBLISHED for the length of that work.
+
+Nothing reached a real student: the only account that could have seen them was
+the development student, and the material was never in front of anyone outside
+this environment. The hold is now restored — every unit and every imported
+question is DRAFT — and `restore-rights-hold.mjs` exists so the same thing
+after a future test run is one command to undo.
+
+This is the second time a verification convenience has quietly changed
+curriculum state. Both times the platform behaved exactly as designed; it was
+the test scaffolding that overreached.
