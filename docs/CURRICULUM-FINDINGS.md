@@ -299,3 +299,74 @@ required a section, so such a picture could never have been deleted by anyone.
 Both were rewritten for three parents, and a `CHECK` constraint now requires
 exactly one. Nine isolation tests cover it; four fail against the old policies
 and one against the missing constraint.
+
+---
+
+# Phase 6.5 — what a functional review found
+
+Five defects, none of which code review had caught, and all five found by
+running the platform and reading what it actually said.
+
+## A unit credited a student for work that did not exist
+
+Measured, not argued: sixteen units, one per combination of parts present,
+each read back through the API as the student.
+
+An empty part counted as complete — "nothing left to do" — so every part a
+teacher had not prepared handed out a free quarter. A published unit with no
+words, no grammar, no activity and no assessment reported **100% and marked
+itself complete** for a student who had never opened it. A unit with only an
+assessment showed 75% before she answered anything.
+
+An empty part is now worth nothing, and the unit cannot be complete while one
+exists. **The consequence is worth stating plainly: a unit missing any of the
+four parts can never be finished by a student.** That is deliberate — for the
+four themed units, completion has to mean work she did — but it means a unit
+without an assessment is permanently incomplete until one is written. The rule
+is a setting (`progress.empty_component_counts_as_complete`) so the client can
+take the other view without a deploy.
+
+## The course figure counted units that must not count
+
+Welcome and Grammar Review carry `counts_toward_completion = false`, and the
+per-unit calculation honoured it — but the teacher's single headline figure per
+student averaged every published unit. The flag was right and unread. The
+moment a teacher published Welcome, which she will, every student's course
+figure would have moved.
+
+## The class view could not load a real class
+
+It opened one transaction per student per unit, all at once. Eighteen published
+units was enough to exhaust the connection pool and return a 500; a class of
+twenty-five students across six units would have been 150 concurrent
+transactions and would never have loaded. Now one transaction per student.
+
+This one is worth remembering as a shape rather than a bug: `Promise.all` over
+a per-row helper that opens its own transaction looks harmless at three rows
+and fails at twenty.
+
+## Two question kinds could not be authored at all
+
+Matching and word ordering had no entry in the "kind of question" list, and
+editing an imported one dropped to a raw JSON box. The engine had marked them
+correctly since Phase 4 and the student could answer them since Phase 6 — but a
+teacher could not write one without a developer.
+
+The forms are now shaped the way a teacher thinks: matching is a list of rows
+("sun goes with day"), ordering is the sentence typed the right way round with
+a preview of the shuffled words. The ids the engine needs are built from those
+and never shown.
+
+## A student could reach a dead end with nothing to do about it
+
+Two of them, both created by rules that are individually right:
+
+- A word must be heard before it counts, and she may not claim to have heard
+  it. On a browser with no voice, a word with no recording cannot be finished.
+- A check is never invented, so a unit with fewer than three worded words
+  cannot produce one, and its words cannot be finished either.
+
+Both were explained and neither offered a way out. Each now names both routes
+forward and carries a button that messages her teacher — naming the exact words
+that cannot be played, or the word whose check will not open. "Ask your
+teacher" is not much help to an eleven-year-old sitting on her own.

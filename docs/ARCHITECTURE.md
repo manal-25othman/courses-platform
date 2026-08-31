@@ -422,6 +422,32 @@ Notation: `PK` primary key, `FK` foreign key, `JSONB` flexible structured column
 
 ### 5.5 Progress (§20–§22)
 
+**The completion rule, as built and measured (Phase 6.5, 2026-08-31).**
+
+A unit is four equal quarters — vocabulary, grammar, activity, assessment
+(`progress.weights`, 25 each). Each quarter is earned as follows:
+
+| Quarter | Earned when |
+|---|---|
+| Vocabulary | every published word is *learned*: seen, heard and checked |
+| Grammar | every published grammar section has been opened |
+| Activity | one activity attempt has been finished (retries improve the score, not the completion) |
+| Assessment | an assessment attempt has been **passed** — sitting and failing uses a try and earns nothing |
+
+**A quarter with nothing in it is worth nothing**, and the unit cannot be
+complete while one exists. This was the reverse until Phase 6.5, when the
+sixteen combinations were measured against the running API: an empty part
+counted as complete, so a published unit with no content at all reported 100%
+and marked itself complete for a student who had never opened it. The rule is
+`progress.empty_component_counts_as_complete`, false by default, and the API
+reports the empty parts in `missingContent` so both screens can say which parts
+the teacher has not prepared rather than showing an unexplained zero.
+
+The **course** figure is the average of the units whose
+`counts_toward_completion` is true — the four themed units. Welcome and Grammar
+Review are shown and their progress is calculated, but they never move it.
+
+
 **`vocabulary_progress`** — §22 requires per-item completion state
 | Field | Notes |
 |---|---|
