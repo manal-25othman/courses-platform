@@ -611,6 +611,101 @@ describe('feedback never leaves its school', () => {
   });
 });
 
+/**
+ * The application connection should be able to do its job and nothing else.
+ *
+ * These are not about one school seeing another's rows; they are about what a
+ * stolen application connection could reach. Each was a real hole found by a
+ * health check on 2026-08-31.
+ */
+describe('the application role has no privileges it does not need', () => {
+  /**
+   * `_prisma_migrations` belongs to no school, so no policy covers it, and the
+   * grant was the only thing in the way. app_user could delete the whole
+   * ledger — which would make the next deploy try to re-apply every migration.
+   */
+  it('cannot touch the migration ledger', async () => {
+    const before = await owner.$queryRawUnsafe<{ count: bigint }[]>(
+      'SELECT count(*)::bigint AS count FROM _prisma_migrations',
+    );
+
+    await expect(
+      app.$executeRawUnsafe('DELETE FROM _prisma_migrations'),
+    ).rejects.toThrow(/permission denied/i);
+
+    const after = await owner.$queryRawUnsafe<{ count: bigint }[]>(
+      'SELECT count(*)::bigint AS count FROM _prisma_migrations',
+    );
+
+    expect(Number(after[0].count)).toBe(Number(before[0].count));
+    expect(Number(after[0].count)).toBeGreaterThan(0);
+  });
+
+  /**
+   * Settings resolve from the most specific scope down to global, so the
+   * application must READ every scope. Writing is another matter: the old
+   * policy said `scope <> 'SCHOOL' OR ...` for both, which let any school
+   * change a value governing all of them.
+   */
+  it('can read a global setting', async () => {
+    const rows = await forSchool(SCHOOL_A, (tx) =>
+      tx.setting.findMany({ where: { scope: 'GLOBAL' } }),
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it('cannot change a global setting', async () => {
+    const key = 'assessment.passing_score';
+    const before = await owner.setting.findFirst({ where: { key, scope: 'GLOBAL' } });
+
+    if (!before) return; // Nothing seeded in this database; nothing to protect.
+
+    await forSchool(SCHOOL_A, (tx) =>
+      tx.$executeRawUnsafe(
+        `UPDATE settings SET value = '1' WHERE key = '${key}' AND scope = 'GLOBAL'`,
+      ),
+    );
+
+    const after = await owner.setting.findFirst({ where: { key, scope: 'GLOBAL' } });
+    expect(after?.value).toEqual(before.value);
+  });
+
+  it("can write its own school's override", async () => {
+    const created = await forSchool(SCHOOL_A, (tx) =>
+      tx.setting.create({
+        data: { scope: 'SCHOOL', scopeId: SCHOOL_A, key: 'iso.test', value: 1 },
+      }),
+    );
+
+    expect(created.id).toBeTruthy();
+    await owner.setting.deleteMany({ where: { key: 'iso.test' } });
+  });
+
+  it("cannot write another school's override", async () => {
+    await expect(
+      forSchool(SCHOOL_A, (tx) =>
+        tx.setting.create({
+          data: { scope: 'SCHOOL', scopeId: SCHOOL_B, key: 'iso.test', value: 1 },
+        }),
+      ),
+    ).rejects.toThrow();
+
+    const leaked = await owner.setting.count({ where: { key: 'iso.test' } });
+    expect(leaked).toBe(0);
+  });
+
+  /** The registries are read by everyone and changed by nobody at runtime. */
+  it.each(['question_types', 'section_types'])(
+    'cannot change the %s registry',
+    async (table) => {
+      await expect(
+        app.$executeRawUnsafe(`UPDATE "${table}" SET display_name = 'changed'`),
+      ).rejects.toThrow(/permission denied/i);
+    },
+  );
+});
+
 describe('the application role cannot switch the protection off', () => {
   it('is not a superuser and cannot bypass policies', async () => {
     const [role] = await app.$queryRaw<{ rolsuper: boolean; rolbypassrls: boolean }[]>`

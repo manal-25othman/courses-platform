@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Prisma, PrismaClient, User } from '@prisma/client';
 
 /**
@@ -22,8 +22,55 @@ export type TenantClient = Omit<
  */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PrismaService.name);
+
   async onModuleInit(): Promise<void> {
     await this.$connect();
+    await this.assertConnectionIsRestricted();
+  }
+
+  /**
+   * Refuses to start on a database role that ignores row-level security.
+   *
+   * A superuser, or any role with BYPASSRLS, is exempt from every policy in
+   * this database. Point the application at one and tenant isolation stops
+   * existing — silently: no error, no warning, every school's data visible to
+   * every request. It is an easy mistake to make, because the connection
+   * string a hosting provider offers first is usually the owner's, and it is
+   * the exact mistake that made the first version of the isolation work look
+   * like it was working when it was not.
+   *
+   * So the check runs at startup and stops the process, rather than leaving a
+   * running API with no protection. Setting ALLOW_UNRESTRICTED_DB=true skips
+   * it, which is for a local database only and never for anything holding real
+   * student data.
+   */
+  private async assertConnectionIsRestricted(): Promise<void> {
+    const [row] = await this.$queryRaw<{ role: string; bypasses: boolean }[]>`
+      SELECT rolname AS role, (rolsuper OR rolbypassrls) AS bypasses
+      FROM pg_roles
+      WHERE rolname = current_user
+    `;
+
+    if (!row?.bypasses) {
+      this.logger.log(`Connected as "${row?.role}", which row-level security applies to.`);
+      return;
+    }
+
+    if (process.env.ALLOW_UNRESTRICTED_DB === 'true') {
+      this.logger.warn(
+        `Connected as "${row.role}", which BYPASSES row-level security. ` +
+          'Tenant isolation is NOT being enforced by the database. ' +
+          'Allowed only because ALLOW_UNRESTRICTED_DB=true.',
+      );
+      return;
+    }
+
+    throw new Error(
+      `Refusing to start: the database user "${row.role}" bypasses row-level security, ` +
+        'so one school could read another\'s data. Point DATABASE_URL at the restricted ' +
+        'role (app_user) instead of the owner. See .env.example.',
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
