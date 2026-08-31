@@ -160,11 +160,15 @@ rather than settling it.
 
 ## Assessment is named, not guessed
 
-`progress.weights` gives assessments a quarter of the total, and assessments are
-Phase 6. Progress therefore reports `notCounted: ["assessment"]` and leaves that
+`progress.weights` gives assessments a quarter of the total, and assessments were
+Phase 6. Progress therefore reported `notCounted: ["assessment"]` and left that
 weight out of the calculation, rather than counting it as zero — which would
 make a finished unit read as three-quarters done — or as complete, which would
 be untrue.
+
+**Superseded by Phase 6.** All four components are now produced, so
+`notCounted` is empty. The mechanism stays for a weight the settings carry that
+the platform does not produce, and a test holds it there.
 
 ## Pronunciation depends on the device, not only the browser
 
@@ -218,3 +222,80 @@ new service, works the moment the API is deployed, and everything that reads a
 picture reads `media_assets.url` — so moving to object storage later is a
 migration behind that column. Revisit if the picture library grows, which it
 will if the 92 curriculum images are ever extracted.
+
+---
+
+# Phase 6 — what building the assessment revealed
+
+## The four core units are a flag, not a rule
+
+The client confirmed on 2026-08-31 that Welcome and Grammar Review are
+preliminary and revision material: finishing them must not affect the
+completion of the themed units or of the course.
+
+That is data, not code. `units.counts_toward_completion` was added and the two
+units were set to false by a one-time correction in the migration, matched on
+the two titles the client named. Nothing in the application reads a unit title,
+and no number of units is written anywhere: a teacher can flip the flag on any
+unit, and a sixth themed unit needs no change.
+
+## Assessments reuse the attempt machinery
+
+They were built as a `purpose` on a question and on an attempt, not as tables
+of their own. The engine, the marking, the frozen snapshots and the review
+screen are identical for practice and assessment; only the pool drawn from and
+the rules around it differ, and those rules all come from the settings store —
+80% to pass, two tries, highest counts (SRS 17, 18, 19). A second copy would
+only have given the two a way to drift apart.
+
+`activity_attempts.pass_mark_percent` is written at submission alongside the
+score. Lowering the mark next term must not turn a fail already recorded into a
+pass, for the same reason editing a question does not change what a student was
+asked.
+
+## Two question kinds had no working student view
+
+Matching and word-ordering send `left`/`right` and `tokens` in their payload
+rather than `options`. The screen had three branches — options, true/false,
+and a text box for everything else — so both fell through to the text box and
+were, in practice, unanswerable. The engine had marked them correctly since
+Phase 4; nothing had ever put one in front of a student.
+
+They are now tap-to-place: tap one side then the other to pair, tap words into
+a sentence and tap one to take it back. **Dragging is offered as well, but
+tapping is the primary mechanism, which is a deliberate departure from the
+"drag/match, drag-to-order" wording of the request.** HTML5 dragging does not
+work on a touchscreen at all, and these students are on phones; a drag-only
+version would have left exactly those two kinds unanswerable on exactly the
+devices that matter. Pointer-based dragging that works on touch is possible
+later if the client wants it.
+
+## The audio fallback cannot be a checkbox
+
+A student may not claim to have heard a word (client, 2026-08-31). The route
+now takes what actually played it, and the server refuses a teacher's recording
+for a word that has none, and refuses a request that names nothing — which is
+what a button reading "I heard it" would send.
+
+The browser-voice claim cannot be verified from the server: the API cannot
+watch a browser speak. What stops it is that the screen only sends after
+playback has finished, and there is no control that sends without playing. This
+is stated rather than glossed: it is an honest limit of doing text-to-speech in
+the browser, which is the approved provider (SRS 7, `audio.provider`).
+
+A teacher's recording is the way through for a browser with no voice — which is
+not hypothetical: the headless Chromium these flows are verified in has none,
+so every verification run exercises the fallback rather than the main path.
+
+## Media grew two more parents, and the policies had to follow
+
+A picture can now hang off a question or a word as well as a grammar section.
+The old read rule began `section_id IS NULL OR …`, which was harmless while a
+section was the only parent a row could have. Once it was not, that branch
+would have made every picture on a question or a word readable by every school
+on the platform. The restrictive delete rule had the mirror problem: it
+required a section, so such a picture could never have been deleted by anyone.
+
+Both were rewritten for three parents, and a `CHECK` constraint now requires
+exactly one. Nine isolation tests cover it; four fail against the old policies
+and one against the missing constraint.

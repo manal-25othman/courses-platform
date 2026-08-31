@@ -590,7 +590,7 @@ Login  →  Access token  (short-lived, e.g. 15 min, stateless)
 
 This design is the reason a mobile app needs **zero** authentication rework later.
 
-### 8.3 Password recovery (§28) — **contains an open item**
+### 8.3 Password recovery (§28) — **built in Phase 6**
 
 | Flow | Status |
 |---|---|
@@ -606,6 +606,23 @@ This design is the reason a mobile app needs **zero** authentication rework late
 - Because the response is neutral, the screen always shows both routes: a reset email is sent if one is registered, and the student is told to ask her teacher if no email arrives. This satisfies §28.1 and §28.2 without leaking account information.
 - **[C]** A teacher-issued password is **temporary** and **forces a password change at first login** (§28.6.2, client-approved). **[C]** All reset actions are written to `audit_log` (§28.6.3, client-approved).
 - **[P]** Token lifetime, single-use enforcement and rate limiting on the reset endpoint are standard security implementation details, configurable via Settings; the SRS does not fix these values.
+
+**As built (Phase 6, 2026-08-31).** `password_reset_tokens` holds the SHA-256
+hash of a 32-byte random token, an expiry (`PASSWORD_RESET_TTL_MINUTES`,
+default 60) and `used_at`. Two `SECURITY DEFINER` functions answer the two
+lookups that happen before a school is known — `auth_find_users_by_email` and
+`auth_find_reset_token` — joining `auth_find_users_by_username` as the only
+routes around the tenant policies; each answers one narrow question and
+refuses a disabled, deleted, expired or spent row. `POST /auth/forgot-password`
+returns 204 for every address, and the audit entry for an address with no
+account records the outcome without the address. `POST /auth/reset-password`
+spends the token, ends every session (`revokeAllForUser`) and spends every
+other outstanding link for that account. E-mail goes through Resend's HTTP API;
+with no key configured the link is written to the API log instead, which is how
+recovery is exercised locally. `issued_by` was not built: self-service and
+teacher-assisted recovery are separate mechanisms in the implementation
+(`POST /students/:id/reset-password` issues a temporary password directly), so
+there is no shared row to distinguish.
 - No phone number and no guardian contact is collected anywhere in the model (§28.4).
 
 ### 8.4 Anti-abuse **[P]**
