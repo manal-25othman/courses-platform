@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, ApiError, CheckAnswerResult, LearnWord, VocabularyCheck } from '@/lib/api';
-import { canSpeak, speak } from '@/lib/speech';
+import { api, ApiError, apiUrl, CheckAnswerResult, LearnWord, VocabularyCheck } from '@/lib/api';
+import { canSpeak, playRecording, speak } from '@/lib/speech';
 
 /**
  * The word list.
@@ -53,29 +53,76 @@ export function VocabularyCards({
     await onChanged();
   }
 
+  /** Records that the word was heard, naming what played it. */
+  async function recordHeard(word: LearnWord, source: 'browser_tts' | 'teacher_audio') {
+    await api.post(`/learn/vocabulary/${word.id}/audio-played`, { source }).catch(() => undefined);
+    await onChanged();
+  }
+
+  /** Plays the teacher's own recording of the word. */
+  async function playRecordingFor(word: LearnWord) {
+    if (!word.teacherAudioUrl) return;
+
+    setProblem(null);
+    setSpeaking(word.id);
+
+    const played = await playRecording(apiUrl(word.teacherAudioUrl));
+
+    setSpeaking(null);
+
+    if (!played) {
+      setProblem('That recording could not be played. Please try again.');
+      return;
+    }
+
+    await recordHeard(word, 'teacher_audio');
+  }
+
+  /**
+   * Plays the word with the browser's own voice, falling back to the
+   * teacher's recording when the browser has no working voice.
+   *
+   * Nothing here marks the word heard unless something actually played. There
+   * is deliberately no button that simply says "I heard it" — a student may
+   * not claim to have heard a word (client, 2026-08-31).
+   */
   async function play(word: LearnWord) {
     setProblem(null);
     setSpeaking(word.id);
 
     const result = await speak(word.wordEn);
 
-    setSpeaking(null);
-
-    if (!result.spoke) {
-      // Not recorded as heard, because it was not heard.
-      // A browser with no voice cannot be retried into working, so it gets a
-      // different message from a one-off failure.
-      if (result.reason === 'unsupported' || result.reason === 'no-voice') {
-        setSupported(false);
-        setProblem(null);
-      } else {
-        setProblem('That word could not be played. Please try again.');
-      }
+    if (result.spoke) {
+      setSpeaking(null);
+      await recordHeard(word, 'browser_tts');
       return;
     }
 
-    await api.post(`/learn/vocabulary/${word.id}/audio-played`).catch(() => undefined);
-    await onChanged();
+    // A browser with no voice cannot be retried into working. If the teacher
+    // has recorded this word, that is the way through; if she has not, the
+    // message says so rather than leaving the student pressing a dead button.
+    const noVoice = result.reason === 'unsupported' || result.reason === 'no-voice';
+
+    if (noVoice) setSupported(false);
+
+    if (word.teacherAudioUrl) {
+      const played = await playRecording(apiUrl(word.teacherAudioUrl));
+      setSpeaking(null);
+
+      if (played) {
+        await recordHeard(word, 'teacher_audio');
+        return;
+      }
+
+      setProblem('That word could not be played. Please try again.');
+      return;
+    }
+
+    setSpeaking(null);
+
+    if (!noVoice) {
+      setProblem('That word could not be played. Please try again.');
+    }
   }
 
   async function openCheck(word: LearnWord) {
@@ -124,8 +171,9 @@ export function VocabularyCards({
 
       {!supported && (
         <p className="alert warn" role="status" data-testid="no-voice">
-          This browser has no voice installed, so words cannot be played or marked as heard here.
-          Open the site in Chrome, Edge or Safari to finish your words.
+          {words.some((w) => w.teacherAudioUrl)
+            ? 'This browser has no voice installed. Words your teacher has recorded will still play; the rest cannot be played here. Open the site in Chrome, Edge or Safari to finish them.'
+            : 'This browser has no voice installed, so words cannot be played or marked as heard here. Open the site in Chrome, Edge or Safari to finish your words.'}
         </p>
       )}
 
@@ -154,6 +202,16 @@ export function VocabularyCards({
               )}
             </div>
 
+            {word.pictureUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={apiUrl(word.pictureUrl)}
+                alt={`A picture of ${word.wordEn}`}
+                className="word-picture"
+                data-testid="word-picture"
+              />
+            )}
+
             {word.partOfSpeech && <p className="muted" style={{ margin: 0 }}>{word.partOfSpeech}</p>}
 
             {/* The interface is English; only the meaning is Arabic, so the
@@ -179,6 +237,17 @@ export function VocabularyCards({
               >
                 {speaking === word.id ? 'Playing…' : '🔊 Hear it'}
               </button>
+              {word.teacherAudioUrl && (
+                <button
+                  className="small"
+                  onClick={() => playRecordingFor(word)}
+                  disabled={speaking === word.id}
+                  data-testid={`teacher-audio-${word.wordEn}`}
+                  aria-label={`Hear your teacher say ${word.wordEn}`}
+                >
+                  🎧 Teacher&rsquo;s voice
+                </button>
+              )}
               {!word.seen && (
                 <button className="small" onClick={() => markSeen(word)} data-testid="mark-seen">
                   I have read this

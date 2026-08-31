@@ -1,28 +1,52 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError, Attempt, AttemptQuestion, AttemptSummary } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  AssessmentState,
+  Attempt,
+  AttemptQuestion,
+  AttemptSummary,
+} from '@/lib/api';
+import { QuestionBody, QuestionPictures } from './QuestionViews';
 
 /**
- * The activity.
+ * The activity, and the unit's assessment.
  *
  * The questions, their order and the order of their choices all come from the
  * API, which took them from the engine and froze them into this attempt. This
  * screen shows what it is given and sends back what she picked; it holds no
  * answers and decides nothing about marking.
  *
- * Retries are unlimited (SRS 9), so finishing shows the result and offers
- * another go.
+ * One component serves both because for a student they are the same act:
+ * answer the questions, send them, see the result. What differs is what the
+ * screen says around it — practice can be repeated as often as she likes
+ * (SRS 9), while an assessment has a limited number of tries and a mark to
+ * reach (SRS 17, 18). Those rules are the API's; this reads them off the
+ * `assessment` it is handed and never decides one itself.
  */
 export function ActivityRunner({
   unitId,
   questionCount,
+  mode = 'activity',
+  assessment,
   onFinished,
 }: {
   unitId: string;
   questionCount: number;
+  mode?: 'activity' | 'assessment';
+  /** How the assessment stands for her. Required in assessment mode. */
+  assessment?: AssessmentState;
   onFinished: () => Promise<void> | void;
 }) {
+  const isAssessment = mode === 'assessment';
+  const startPath = isAssessment
+    ? `/learn/units/${unitId}/assessment`
+    : `/learn/units/${unitId}/activity`;
+  const attemptsPath = isAssessment
+    ? `/learn/units/${unitId}/assessment/attempts`
+    : `/learn/units/${unitId}/attempts`;
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [responses, setResponses] = useState<Record<string, unknown>>({});
   const [past, setPast] = useState<AttemptSummary[]>([]);
@@ -31,10 +55,10 @@ export function ActivityRunner({
 
   const loadPast = useCallback(async () => {
     const list = await api
-      .get<AttemptSummary[]>(`/learn/units/${unitId}/attempts`)
+      .get<AttemptSummary[]>(attemptsPath)
       .catch(() => [] as AttemptSummary[]);
     setPast(list);
-  }, [unitId]);
+  }, [attemptsPath]);
 
   useEffect(() => {
     void loadPast();
@@ -71,7 +95,7 @@ export function ActivityRunner({
     setBusy(true);
     setError(null);
     try {
-      const started = await api.post<Attempt>(`/learn/units/${unitId}/activity`);
+      const started = await api.post<Attempt>(startPath);
       setAttempt(started);
       // An attempt resumed after closing the page brings her answers back.
       const existing: Record<string, unknown> = {};
@@ -82,7 +106,11 @@ export function ActivityRunner({
       }
       setResponses(existing);
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'Could not start the activity.');
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : `Could not start the ${isAssessment ? 'assessment' : 'activity'}.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -109,7 +137,9 @@ export function ActivityRunner({
   if (questionCount === 0) {
     return (
       <div className="card">
-        <p className="muted">There is no activity in this unit yet.</p>
+        <p className="muted">
+          There is no {isAssessment ? 'assessment' : 'activity'} in this unit yet.
+        </p>
       </div>
     );
   }
@@ -117,23 +147,41 @@ export function ActivityRunner({
   if (!attempt) {
     return (
       <div className="card stack">
-        <h2 style={{ margin: 0 }}>Activity</h2>
+        <h2 style={{ margin: 0 }}>{isAssessment ? 'Unit assessment' : 'Activity'}</h2>
+
         <p className="muted">
-          {questionCount} question{questionCount === 1 ? '' : 's'}. You can try this as many times
-          as you like.
+          {questionCount} question{questionCount === 1 ? '' : 's'}.{' '}
+          {isAssessment && assessment
+            ? `You need ${assessment.passMarkPercent}% to pass.`
+            : 'You can try this as many times as you like.'}
         </p>
+
+        {isAssessment && assessment && <AssessmentStanding assessment={assessment} />}
+
         {error && (
           <p className="alert error" role="alert">
             {error}
           </p>
         )}
+
         <div className="row">
-          <button className="primary" onClick={start} disabled={busy} data-testid="start-activity">
-            {busy ? 'Starting…' : 'Start the activity'}
+          <button
+            className="primary"
+            onClick={start}
+            disabled={busy || (isAssessment && assessment ? !assessment.canStart : false)}
+            data-testid={isAssessment ? 'start-assessment' : 'start-activity'}
+          >
+            {busy
+              ? 'Starting…'
+              : isAssessment
+                ? assessment && assessment.attemptsUsed > 0
+                  ? 'Try the assessment again'
+                  : 'Start the assessment'
+                : 'Start the activity'}
           </button>
         </div>
 
-        <PastTries past={past} onOpen={openPast} />
+        <PastTries past={past} onOpen={openPast} isAssessment={isAssessment} />
       </div>
     );
   }
@@ -146,25 +194,46 @@ export function ActivityRunner({
       {finished ? (
         <div className="card stack" data-testid="activity-result">
           <h2 style={{ margin: 0 }}>Your result</h2>
+
+          {attempt.passed !== null && attempt.passed !== undefined && (
+            <p
+              className={`badge ${attempt.passed ? 'active' : 'deleted'} result-verdict`}
+              data-testid="assessment-verdict"
+            >
+              {attempt.passed ? 'Passed' : 'Not passed'}
+            </p>
+          )}
+
           <p style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0 }}>
             <span data-testid="score-percent">{attempt.scorePercent}%</span>
           </p>
           <p className="muted" style={{ margin: 0 }}>
             {attempt.correctCount} right, {attempt.incorrectCount} wrong — {attempt.pointsAwarded}{' '}
-            of {attempt.pointsAvailable} marks.
+            of {attempt.pointsAvailable} marks
+            {typeof attempt.passMarkPercent === 'number'
+              ? `. You needed ${attempt.passMarkPercent}%.`
+              : '.'}
           </p>
+
           <div className="row">
-            <button
-              className="primary"
-              onClick={() => {
-                setAttempt(null);
-                setResponses({});
-                void start();
-              }}
-              data-testid="try-again"
-            >
-              Try again
-            </button>
+            {/*
+              Whether another try is allowed is the API's decision, not this
+              screen's: an assessment has a limited number and a pass ends it.
+              The button is only offered when it would work.
+            */}
+            {(!isAssessment || (assessment?.canStart ?? false)) && (
+              <button
+                className="primary"
+                onClick={() => {
+                  setAttempt(null);
+                  setResponses({});
+                  void start();
+                }}
+                data-testid="try-again"
+              >
+                Try again
+              </button>
+            )}
             <button
               onClick={() => {
                 setAttempt(null);
@@ -173,11 +242,11 @@ export function ActivityRunner({
               }}
               data-testid="back-to-activity"
             >
-              Back to the activity
+              Back to the {isAssessment ? 'assessment' : 'activity'}
             </button>
           </div>
 
-          <PastTries past={past} onOpen={openPast} />
+          <PastTries past={past} onOpen={openPast} isAssessment={isAssessment} />
         </div>
       ) : (
         <div className="card between">
@@ -241,15 +310,19 @@ export function ActivityRunner({
 function PastTries({
   past,
   onOpen,
+  isAssessment = false,
 }: {
   past: AttemptSummary[];
   onOpen: (id: string) => void;
+  isAssessment?: boolean;
 }) {
   if (past.length === 0) return null;
 
   return (
     <div className="stack" style={{ marginTop: '.5rem' }}>
-      <h3 style={{ margin: 0, fontSize: '.95rem' }}>Your past tries</h3>
+      <h3 style={{ margin: 0, fontSize: '.95rem' }}>
+        {isAssessment ? 'Your assessment attempts' : 'Your past tries'}
+      </h3>
       <ul style={{ margin: 0, paddingInlineStart: 0, listStyle: 'none' }} data-testid="past-tries">
         {past.map((tryOut, index) => (
           <li key={tryOut.id} className="between" style={{ padding: '.4rem 0' }}>
@@ -261,6 +334,14 @@ function PastTries({
               · {tryOut.correctCount} right
             </span>
             <span className="row">
+              {typeof tryOut.passed === 'boolean' && (
+                <span
+                  className={`badge ${tryOut.passed ? 'active' : 'deleted'}`}
+                  data-testid="past-verdict"
+                >
+                  {tryOut.passed ? 'Passed' : 'Not passed'}
+                </span>
+              )}
               <strong data-testid="past-score">{tryOut.scorePercent}%</strong>
               <button className="small" onClick={() => onOpen(tryOut.id)} data-testid="open-past">
                 See my answers
@@ -273,7 +354,54 @@ function PastTries({
   );
 }
 
-/** One question. What it looks like follows its kind, which the API names. */
+/**
+ * How her assessment stands: the mark, the tries and why she may not start.
+ *
+ * Every number here comes from the API. Nothing on this screen decides
+ * whether she may sit it — it says what she was told.
+ */
+function AssessmentStanding({ assessment }: { assessment: AssessmentState }) {
+  const blocked = {
+    already_passed: 'You have passed this assessment. Well done.',
+    no_attempts_left: 'You have used all your tries for this assessment.',
+    no_questions: 'Your teacher has not set an assessment for this unit yet.',
+  } as const;
+
+  return (
+    <div className="stack" style={{ gap: '.4rem' }} data-testid="assessment-standing">
+      <p className="muted" style={{ margin: 0 }}>
+        <span data-testid="assessment-attempts">
+          {assessment.attemptsUsed} of{' '}
+          {assessment.maxAttempts === null ? 'unlimited' : assessment.maxAttempts} tries used
+        </span>
+        {assessment.bestScorePercent !== null && (
+          <>
+            {' · '}
+            <span data-testid="assessment-best">best {assessment.bestScorePercent}%</span>
+          </>
+        )}
+      </p>
+
+      {assessment.blockedBecause && (
+        <p
+          className={`alert ${assessment.blockedBecause === 'already_passed' ? 'ok' : 'warn'}`}
+          role="status"
+          data-testid="assessment-blocked"
+        >
+          {blocked[assessment.blockedBecause]}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One question.
+ *
+ * The card is the same for every kind — where she is, the wording she was
+ * given, any picture that came with it, and whether it was right. What sits
+ * inside follows the kind, and that lives in QuestionViews.
+ */
 function QuestionCard({
   question,
   number,
@@ -289,39 +417,8 @@ function QuestionCard({
   response: unknown;
   onAnswer: (value: unknown) => void;
 }) {
-  const options = Array.isArray(question.payload?.options)
-    ? (question.payload.options as { id: string; text: string }[])
-    : [];
-
-  const picked =
-    response && typeof response === 'object' && 'optionId' in response
-      ? String((response as { optionId: unknown }).optionId)
-      : null;
-
-  const pickedBool =
-    response && typeof response === 'object' && 'value' in response
-      ? Boolean((response as { value: unknown }).value)
-      : null;
-
-  const expectedOption =
-    question.expected && typeof question.expected.correctOptionId === 'string'
-      ? question.expected.correctOptionId
-      : null;
-
-  const expectedBool =
-    question.expected && typeof question.expected.value === 'boolean'
-      ? question.expected.value
-      : null;
-
-  function classFor(isThisOne: boolean, isCorrectOne: boolean): string {
-    if (!finished) return isThisOne ? 'choice picked' : 'choice';
-    if (isCorrectOne) return 'choice right';
-    if (isThisOne) return 'choice wrong';
-    return 'choice';
-  }
-
   return (
-    <div className="card stack" data-testid="activity-question">
+    <div className="card stack" data-testid="activity-question" data-type={question.typeKey}>
       <div className="between">
         {/*
           Where she is, kept clear of the question itself. The imported text
@@ -344,66 +441,14 @@ function QuestionCard({
         {question.prompt}
       </strong>
 
-      {options.length > 0 && (
-        <div className="stack" style={{ gap: '.4rem' }}>
-          {options.map((option) => (
-            <label
-              key={option.id}
-              className={classFor(picked === option.id, expectedOption === option.id)}
-              style={{ margin: 0, fontWeight: 400 }}
-            >
-              <input
-                type="radio"
-                name={question.answerId}
-                checked={picked === option.id}
-                disabled={finished}
-                onChange={() => onAnswer({ optionId: option.id })}
-                data-testid={`option-${question.answerId}-${option.id}`}
-              />
-              <span>{option.text}</span>
-            </label>
-          ))}
-        </div>
-      )}
+      <QuestionPictures question={question} />
 
-      {options.length === 0 && question.typeKey === 'true_false' && (
-        <div className="row">
-          {[true, false].map((value) => (
-            <label
-              key={String(value)}
-              className={classFor(pickedBool === value, expectedBool === value)}
-              style={{ margin: 0, fontWeight: 400 }}
-            >
-              <input
-                type="radio"
-                name={question.answerId}
-                checked={pickedBool === value}
-                disabled={finished}
-                onChange={() => onAnswer({ value })}
-                data-testid={`tf-${question.answerId}-${value}`}
-              />
-              <span>{value ? 'True' : 'False'}</span>
-            </label>
-          ))}
-        </div>
-      )}
-
-      {options.length === 0 && question.typeKey !== 'true_false' && (
-        <label style={{ fontWeight: 400 }}>
-          Your answer
-          <input
-            type="text"
-            disabled={finished}
-            defaultValue={
-              response && typeof response === 'object' && 'text' in response
-                ? String((response as { text: unknown }).text)
-                : ''
-            }
-            onChange={(e) => onAnswer({ text: e.target.value })}
-            data-testid={`typed-${question.answerId}`}
-          />
-        </label>
-      )}
+      <QuestionBody
+        question={question}
+        finished={finished}
+        response={response}
+        onAnswer={onAnswer}
+      />
     </div>
   );
 }

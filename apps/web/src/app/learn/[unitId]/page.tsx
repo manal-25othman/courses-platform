@@ -14,15 +14,16 @@ import { VocabularyCards } from '@/components/VocabularyCards';
 import { GrammarSections } from '@/components/GrammarSections';
 import { ActivityRunner } from '@/components/ActivityRunner';
 
-type Tab = 'vocabulary' | 'grammar' | 'activity';
+type Tab = 'vocabulary' | 'grammar' | 'activity' | 'assessment';
 
 /**
  * One unit, as a student works through it.
  *
- * Three parts, in the order the curriculum teaches them: learn the words, read
- * the explanations, then try the questions. Which tab is open is the only
- * thing this page decides; everything shown inside comes from the API, which
- * serves published material only.
+ * Four parts, in the order the curriculum teaches them: learn the words, read
+ * the explanations, practise with the questions, then sit the unit's
+ * assessment. Which tab is open is the only thing this page decides;
+ * everything shown inside comes from the API, which serves published material
+ * only, and every rule about the assessment is the API's.
  */
 export default function LearnUnitPage() {
   const router = useRouter();
@@ -105,6 +106,12 @@ export default function LearnUnitPage() {
               {progress.overallPercent}% done · words {progress.vocabulary.done}/
               {progress.vocabulary.total}
               {progress.bestScorePercent !== null && ` · best score ${progress.bestScorePercent}%`}
+              {progress.assessmentState.passed && ' · assessment passed'}
+            </p>
+          )}
+          {progress && !progress.countsTowardCompletion && (
+            <p className="muted" style={{ margin: 0 }} data-testid="not-counted-unit">
+              This unit is extra practice. It does not count towards your course.
             </p>
           )}
         </div>
@@ -148,6 +155,14 @@ export default function LearnUnitPage() {
         >
           Activity ({unit.activity.questionCount})
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'assessment'}
+          onClick={() => setTab('assessment')}
+          data-testid="tab-assessment"
+        >
+          Assessment{unit.assessment.passed ? ' ✓' : ` (${unit.assessment.questionCount})`}
+        </button>
       </div>
 
       {tab === 'vocabulary' && (
@@ -162,6 +177,16 @@ export default function LearnUnitPage() {
         <ActivityRunner
           unitId={unit.id}
           questionCount={unit.activity.questionCount}
+          onFinished={load}
+        />
+      )}
+
+      {tab === 'assessment' && (
+        <ActivityRunner
+          unitId={unit.id}
+          mode="assessment"
+          questionCount={unit.assessment.questionCount}
+          assessment={unit.assessment}
           onFinished={load}
         />
       )}

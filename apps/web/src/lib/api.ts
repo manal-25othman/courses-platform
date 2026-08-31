@@ -198,21 +198,34 @@ export interface QuestionType {
   orderIndex: number;
 }
 
+export type QuestionPurpose = 'ACTIVITY' | 'ASSESSMENT';
+
+export interface MediaFile {
+  id: string;
+  url: string;
+  mimeType?: string;
+  altText: string | null;
+}
+
 /** A question as the teacher sees it: answer key included. */
 export interface Question {
   id: string;
   unitId: string;
+  sectionId: string | null;
   typeKey: string;
   prompt: string;
   payload: Record<string, unknown>;
   answerKey: Record<string, unknown>;
   points: number;
+  purpose: QuestionPurpose;
   orderIndex: number;
   needsReview: boolean;
   reviewNotes: string | null;
   sourceRef: string | null;
   status: ContentStatus;
   type?: QuestionType;
+  media?: MediaFile[];
+  section?: { id: string; title: string | null } | null;
 }
 
 export interface ReviewSummary {
@@ -220,6 +233,8 @@ export interface ReviewSummary {
   needingReview: number;
   published: number;
   readyToPublish: number;
+  assessmentTotal: number;
+  assessmentPublished: number;
 }
 
 export interface Choice {
@@ -250,13 +265,30 @@ export interface ComponentProgress {
   percent: number;
 }
 
+/** How the unit's assessment stands for one student. */
+export interface AssessmentState {
+  questionCount: number;
+  passMarkPercent: number;
+  maxAttempts: number | null;
+  attemptsUsed: number;
+  attemptsLeft: number | null;
+  bestScorePercent: number | null;
+  passed: boolean;
+  canStart: boolean;
+  blockedBecause: 'no_questions' | 'no_attempts_left' | 'already_passed' | null;
+}
+
 export interface UnitProgress {
   unitId: string;
   vocabulary: ComponentProgress;
   grammar: ComponentProgress;
   activity: ComponentProgress;
+  assessment: ComponentProgress;
   bestScorePercent: number | null;
   attemptsTaken: number;
+  assessmentState: AssessmentState;
+  /** False for Welcome and Grammar Review, which are not part of the course. */
+  countsTowardCompletion: boolean;
   overallPercent: number;
   notCounted: string[];
   isComplete: boolean;
@@ -289,6 +321,10 @@ export interface LearnWord {
   partOfSpeech: string | null;
   exampleSentence: string | null;
   orderIndex: number;
+  /** A recording the teacher made, for a browser with no working voice. */
+  teacherAudioUrl: string | null;
+  /** A picture the teacher attached to this word. */
+  pictureUrl: string | null;
   seen: boolean;
   audioPlayed: boolean;
   /** She has answered the check on this word correctly. */
@@ -322,6 +358,7 @@ export interface LearnUnit {
   sections: LearnSection[];
   vocabulary: LearnWord[];
   activity: { questionCount: number };
+  assessment: AssessmentState;
 }
 
 export interface AttemptQuestion {
@@ -330,6 +367,8 @@ export interface AttemptQuestion {
   prompt: string;
   payload: Record<string, unknown>;
   points: number;
+  /** Pictures frozen with the question, part of what she was asked. */
+  media?: MediaFile[];
   response: unknown;
   isCorrect?: boolean | null;
   pointsAwarded?: number | null;
@@ -339,6 +378,7 @@ export interface AttemptQuestion {
 export interface Attempt {
   id: string;
   unitId: string;
+  purpose: QuestionPurpose;
   status: 'IN_PROGRESS' | 'SUBMITTED';
   startedAt: string;
   submittedAt?: string | null;
@@ -347,18 +387,24 @@ export interface Attempt {
   pointsAwarded?: number | null;
   pointsAvailable?: number | null;
   scorePercent?: number | null;
+  /** The mark she had to reach, frozen with the score. Null for practice. */
+  passMarkPercent?: number | null;
+  passed?: boolean | null;
   questions: AttemptQuestion[];
 }
 
 /** One of her finished tries, as listed on the activity tab. */
 export interface AttemptSummary {
   id: string;
+  purpose?: QuestionPurpose;
   submittedAt: string | null;
   correctCount: number | null;
   incorrectCount: number | null;
   pointsAwarded: number | null;
   pointsAvailable: number | null;
   scorePercent: number | null;
+  passMarkPercent?: number | null;
+  passed?: boolean | null;
 }
 
 // --- Feedback between a teacher and a student ------------------------------
@@ -415,15 +461,26 @@ export interface StudentDetail {
     unitId: string;
     title: string;
     progress: UnitProgress;
-    attempts: {
-      id: string;
-      submittedAt: string | null;
-      scorePercent: number | null;
-      correctCount: number | null;
-      incorrectCount: number | null;
-    }[];
+    attempts: AttemptSummary[];
     words: StudentWordProgress[];
   }[];
+}
+
+/** One finished paper as the teacher reads it, question by question. */
+export interface TeacherAttemptDetail {
+  id: string;
+  purpose: QuestionPurpose;
+  unit: { id: string; title: string };
+  student: { id: string; fullName: string };
+  submittedAt: string | null;
+  correctCount: number | null;
+  incorrectCount: number | null;
+  pointsAwarded: number | null;
+  pointsAvailable: number | null;
+  scorePercent: number | null;
+  passMarkPercent: number | null;
+  passed: boolean | null;
+  questions: (AttemptQuestion & { orderIndex: number })[];
 }
 
 /** How long ago something happened, in words a person would use. */

@@ -116,3 +116,39 @@ export function speak(text: string, lang = 'en-GB'): Promise<SpeechResult> {
     })();
   });
 }
+
+/**
+ * Plays a recording the teacher made, and waits for it to finish.
+ *
+ * The fallback for a browser whose own voice does not work — which the block
+ * at the top of this file explains is a real situation, not a hypothetical
+ * one. Like `speak`, this resolves false unless the sound really played: a
+ * word she has not heard has not been heard.
+ */
+export function playRecording(url: string): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    try {
+      const audio = new Audio(url);
+      audio.addEventListener('ended', () => finish(true), { once: true });
+      audio.addEventListener('error', () => finish(false), { once: true });
+
+      void audio.play().catch(() => finish(false));
+
+      // A recording of a single word is short; this is only a safety net so
+      // the button never stays disabled. It counts as played only if the
+      // browser is actually part-way through it.
+      setTimeout(() => finish(audio.currentTime > 0), 15000);
+    } catch {
+      finish(false);
+    }
+  });
+}
