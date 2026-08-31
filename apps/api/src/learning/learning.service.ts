@@ -4,13 +4,25 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AttemptStatus, ContentStatus, SettingScope, UserRole } from '@prisma/client';
+import {
+  AttemptStatus,
+  ContentStatus,
+  QuestionPurpose,
+  SettingScope,
+  UserRole,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { SETTING_KEYS } from '../settings/settings.types';
 import { QuestionEngineService, StoredQuestion } from '../questions/question-engine.service';
 import { CurrentUser } from '../auth/auth.types';
-import { ComponentProgress, QuestionSnapshot, UnitProgress } from './learning.types';
+import {
+  AssessmentState,
+  ComponentProgress,
+  QuestionSnapshot,
+  UnitProgress,
+} from './learning.types';
+import { AudioSource } from './dto/learning.dto';
 import {
   buildCheck,
   CheckableWord,
@@ -32,6 +44,27 @@ type ProgressWeights = Record<string, number>;
  * progress are the same set, never two lists that can drift apart.
  */
 const STUDENT_SECTION_COMPONENT = 'grammar';
+
+/** A file the teacher attached to a word. */
+interface WordMedia {
+  url: string;
+  mimeType: string;
+}
+
+/**
+ * The teacher's own recording of a word, if she made one.
+ *
+ * This is the fallback for a browser with no working voice. It never lets a
+ * student say she has heard a word without playing it (client, 2026-08-31).
+ */
+function teacherRecording(media: WordMedia[]): string | null {
+  return media.find((m) => m.mimeType.startsWith('audio/'))?.url ?? null;
+}
+
+/** A picture illustrating a word, if the teacher attached one. */
+function wordPicture(media: WordMedia[]): string | null {
+  return media.find((m) => m.mimeType.startsWith('image/'))?.url ?? null;
+}
 
 /** The examples a teacher entered on a section, if any. */
 function readExamples(config: unknown): string[] {
@@ -147,8 +180,15 @@ export class LearningService {
         tx.vocabularyItem.findMany({
           where: { unitId, status: ContentStatus.PUBLISHED },
           orderBy: { orderIndex: 'asc' },
+          include: { media: { orderBy: { orderIndex: 'asc' } } },
         }),
-        tx.question.count({ where: { unitId, status: ContentStatus.PUBLISHED } }),
+        tx.question.count({
+          where: {
+            unitId,
+            status: ContentStatus.PUBLISHED,
+            purpose: QuestionPurpose.ACTIVITY,
+          },
+        }),
       ]);
 
       const [vocabProgress, sectionProgress] = await Promise.all([
@@ -185,6 +225,11 @@ export class LearningService {
             partOfSpeech: item.partOfSpeech,
             exampleSentence: item.exampleSentence,
             orderIndex: item.orderIndex,
+            // A recording the teacher made, for a browser whose own voice does
+            // not work. Null when there is none, which the screen reports
+            // honestly rather than pretending the word can be heard.
+            teacherAudioUrl: teacherRecording(item.media),
+            pictureUrl: wordPicture(item.media),
             seen: Boolean(p?.seenAt),
             audioPlayed: Boolean(p?.audioPlayedAt),
             checked: Boolean(p?.verifiedAt),
@@ -195,8 +240,87 @@ export class LearningService {
           };
         }),
         activity: { questionCount },
+        assessment: await this.assessmentState(tx, actor.userId, unitId),
       };
     });
+  }
+
+  /**
+   * The unit's assessment, as it stands for one student.
+   *
+   * Every rule here is a setting: the mark to reach, how many tries, and which
+   * try counts (SRS 17, 18, 19). Nothing is decided in this file.
+   */
+  private async assessmentState(
+    tx: Pick<PrismaService, 'question' | 'activityAttempt'>,
+    studentId: string,
+    unitId: string,
+  ): Promise<AssessmentState> {
+    const [passMark, maxAttempts, resultPolicy] = await Promise.all([
+      this.settings.resolve<number>(SETTING_KEYS.ASSESSMENT_PASSING_SCORE, this.scopes(unitId)),
+      this.settings.resolve<number | null>(
+        SETTING_KEYS.ASSESSMENT_MAX_ATTEMPTS,
+        this.scopes(unitId),
+      ),
+      this.settings.resolve<string>(SETTING_KEYS.ASSESSMENT_RESULT_POLICY, this.scopes(unitId)),
+    ]);
+
+    const passMarkPercent = passMark ?? 100;
+
+    const [questionCount, attempts] = await Promise.all([
+      tx.question.count({
+        where: { unitId, status: ContentStatus.PUBLISHED, purpose: QuestionPurpose.ASSESSMENT },
+      }),
+      tx.activityAttempt.findMany({
+        where: {
+          studentId,
+          unitId,
+          purpose: QuestionPurpose.ASSESSMENT,
+          status: AttemptStatus.SUBMITTED,
+        },
+        orderBy: { submittedAt: 'asc' },
+        select: { scorePercent: true, passed: true },
+      }),
+    ]);
+
+    const scores = attempts
+      .map((a) => a.scorePercent)
+      .filter((score): score is number => typeof score === 'number');
+
+    const bestScorePercent = scores.length
+      ? resultPolicy === 'latest'
+        ? scores[scores.length - 1]
+        : Math.max(...scores)
+      : null;
+
+    // Read from what was recorded at the time, not by re-testing today's mark
+    // against an old score: the mark she had to reach was frozen with it.
+    const passed = attempts.some((a) => a.passed === true);
+
+    const attemptsUsed = attempts.length;
+    const attemptsLeft =
+      typeof maxAttempts === 'number' ? Math.max(0, maxAttempts - attemptsUsed) : null;
+
+    const blockedBecause: AssessmentState['blockedBecause'] =
+      questionCount === 0
+        ? 'no_questions'
+        : passed
+          ? 'already_passed'
+          : attemptsLeft === 0
+            ? 'no_attempts_left'
+            : null;
+
+    return {
+      questionCount,
+      passMarkPercent,
+      maxAttempts: typeof maxAttempts === 'number' ? maxAttempts : null,
+      attemptsUsed,
+      attemptsLeft,
+      bestScorePercent,
+      passed,
+      canStart: blockedBecause === null,
+      blockedBecause,
+    };
   }
 
   // --- Vocabulary ----------------------------------------------------------
@@ -212,6 +336,7 @@ export class LearningService {
     actor: CurrentUser,
     itemId: string,
     event: 'seen' | 'audio',
+    audioSource?: AudioSource,
   ) {
     this.assertStudent(actor);
     const schoolId = this.schoolOf(actor);
@@ -224,9 +349,27 @@ export class LearningService {
       // Published only: progress cannot be recorded against a draft word.
       const item = await tx.vocabularyItem.findFirst({
         where: { id: itemId, status: ContentStatus.PUBLISHED },
+        include: { media: true },
       });
 
       if (!item) throw new NotFoundException('Word not found.');
+
+      if (event === 'audio') {
+        // She may not claim to have heard a word; the screen reports what it
+        // played, after it finished playing (client, 2026-08-31). The server
+        // can check one of the two claims outright — a teacher's recording
+        // that does not exist cannot have been played — and refuses the
+        // request outright when neither way of hearing the word is available.
+        const recording = teacherRecording(item.media);
+
+        if (audioSource === AudioSource.TEACHER_AUDIO && !recording) {
+          throw new BadRequestException('There is no recording of this word to play.');
+        }
+
+        if (!audioSource) {
+          throw new BadRequestException('Play the word before marking it heard.');
+        }
+      }
 
       const now = new Date();
       const existing = await tx.vocabularyProgress.findFirst({
@@ -416,16 +559,26 @@ export class LearningService {
   // --- Activity ------------------------------------------------------------
 
   /**
-   * Starts an activity, or hands back the one she already has open.
+   * Starts an activity or an assessment, or hands back the one already open.
+   *
+   * One method for both. They draw from different pools of questions and obey
+   * different rules about retries, and everything else — the shuffle, the
+   * freezing, the marking, the review afterwards — is the same, so writing a
+   * second copy would only give the two a way to drift apart.
    *
    * The questions are frozen into the attempt as they stand right now. That is
    * the whole point: from here on she is answering the questions she was
    * given, and a teacher correcting one afterwards does not change the paper
    * in front of her, nor any result already recorded.
    */
-  async startActivity(actor: CurrentUser, unitId: string) {
+  async startActivity(
+    actor: CurrentUser,
+    unitId: string,
+    purpose: QuestionPurpose = QuestionPurpose.ACTIVITY,
+  ) {
     this.assertStudent(actor);
     const schoolId = this.schoolOf(actor);
+    const isAssessment = purpose === QuestionPurpose.ASSESSMENT;
 
     const [shuffleQuestions, shuffleOptions, maxAttempts] = await Promise.all([
       this.settings.resolve<boolean>(
@@ -437,7 +590,7 @@ export class LearningService {
         this.scopes(unitId),
       ),
       this.settings.resolve<number | null>(
-        SETTING_KEYS.ACTIVITY_MAX_ATTEMPTS,
+        isAssessment ? SETTING_KEYS.ASSESSMENT_MAX_ATTEMPTS : SETTING_KEYS.ACTIVITY_MAX_ATTEMPTS,
         this.scopes(unitId),
       ),
     ]);
@@ -451,17 +604,28 @@ export class LearningService {
       // An attempt she has not finished is resumed, not replaced, so closing
       // the page does not lose her work or reshuffle the questions.
       const open = await tx.activityAttempt.findFirst({
-        where: { studentId: actor.userId, unitId, status: AttemptStatus.IN_PROGRESS },
+        where: { studentId: actor.userId, unitId, purpose, status: AttemptStatus.IN_PROGRESS },
         include: { answers: { orderBy: { orderIndex: 'asc' } } },
       });
 
       if (open) return this.asStudentAttempt(open);
 
-      // Activities are unlimited for this client (SRS 9), which the settings
-      // store expresses as null. A number is honoured if one is ever set.
-      if (typeof maxAttempts === 'number') {
+      if (isAssessment) {
+        // A pass is the end of it. Letting her sit it again could only lower a
+        // result she has already earned, or waste a try she does not need.
+        const state = await this.assessmentState(tx, actor.userId, unitId);
+
+        if (state.blockedBecause === 'already_passed') {
+          throw new BadRequestException('You have already passed this assessment.');
+        }
+        if (state.blockedBecause === 'no_attempts_left') {
+          throw new BadRequestException('You have used all your tries for this assessment.');
+        }
+      } else if (typeof maxAttempts === 'number') {
+        // Activities are unlimited for this client (SRS 9), which the settings
+        // store expresses as null. A number is honoured if one is ever set.
         const taken = await tx.activityAttempt.count({
-          where: { studentId: actor.userId, unitId, status: AttemptStatus.SUBMITTED },
+          where: { studentId: actor.userId, unitId, purpose, status: AttemptStatus.SUBMITTED },
         });
 
         if (taken >= maxAttempts) {
@@ -470,12 +634,20 @@ export class LearningService {
       }
 
       const questions = await tx.question.findMany({
-        where: { unitId, status: ContentStatus.PUBLISHED },
+        where: { unitId, purpose, status: ContentStatus.PUBLISHED },
         orderBy: { orderIndex: 'asc' },
+        include: {
+          media: {
+            orderBy: { orderIndex: 'asc' },
+            select: { id: true, url: true, altText: true },
+          },
+        },
       });
 
       if (questions.length === 0) {
-        throw new BadRequestException('This unit has no activity yet.');
+        throw new BadRequestException(
+          isAssessment ? 'This unit has no assessment yet.' : 'This unit has no activity yet.',
+        );
       }
 
       const seed = `${actor.userId}:${unitId}:${Date.now()}`;
@@ -499,10 +671,17 @@ export class LearningService {
       });
 
       const byId = new Map(stored.map((q) => [q.id, q]));
+      const mediaById = new Map(questions.map((q) => [q.id, q.media]));
       const capturedAt = new Date().toISOString();
 
       const attempt = await tx.activityAttempt.create({
-        data: { studentId: actor.userId, unitId, seed, status: AttemptStatus.IN_PROGRESS },
+        data: {
+          studentId: actor.userId,
+          unitId,
+          purpose,
+          seed,
+          status: AttemptStatus.IN_PROGRESS,
+        },
       });
 
       for (const [index, shown] of presented.entries()) {
@@ -518,6 +697,7 @@ export class LearningService {
           payload: shown.payload,
           answerKey: source.answerKey as Record<string, unknown>,
           points: source.points,
+          media: mediaById.get(source.id) ?? [],
           capturedAt,
         };
 
@@ -545,6 +725,10 @@ export class LearningService {
    *
    * Nothing here reads the live question table. That is what makes an old
    * result stable while the curriculum behind it is being corrected.
+   *
+   * For an assessment the pass mark is written into the attempt beside the
+   * score, for the same reason: lowering the mark next term must not turn a
+   * fail already recorded into a pass.
    */
   async submitActivity(
     actor: CurrentUser,
@@ -604,6 +788,16 @@ export class LearningService {
       const scorePercent =
         pointsAvailable === 0 ? 0 : Math.round((pointsAwarded / pointsAvailable) * 100);
 
+      // Only an assessment has a pass mark. An activity is practice: it has a
+      // score, and no line to be the wrong side of.
+      const passMarkPercent =
+        attempt.purpose === QuestionPurpose.ASSESSMENT
+          ? ((await this.settings.resolve<number>(
+              SETTING_KEYS.ASSESSMENT_PASSING_SCORE,
+              this.scopes(attempt.unitId),
+            )) ?? 100)
+          : null;
+
       await tx.activityAttempt.update({
         where: { id: attempt.id },
         data: {
@@ -614,6 +808,8 @@ export class LearningService {
           pointsAwarded,
           pointsAvailable,
           scorePercent,
+          passMarkPercent,
+          passed: passMarkPercent === null ? null : scorePercent >= passMarkPercent,
         },
       });
 
@@ -633,21 +829,28 @@ export class LearningService {
    * is also how she reaches a finished attempt again: the questions in it are
    * the ones she was given, not the ones the unit holds today.
    */
-  async listAttempts(actor: CurrentUser, unitId: string) {
+  async listAttempts(
+    actor: CurrentUser,
+    unitId: string,
+    purpose: QuestionPurpose = QuestionPurpose.ACTIVITY,
+  ) {
     this.assertStudent(actor);
 
     return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
       const attempts = await tx.activityAttempt.findMany({
-        where: { studentId: actor.userId, unitId, status: AttemptStatus.SUBMITTED },
+        where: { studentId: actor.userId, unitId, purpose, status: AttemptStatus.SUBMITTED },
         orderBy: { submittedAt: 'desc' },
         select: {
           id: true,
+          purpose: true,
           submittedAt: true,
           correctCount: true,
           incorrectCount: true,
           pointsAwarded: true,
           pointsAvailable: true,
           scorePercent: true,
+          passMarkPercent: true,
+          passed: true,
         },
       });
 
@@ -678,10 +881,11 @@ export class LearningService {
   /**
    * How far she has got with one unit.
    *
-   * Weights come from `progress.weights`. Assessments are not built yet, so
-   * that component is named in `notCounted` and its weight is left out of the
-   * total rather than counted as zero — which would make a finished unit look
-   * unfinished — or as complete, which would be a lie.
+   * Weights come from `progress.weights`: an equal quarter each for words,
+   * grammar, activities and the assessment (SRS 21). A component the settings
+   * weight that this platform does not produce is named in `notCounted` and
+   * left out of the total, rather than counted as zero — which would make a
+   * finished unit look unfinished — or as complete, which would be a lie.
    *
    * Games are not part of this calculation at all. Nothing in this method
    * reads a game, which is the SRS 13.1 rule (`games.affects_progress` false)
@@ -696,21 +900,38 @@ export class LearningService {
     ]);
 
     return this.prisma.forSchool(schoolId, async (tx) => {
-      const [vocabulary, sections, questionCount, attempts] = await Promise.all([
-        tx.vocabularyItem.findMany({
-          where: { unitId, status: ContentStatus.PUBLISHED },
-          select: { id: true },
-        }),
-        tx.unitSection.findMany({
-          where: { unitId, status: ContentStatus.PUBLISHED },
-          select: { id: true, type: { select: { progressComponent: true } } },
-        }),
-        tx.question.count({ where: { unitId, status: ContentStatus.PUBLISHED } }),
-        tx.activityAttempt.findMany({
-          where: { studentId: actor.userId, unitId, status: AttemptStatus.SUBMITTED },
-          select: { scorePercent: true },
-        }),
-      ]);
+      const [unit, vocabulary, sections, questionCount, attempts, assessment] =
+        await Promise.all([
+          tx.unit.findUnique({
+            where: { id: unitId },
+            select: { countsTowardCompletion: true },
+          }),
+          tx.vocabularyItem.findMany({
+            where: { unitId, status: ContentStatus.PUBLISHED },
+            select: { id: true },
+          }),
+          tx.unitSection.findMany({
+            where: { unitId, status: ContentStatus.PUBLISHED },
+            select: { id: true, type: { select: { progressComponent: true } } },
+          }),
+          tx.question.count({
+            where: {
+              unitId,
+              status: ContentStatus.PUBLISHED,
+              purpose: QuestionPurpose.ACTIVITY,
+            },
+          }),
+          tx.activityAttempt.findMany({
+            where: {
+              studentId: actor.userId,
+              unitId,
+              purpose: QuestionPurpose.ACTIVITY,
+              status: AttemptStatus.SUBMITTED,
+            },
+            select: { scorePercent: true },
+          }),
+          this.assessmentState(tx, actor.userId, unitId),
+        ]);
 
       const vocabIds = vocabulary.map((v) => v.id);
       const learned = vocabIds.length
@@ -751,10 +972,20 @@ export class LearningService {
         bestScorePercent === null ? 0 : 1,
       );
 
+      // The assessment is done when it has been passed, not when it has been
+      // sat: a failed attempt is a try used, not a quarter of the unit earned.
+      // A unit with no assessment has nothing to pass, so it counts as done —
+      // the same rule every other component here already follows.
+      const assessmentProgress = this.component(
+        assessment.questionCount > 0 ? 1 : 0,
+        assessment.passed ? 1 : 0,
+      );
+
       const parts: { key: string; progress: ComponentProgress }[] = [
         { key: 'vocabulary', progress: vocabProgress },
         { key: 'grammar', progress: grammarProgress },
         { key: 'activity', progress: activityProgress },
+        { key: 'assessment', progress: assessmentProgress },
       ];
 
       const notCounted: string[] = [];
@@ -780,8 +1011,14 @@ export class LearningService {
         vocabulary: vocabProgress,
         grammar: grammarProgress,
         activity: activityProgress,
+        assessment: assessmentProgress,
         bestScorePercent,
         attemptsTaken: attempts.length,
+        assessmentState: assessment,
+        // Welcome and Grammar Review are preliminary and revision material
+        // (client, 2026-08-31). Her progress through them is still worked out
+        // and shown; it simply does not count towards the course.
+        countsTowardCompletion: unit?.countsTowardCompletion ?? true,
         overallPercent,
         notCounted,
         isComplete: parts.every((p) => p.progress.percent === 100),
@@ -801,6 +1038,7 @@ export class LearningService {
   private asStudentAttempt(attempt: {
     id: string;
     unitId: string;
+    purpose: QuestionPurpose;
     status: AttemptStatus;
     startedAt: Date;
     answers: { id: string; orderIndex: number; snapshot: unknown; response: unknown }[];
@@ -808,6 +1046,7 @@ export class LearningService {
     return {
       id: attempt.id,
       unitId: attempt.unitId,
+      purpose: attempt.purpose,
       status: attempt.status,
       startedAt: attempt.startedAt,
       questions: attempt.answers.map((answer) => {
@@ -818,6 +1057,7 @@ export class LearningService {
           prompt: snapshot.prompt,
           payload: snapshot.payload,
           points: snapshot.points,
+          media: snapshot.media ?? [],
           response: answer.response ?? null,
         };
       }),
@@ -828,6 +1068,7 @@ export class LearningService {
   private asReviewedAttempt(attempt: {
     id: string;
     unitId: string;
+    purpose: QuestionPurpose;
     status: AttemptStatus;
     startedAt: Date;
     submittedAt: Date | null;
@@ -836,6 +1077,8 @@ export class LearningService {
     pointsAwarded: number | null;
     pointsAvailable: number | null;
     scorePercent: number | null;
+    passMarkPercent: number | null;
+    passed: boolean | null;
     answers: {
       id: string;
       orderIndex: number;
@@ -848,6 +1091,7 @@ export class LearningService {
     return {
       id: attempt.id,
       unitId: attempt.unitId,
+      purpose: attempt.purpose,
       status: attempt.status,
       startedAt: attempt.startedAt,
       submittedAt: attempt.submittedAt,
@@ -856,6 +1100,9 @@ export class LearningService {
       pointsAwarded: attempt.pointsAwarded,
       pointsAvailable: attempt.pointsAvailable,
       scorePercent: attempt.scorePercent,
+      // The mark she had to reach, as it was on the day. Null for practice.
+      passMarkPercent: attempt.passMarkPercent,
+      passed: attempt.passed,
       questions: attempt.answers.map((answer) => {
         const snapshot = answer.snapshot as QuestionSnapshot;
         return {
@@ -864,6 +1111,7 @@ export class LearningService {
           prompt: snapshot.prompt,
           payload: snapshot.payload,
           points: snapshot.points,
+          media: snapshot.media ?? [],
           response: answer.response ?? null,
           isCorrect: answer.isCorrect,
           pointsAwarded: answer.pointsAwarded,

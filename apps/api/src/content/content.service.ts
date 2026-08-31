@@ -350,11 +350,31 @@ export class ContentService {
     'image/gif',
   ] as const;
 
+  /**
+   * Recordings a teacher makes of a word.
+   *
+   * Only where a browser can play them back without a plugin, because the
+   * point of a teacher recording is that a student who has no working voice
+   * in her browser can still hear the word (client, 2026-08-31).
+   */
+  private static readonly ALLOWED_AUDIO_TYPES = [
+    'audio/mpeg',
+    'audio/mp4',
+    'audio/ogg',
+    'audio/wav',
+    'audio/webm',
+  ] as const;
+
   /** Two megabytes. Large enough for a worksheet scan, small enough to serve. */
   private static readonly MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
   /**
-   * Attaches a picture to a section.
+   * Attaches a file to a section, a question or a word.
+   *
+   * One method for all three because the work is identical: check the kind of
+   * file, decode it, check the size, find the parent, store the bytes and give
+   * the row a URL that addresses itself. The database enforces that a row
+   * names exactly one parent, so this cannot drift.
    *
    * The file is kept in the database for the pilot. That needs no new service,
    * works the moment the API is deployed, and can be moved to object storage
@@ -362,12 +382,23 @@ export class ContentService {
    * a choice for the size of this pilot, not a permanent one — see
    * docs/CURRICULUM-FINDINGS.md.
    */
-  async addSectionImage(actor: CurrentUser, sectionId: string, dto: UploadImageDto) {
+  private async attachMedia(
+    actor: CurrentUser,
+    parent: { section: string } | { question: string } | { word: string },
+    dto: UploadImageDto,
+    allowAudio = false,
+  ) {
     const schoolId = this.schoolOf(actor);
 
-    if (!ContentService.ALLOWED_IMAGE_TYPES.includes(dto.mimeType as never)) {
+    const allowed: readonly string[] = allowAudio
+      ? [...ContentService.ALLOWED_IMAGE_TYPES, ...ContentService.ALLOWED_AUDIO_TYPES]
+      : ContentService.ALLOWED_IMAGE_TYPES;
+
+    if (!allowed.includes(dto.mimeType)) {
       throw new BadRequestException(
-        'That kind of file cannot be used. Please upload a PNG, JPEG, WEBP or GIF picture.',
+        allowAudio
+          ? 'That kind of file cannot be used. Please upload a PNG, JPEG, WEBP or GIF picture, or an MP3, M4A, OGG, WAV or WEBM recording.'
+          : 'That kind of file cannot be used. Please upload a PNG, JPEG, WEBP or GIF picture.',
       );
     }
 
@@ -383,29 +414,45 @@ export class ContentService {
       bytes = new Uint8Array(buffer.byteLength);
       bytes.set(buffer);
     } catch {
-      throw new BadRequestException('That picture could not be read. Please try another file.');
+      throw new BadRequestException('That file could not be read. Please try another one.');
     }
 
     if (bytes.length === 0) {
-      throw new BadRequestException('That picture is empty.');
+      throw new BadRequestException('That file is empty.');
     }
 
     if (bytes.length > ContentService.MAX_IMAGE_BYTES) {
-      throw new BadRequestException('That picture is too large. The limit is 2 MB.');
+      throw new BadRequestException('That file is too large. The limit is 2 MB.');
     }
 
     const asset = await this.prisma.forSchool(schoolId, async (tx) => {
-      const section = await tx.unitSection.findUnique({ where: { id: sectionId } });
-      if (!section) throw new NotFoundException('Section not found.');
+      // The parent must exist and belong to this school. Row-level security
+      // would refuse the insert anyway; finding it first turns that into a
+      // message the teacher can act on.
+      const where =
+        'section' in parent
+          ? { sectionId: parent.section }
+          : 'question' in parent
+            ? { questionId: parent.question }
+            : { vocabularyItemId: parent.word };
+
+      const exists =
+        'section' in parent
+          ? await tx.unitSection.findUnique({ where: { id: parent.section } })
+          : 'question' in parent
+            ? await tx.question.findUnique({ where: { id: parent.question } })
+            : await tx.vocabularyItem.findUnique({ where: { id: parent.word } });
+
+      if (!exists) throw new NotFoundException('That has been removed. Reload the page.');
 
       const last = await tx.mediaAsset.findFirst({
-        where: { sectionId },
+        where,
         orderBy: { orderIndex: 'desc' },
       });
 
       const created = await tx.mediaAsset.create({
         data: {
-          sectionId,
+          ...where,
           // Filled in below, once the row has an id to address it by.
           url: '',
           mimeType: dto.mimeType,
@@ -418,7 +465,7 @@ export class ContentService {
 
       return tx.mediaAsset.update({
         where: { id: created.id },
-        data: { url: `/api/v1/content/images/${created.id}` },
+        data: { url: `/api/v1/content/media/${created.id}` },
         select: { id: true, url: true, mimeType: true, altText: true, byteSize: true },
       });
     });
@@ -427,29 +474,57 @@ export class ContentService {
       action: AUDIT_ACTIONS.CONTENT_UPDATED,
       schoolId,
       actorUserId: actor.userId,
-      targetType: 'section_image',
+      targetType: 'media_asset',
       targetId: asset.id,
     });
 
     return asset;
   }
 
+  addSectionImage(actor: CurrentUser, sectionId: string, dto: UploadImageDto) {
+    return this.attachMedia(actor, { section: sectionId }, dto);
+  }
+
+  /** A picture that is part of the question, such as "name what you see". */
+  addQuestionImage(actor: CurrentUser, questionId: string, dto: UploadImageDto) {
+    return this.attachMedia(actor, { question: questionId }, dto);
+  }
+
   /**
-   * Serves a picture.
+   * A picture or a recording for one word.
    *
-   * Published pictures are open to students; a draft one is the teacher's
-   * alone, exactly like the section it belongs to.
+   * The recording is the fallback for a browser whose built-in voice does not
+   * work. It never lets a student say she has heard a word — she still has to
+   * play it (client, 2026-08-31).
    */
-  async getImage(actor: CurrentUser, imageId: string) {
+  addWordMedia(actor: CurrentUser, itemId: string, dto: UploadImageDto) {
+    return this.attachMedia(actor, { word: itemId }, dto, true);
+  }
+
+  /**
+   * Serves a file.
+   *
+   * Students may fetch one too, which is how a grammar page shows its image
+   * and how a word plays its recording. Whether a student may see it is the
+   * status of whatever it hangs off: a picture on a draft question is not
+   * served to her, exactly as the question itself is not.
+   */
+  async getMedia(actor: CurrentUser, mediaId: string) {
     return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+      const visible = { status: { in: this.visibleStatuses(actor) } };
+
       const asset = await tx.mediaAsset.findFirst({
         where: {
-          id: imageId,
-          section: { status: { in: this.visibleStatuses(actor) } },
+          id: mediaId,
+          OR: [
+            { section: visible },
+            { question: visible },
+            { vocabularyItem: visible },
+          ],
         },
       });
 
-      if (!asset?.data) throw new NotFoundException('Picture not found.');
+      if (!asset?.data) throw new NotFoundException('File not found.');
 
       return {
         data: Buffer.from(asset.data),
@@ -458,12 +533,12 @@ export class ContentService {
     });
   }
 
-  async removeSectionImage(actor: CurrentUser, imageId: string) {
+  async removeMedia(actor: CurrentUser, mediaId: string) {
     await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
-      const asset = await tx.mediaAsset.findUnique({ where: { id: imageId } });
-      if (!asset) throw new NotFoundException('Picture not found.');
+      const asset = await tx.mediaAsset.findUnique({ where: { id: mediaId } });
+      if (!asset) throw new NotFoundException('File not found.');
 
-      await tx.mediaAsset.delete({ where: { id: imageId } });
+      await tx.mediaAsset.delete({ where: { id: mediaId } });
     });
   }
 

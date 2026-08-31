@@ -25,4 +25,10 @@ export class ProgressController {
   async student(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
     return this.progress.studentDetail(actor, id);
   }
+
+  /** One finished paper, question by question, right and wrong. */
+  @Get('attempts/:id')
+  async attempt(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.progress.attemptDetail(actor, id);
+  }
 }

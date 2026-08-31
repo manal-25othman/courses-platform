@@ -3,6 +3,7 @@ import { AttemptStatus, ContentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LearningService } from '../learning/learning.service';
 import { CurrentUser } from '../auth/auth.types';
+import { QuestionSnapshot } from '../learning/learning.types';
 
 /**
  * What the teacher sees about how her class is getting on.
@@ -137,10 +138,13 @@ export class ProgressService {
             orderBy: { submittedAt: 'desc' },
             select: {
               id: true,
+              purpose: true,
               submittedAt: true,
               scorePercent: true,
               correctCount: true,
               incorrectCount: true,
+              passMarkPercent: true,
+              passed: true,
             },
           }),
         ]);
@@ -183,6 +187,71 @@ export class ProgressService {
       lastLoginAt: student.lastLoginAt,
       lastActivityAt: await this.lastActivity(schoolId, studentId),
       units: perUnit,
+    };
+  }
+
+  /**
+   * One finished attempt, question by question.
+   *
+   * This is what a teacher needs to help: not "6 out of 10" but which six, and
+   * what the student wrote for the four she got wrong. Everything comes from
+   * the attempt's own frozen snapshots, so an old paper reads exactly as it
+   * was sat even after the questions behind it have been corrected.
+   */
+  async attemptDetail(actor: CurrentUser, attemptId: string) {
+    const schoolId = this.schoolOf(actor);
+
+    const attempt = await this.prisma.forSchool(schoolId, (tx) =>
+      tx.activityAttempt.findFirst({
+        where: {
+          id: attemptId,
+          status: AttemptStatus.SUBMITTED,
+          // Her own students only, the same rule as everything else here.
+          student: this.scopeFor(actor),
+        },
+        include: {
+          answers: { orderBy: { orderIndex: 'asc' } },
+          unit: { select: { id: true, title: true } },
+          student: { include: { studentProfile: true } },
+        },
+      }),
+    );
+
+    if (!attempt) throw new NotFoundException('Attempt not found.');
+
+    return {
+      id: attempt.id,
+      purpose: attempt.purpose,
+      unit: attempt.unit,
+      student: {
+        id: attempt.student.id,
+        fullName: attempt.student.studentProfile?.fullName ?? attempt.student.username,
+      },
+      submittedAt: attempt.submittedAt,
+      correctCount: attempt.correctCount,
+      incorrectCount: attempt.incorrectCount,
+      pointsAwarded: attempt.pointsAwarded,
+      pointsAvailable: attempt.pointsAvailable,
+      scorePercent: attempt.scorePercent,
+      passMarkPercent: attempt.passMarkPercent,
+      passed: attempt.passed,
+      questions: attempt.answers.map((answer) => {
+        const snapshot = answer.snapshot as unknown as QuestionSnapshot;
+        return {
+          answerId: answer.id,
+          orderIndex: answer.orderIndex,
+          typeKey: snapshot.typeKey,
+          prompt: snapshot.prompt,
+          payload: snapshot.payload,
+          points: snapshot.points,
+          media: snapshot.media ?? [],
+          response: answer.response ?? null,
+          isCorrect: answer.isCorrect,
+          pointsAwarded: answer.pointsAwarded,
+          // The answer that was right on the day she sat it.
+          expected: snapshot.answerKey,
+        };
+      }),
     };
   }
 

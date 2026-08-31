@@ -11,7 +11,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { QuestionPurpose, UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUser as Actor } from '../auth/auth.types';
@@ -24,6 +24,10 @@ import {
 } from './dto/question.dto';
 
 const TEACHER = [UserRole.TEACHER, UserRole.ADMIN];
+
+function isPurpose(value: string | undefined): value is QuestionPurpose {
+  return value === QuestionPurpose.ACTIVITY || value === QuestionPurpose.ASSESSMENT;
+}
 
 /**
  * Questions.
@@ -47,8 +51,14 @@ export class QuestionsController {
     @CurrentUser() actor: Actor,
     @Param('unitId', ParseUUIDPipe) unitId: string,
     @Query('needsReview') needsReview?: string,
+    @Query('purpose') purpose?: string,
   ) {
-    return this.questions.listForUnit(actor, unitId, needsReview === 'true');
+    return this.questions.listForUnit(actor, unitId, {
+      onlyNeedingReview: needsReview === 'true',
+      // Anything else in the query string means "both", not an error: this is
+      // a filter, and an unrecognised one narrows nothing.
+      purpose: isPurpose(purpose) ? purpose : undefined,
+    });
   }
 
   /** How much of an imported unit still needs a teacher's eye. */
@@ -68,7 +78,7 @@ export class QuestionsController {
     @Param('unitId', ParseUUIDPipe) unitId: string,
     @Body() dto: PreviewDto,
   ) {
-    return this.questions.preview(actor, unitId, dto.seed ?? 'preview');
+    return this.questions.preview(actor, unitId, dto.seed ?? 'preview', dto.purpose);
   }
 
   @Post('unit/:unitId')

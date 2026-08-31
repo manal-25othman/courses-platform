@@ -8,12 +8,12 @@ import {
   ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { QuestionPurpose, UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUser as Actor } from '../auth/auth.types';
 import { LearningService } from './learning.service';
-import { AnswerCheckDto, SubmitAttemptDto } from './dto/learning.dto';
+import { AnswerCheckDto, AudioPlayedDto, SubmitAttemptDto } from './dto/learning.dto';
 
 /**
  * The student's own screens.
@@ -50,11 +50,21 @@ export class LearningController {
     return this.learning.markVocabulary(actor, id, 'seen');
   }
 
-  /** She has played the pronunciation. Both are needed before it counts. */
+  /**
+   * The word has just finished playing. Both are needed before it counts.
+   *
+   * The screen calls this when playback ends, naming what played it. There is
+   * no button that says "I heard it": a student may not claim to have heard a
+   * word she has not played (client, 2026-08-31).
+   */
   @Post('vocabulary/:id/audio-played')
   @HttpCode(HttpStatus.OK)
-  async vocabularyAudio(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
-    return this.learning.markVocabulary(actor, id, 'audio');
+  async vocabularyAudio(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AudioPlayedDto,
+  ) {
+    return this.learning.markVocabulary(actor, id, 'audio', dto.source);
   }
 
   /** The check on a word she has read and heard. */
@@ -86,10 +96,32 @@ export class LearningController {
     return this.learning.startActivity(actor, id);
   }
 
-  /** Her past tries at this unit, newest first. */
+  /**
+   * Starts the unit's assessment, or returns the one already open.
+   *
+   * The same engine, the same frozen questions and the same marking as an
+   * activity. What differs is the pool it draws from and the rules around it:
+   * a limited number of tries, and a mark to reach (SRS 17, 18).
+   */
+  @Post('units/:id/assessment')
+  @HttpCode(HttpStatus.OK)
+  async startAssessment(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.learning.startActivity(actor, id, QuestionPurpose.ASSESSMENT);
+  }
+
+  /** Her past tries at this unit's activity, newest first. */
   @Get('units/:id/attempts')
   async attempts(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
     return this.learning.listAttempts(actor, id);
+  }
+
+  /** Her past tries at this unit's assessment, newest first. */
+  @Get('units/:id/assessment/attempts')
+  async assessmentAttempts(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.learning.listAttempts(actor, id, QuestionPurpose.ASSESSMENT);
   }
 
   @Get('attempts/:id')

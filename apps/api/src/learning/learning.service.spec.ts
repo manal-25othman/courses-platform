@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AttemptStatus, ContentStatus, UserRole } from '@prisma/client';
+import { AttemptStatus, ContentStatus, QuestionPurpose, UserRole } from '@prisma/client';
 import { LearningService } from './learning.service';
 import { QuestionEngineService } from '../questions/question-engine.service';
 import { CurrentUser } from '../auth/auth.types';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { SettingsService } from '../settings/settings.service';
 import { SETTING_KEYS } from '../settings/settings.types';
+import { AudioSource } from './dto/learning.dto';
 
 const SCHOOL = 'school-1';
 const STUDENT_ID = 'student-1';
@@ -24,6 +25,8 @@ const teacher: CurrentUser = { ...student, role: UserRole.TEACHER, userId: 't1',
 const CONFIRMED: Record<string, unknown> = {
   [SETTING_KEYS.VOCABULARY_COMPLETION_RULE]: 'seen_audio_and_checked',
   [SETTING_KEYS.ACTIVITY_MAX_ATTEMPTS]: null,
+  [SETTING_KEYS.ASSESSMENT_PASSING_SCORE]: 80,
+  [SETTING_KEYS.ASSESSMENT_MAX_ATTEMPTS]: 2,
   [SETTING_KEYS.ASSESSMENT_RESULT_POLICY]: 'highest',
   [SETTING_KEYS.PROGRESS_WEIGHTS]: {
     vocabulary: 25,
@@ -44,12 +47,24 @@ function settingsWith(overrides: Record<string, unknown> = {}): SettingsService 
 }
 
 interface Tables {
-  vocabularyItem?: { id: string; status: ContentStatus; wordEn?: string; meaningAr?: string | null; unitId?: string }[];
+  vocabularyItem?: {
+    id: string;
+    status: ContentStatus;
+    wordEn?: string;
+    meaningAr?: string | null;
+    unitId?: string;
+    /** Files the teacher attached. A recording is the audio fallback. */
+    media?: { url: string; mimeType: string }[];
+  }[];
   vocabularyProgress?: Record<string, unknown>[];
   unitSection?: { id: string; type: { progressComponent: string | null } }[];
   sectionProgress?: Record<string, unknown>[];
   questions?: number;
   attempts?: { scorePercent: number | null }[];
+  /** The unit's assessment: how many questions, and her tries at it. */
+  assessmentQuestions?: number;
+  assessmentAttempts?: { scorePercent: number | null; passed: boolean | null }[];
+  countsTowardCompletion?: boolean;
 }
 
 /** An in-memory stand-in, so these run without a database. */
@@ -61,13 +76,19 @@ function serviceOver(tables: Tables, overrides: Record<string, unknown> = {}) {
       findFirst: async ({ where }: { where: { status?: ContentStatus } }) =>
         where.status === ContentStatus.PUBLISHED ? { id: 'u1', title: 'Unit', status: where.status } : null,
       findMany: async () => [{ id: 'u1', title: 'Unit', orderIndex: 0, description: null }],
+      findUnique: async () => ({
+        countsTowardCompletion: tables.countsTowardCompletion ?? true,
+      }),
     },
     vocabularyItem: {
       findMany: async () => tables.vocabularyItem ?? [],
-      findFirst: async ({ where }: { where: { id: string; status?: ContentStatus } }) =>
-        (tables.vocabularyItem ?? []).find(
+      findFirst: async ({ where }: { where: { id: string; status?: ContentStatus } }) => {
+        const found = (tables.vocabularyItem ?? []).find(
           (v) => v.id === where.id && v.status === ContentStatus.PUBLISHED,
-        ) ?? null,
+        );
+        // The service reads `media` to find a teacher's recording.
+        return found ? { ...found, media: found.media ?? [] } : null;
+      },
     },
     vocabularyProgress: {
       findMany: async () => vocabProgress,
@@ -96,13 +117,31 @@ function serviceOver(tables: Tables, overrides: Record<string, unknown> = {}) {
       count: async () => (tables.sectionProgress ?? []).length,
       create: async ({ data }: { data: Record<string, unknown> }) => data,
     },
-    question: { count: async () => tables.questions ?? 0, findMany: async () => [] },
+    question: {
+      // The two pools are counted separately, so the fake has to tell them
+      // apart the same way the service does.
+      count: async ({ where }: { where: { purpose?: QuestionPurpose } }) =>
+        where.purpose === QuestionPurpose.ASSESSMENT
+          ? (tables.assessmentQuestions ?? 0)
+          : (tables.questions ?? 0),
+      findMany: async () => [],
+    },
     activityAttempt: {
-      findMany: async () => tables.attempts ?? [],
+      findMany: async ({ where }: { where: { purpose?: QuestionPurpose } }) =>
+        where.purpose === QuestionPurpose.ASSESSMENT
+          ? (tables.assessmentAttempts ?? [])
+          : (tables.attempts ?? []),
       findFirst: async () => null,
       count: async () => (tables.attempts ?? []).length,
       create: async ({ data }: { data: Record<string, unknown> }) => ({ id: 'a1', ...data }),
-      findUnique: async () => ({ id: 'a1', unitId: 'u1', status: AttemptStatus.IN_PROGRESS, startedAt: new Date(), answers: [] }),
+      findUnique: async () => ({
+        id: 'a1',
+        unitId: 'u1',
+        purpose: QuestionPurpose.ACTIVITY,
+        status: AttemptStatus.IN_PROGRESS,
+        startedAt: new Date(),
+        answers: [],
+      }),
       update: async () => ({}),
     },
     attemptAnswer: { create: async () => ({}), update: async () => ({}) },
@@ -135,7 +174,7 @@ describe('LearningService vocabulary completion (SRS 22, amended)', () => {
   it('does not count a word as learned from audio alone', async () => {
     const service = serviceOver({ vocabularyItem: item });
 
-    const progress = await service.markVocabulary(student, 'w1', 'audio');
+    const progress = await service.markVocabulary(student, 'w1', 'audio', AudioSource.BROWSER_TTS);
 
     expect((progress as { learnedAt: Date | null }).learnedAt).toBeNull();
   });
@@ -149,7 +188,7 @@ describe('LearningService vocabulary completion (SRS 22, amended)', () => {
     const service = serviceOver({ vocabularyItem: item });
 
     await service.markVocabulary(student, 'w1', 'seen');
-    const progress = await service.markVocabulary(student, 'w1', 'audio');
+    const progress = await service.markVocabulary(student, 'w1', 'audio', AudioSource.BROWSER_TTS);
 
     expect((progress as { learnedAt: Date | null }).learnedAt).toBeNull();
   });
@@ -157,7 +196,7 @@ describe('LearningService vocabulary completion (SRS 22, amended)', () => {
   it('still records both steps, whichever order she does them in', async () => {
     const service = serviceOver({ vocabularyItem: item });
 
-    await service.markVocabulary(student, 'w1', 'audio');
+    await service.markVocabulary(student, 'w1', 'audio', AudioSource.BROWSER_TTS);
     const progress = await service.markVocabulary(student, 'w1', 'seen') as {
       seenAt: Date | null;
       audioPlayedAt: Date | null;
@@ -175,7 +214,7 @@ describe('LearningService vocabulary completion (SRS 22, amended)', () => {
     );
 
     await service.markVocabulary(student, 'w1', 'seen');
-    const progress = await service.markVocabulary(student, 'w1', 'audio');
+    const progress = await service.markVocabulary(student, 'w1', 'audio', AudioSource.BROWSER_TTS);
 
     expect((progress as { learnedAt: Date | null }).learnedAt).not.toBeNull();
   });
@@ -200,7 +239,7 @@ describe('LearningService vocabulary completion (SRS 22, amended)', () => {
     );
 
     await service.markVocabulary(student, 'w1', 'seen');
-    const progress = await service.markVocabulary(student, 'w1', 'audio');
+    const progress = await service.markVocabulary(student, 'w1', 'audio', AudioSource.BROWSER_TTS);
 
     expect((progress as { learnedAt: Date | null }).learnedAt).toBeNull();
   });
@@ -233,21 +272,134 @@ describe('LearningService progress (SRS 16, 21)', () => {
     expect(progress.vocabulary).toEqual({ total: 2, done: 1, percent: 50 });
     expect(progress.grammar).toEqual({ total: 1, done: 1, percent: 100 });
     expect(progress.activity.percent).toBe(100);
-    // (50 + 100 + 100) / 3 components of equal weight
-    expect(progress.overallPercent).toBe(83);
+    // This unit has no assessment, so there is nothing there left to do.
+    expect(progress.assessment.percent).toBe(100);
+    // (50 + 100 + 100 + 100) / 4 components of equal weight
+    expect(progress.overallPercent).toBe(88);
   });
 
   /**
-   * Assessments are Phase 6. Counting their weight as zero would make a
-   * finished unit look unfinished, and counting it as done would be untrue —
-   * so it is named instead.
+   * All four components are built now, so nothing should be named here. The
+   * mechanism stays: a weight the settings carry for something this platform
+   * does not produce is reported rather than counted as zero, which would make
+   * a finished unit look unfinished, or as done, which would be untrue.
    */
-  it('names the parts it cannot measure rather than guessing at them', async () => {
+  it('names a weighted part it cannot measure rather than guessing at it', async () => {
+    const service = serviceOver(
+      { questions: 1 },
+      {
+        [SETTING_KEYS.PROGRESS_WEIGHTS]: {
+          vocabulary: 20,
+          grammar: 20,
+          activity: 20,
+          assessment: 20,
+          speaking: 20,
+        },
+      },
+    );
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.notCounted).toEqual(['speaking']);
+  });
+
+  it('counts nothing as not counted when every weighted part is built', async () => {
     const service = serviceOver({ questions: 1 });
 
     const progress = await service.unitProgress(student, 'u1');
 
-    expect(progress.notCounted).toEqual(['assessment']);
+    expect(progress.notCounted).toEqual([]);
+  });
+
+  /**
+   * The assessment is a quarter of the unit, and it is earned by passing.
+   * Sitting it and failing uses a try; it does not move her on.
+   */
+  it('counts the assessment only once it has been passed', async () => {
+    const failed = serviceOver({
+      assessmentQuestions: 4,
+      assessmentAttempts: [{ scorePercent: 50, passed: false }],
+    });
+
+    expect((await failed.unitProgress(student, 'u1')).assessment.percent).toBe(0);
+
+    const passed = serviceOver({
+      assessmentQuestions: 4,
+      assessmentAttempts: [
+        { scorePercent: 50, passed: false },
+        { scorePercent: 90, passed: true },
+      ],
+    });
+
+    expect((await passed.unitProgress(student, 'u1')).assessment.percent).toBe(100);
+  });
+
+  /**
+   * Whether the pass mark was reached is read from what was recorded on the
+   * day, never re-tested against today's setting. Lowering the mark next term
+   * must not turn a fail already recorded into a pass.
+   */
+  it('does not re-mark an old attempt against a changed pass mark', async () => {
+    const service = serviceOver(
+      {
+        assessmentQuestions: 4,
+        // 60% recorded as a fail, when the mark was 80.
+        assessmentAttempts: [{ scorePercent: 60, passed: false }],
+      },
+      // The mark has since been lowered to 50.
+      { [SETTING_KEYS.ASSESSMENT_PASSING_SCORE]: 50 },
+    );
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessmentState.passed).toBe(false);
+    expect(progress.assessment.percent).toBe(0);
+  });
+
+  /**
+   * Welcome and Grammar Review are preliminary and revision material (client,
+   * 2026-08-31). Her progress through them is still worked out and shown; it
+   * simply does not count towards the course.
+   */
+  it('reports whether a unit counts towards the course', async () => {
+    const core = serviceOver({});
+    expect((await core.unitProgress(student, 'u1')).countsTowardCompletion).toBe(true);
+
+    const welcome = serviceOver({ countsTowardCompletion: false });
+    expect((await welcome.unitProgress(student, 'u1')).countsTowardCompletion).toBe(false);
+  });
+
+  /** How many tries are left, and why she may not start another. */
+  it('reports the assessment rules from the settings store', async () => {
+    const service = serviceOver({
+      assessmentQuestions: 4,
+      assessmentAttempts: [
+        { scorePercent: 40, passed: false },
+        { scorePercent: 60, passed: false },
+      ],
+    });
+
+    const { assessmentState } = await service.unitProgress(student, 'u1');
+
+    expect(assessmentState.passMarkPercent).toBe(80);
+    expect(assessmentState.maxAttempts).toBe(2);
+    expect(assessmentState.attemptsUsed).toBe(2);
+    expect(assessmentState.attemptsLeft).toBe(0);
+    expect(assessmentState.bestScorePercent).toBe(60);
+    expect(assessmentState.canStart).toBe(false);
+    expect(assessmentState.blockedBecause).toBe('no_attempts_left');
+  });
+
+  it('will not let her sit an assessment she has already passed', async () => {
+    const service = serviceOver({
+      assessmentQuestions: 4,
+      assessmentAttempts: [{ scorePercent: 90, passed: true }],
+    });
+
+    const { assessmentState } = await service.unitProgress(student, 'u1');
+
+    expect(assessmentState.canStart).toBe(false);
+    expect(assessmentState.blockedBecause).toBe('already_passed');
   });
 
   it('takes her best score, not her latest, when the policy says highest', async () => {
@@ -320,12 +472,16 @@ describe('LearningService marks from the frozen copy, not the live question', ()
     capturedAt: new Date().toISOString(),
   };
 
-  function serviceWithDivergentQuestion() {
+  function serviceWithDivergentQuestion(
+    purpose: QuestionPurpose = QuestionPurpose.ACTIVITY,
+    overrides: Record<string, unknown> = {},
+  ) {
     const updates: Record<string, unknown>[] = [];
     const attempt = {
       id: 'att1',
       unitId: 'u1',
       studentId: STUDENT_ID,
+      purpose,
       status: AttemptStatus.IN_PROGRESS,
       startedAt: new Date(),
       submittedAt: null,
@@ -391,7 +547,11 @@ describe('LearningService marks from the frozen copy, not the live question', ()
     } as unknown as PrismaService;
 
     return {
-      service: new LearningService(prisma, settingsWith(), new QuestionEngineService()),
+      service: new LearningService(
+        prisma,
+        settingsWith(overrides),
+        new QuestionEngineService(),
+      ),
       updates,
     };
   }
@@ -440,6 +600,120 @@ describe('LearningService marks from the frozen copy, not the live question', ()
     const answerUpdate = updates.find((u) => 'isCorrect' in u);
     expect(answerUpdate?.isCorrect).toBe(false);
   });
+
+  /**
+   * The pass mark is frozen with the score for the same reason the questions
+   * are frozen with the paper: what she had to reach is part of the result.
+   */
+  it('writes the pass mark into an assessment result', async () => {
+    const { service, updates } = serviceWithDivergentQuestion(QuestionPurpose.ASSESSMENT);
+
+    await service.submitActivity(student, 'att1', { ans1: { optionId: 'a' } });
+
+    const attemptUpdate = updates.find((u) => 'scorePercent' in u);
+    expect(attemptUpdate?.passMarkPercent).toBe(80);
+    expect(attemptUpdate?.passed).toBe(true);
+  });
+
+  it('records a fail when the score is under the mark', async () => {
+    const { service, updates } = serviceWithDivergentQuestion(QuestionPurpose.ASSESSMENT);
+
+    await service.submitActivity(student, 'att1', { ans1: { optionId: 'b' } });
+
+    const attemptUpdate = updates.find((u) => 'scorePercent' in u);
+    expect(attemptUpdate?.scorePercent).toBe(0);
+    expect(attemptUpdate?.passed).toBe(false);
+  });
+
+  /** Practice has a score and no line to be the wrong side of. */
+  it('gives a practice activity no pass mark at all', async () => {
+    const { service, updates } = serviceWithDivergentQuestion(QuestionPurpose.ACTIVITY);
+
+    await service.submitActivity(student, 'att1', { ans1: { optionId: 'a' } });
+
+    const attemptUpdate = updates.find((u) => 'scorePercent' in u);
+    expect(attemptUpdate?.passMarkPercent).toBeNull();
+    expect(attemptUpdate?.passed).toBeNull();
+  });
+
+  /** The mark is a setting, so a school that moves it moves it for real. */
+  it('uses the pass mark the settings hold, not a number in this file', async () => {
+    const { service, updates } = serviceWithDivergentQuestion(QuestionPurpose.ASSESSMENT, {
+      [SETTING_KEYS.ASSESSMENT_PASSING_SCORE]: 100,
+    });
+
+    await service.submitActivity(student, 'att1', { ans1: { optionId: 'a' } });
+
+    const attemptUpdate = updates.find((u) => 'scorePercent' in u);
+    expect(attemptUpdate?.passMarkPercent).toBe(100);
+  });
+});
+
+/**
+ * A student may not claim to have heard a word (client, 2026-08-31).
+ *
+ * The screen calls this only when playback has finished, and says what played
+ * it. The server cannot watch a browser speak, but it can refuse the claim it
+ * is able to check — a teacher's recording that does not exist — and it can
+ * refuse a request that names nothing at all, which is what a button reading
+ * "I heard it" would send.
+ */
+describe('LearningService will not take her word for having heard a word', () => {
+  const word = [{ id: 'w1', status: ContentStatus.PUBLISHED }];
+
+  it('refuses a claim that names no source', async () => {
+    const service = serviceOver({ vocabularyItem: word });
+
+    await expect(service.markVocabulary(student, 'w1', 'audio')).rejects.toThrow(
+      /play the word/i,
+    );
+  });
+
+  it("refuses a teacher recording for a word that has none", async () => {
+    const service = serviceOver({ vocabularyItem: word });
+
+    await expect(
+      service.markVocabulary(student, 'w1', 'audio', AudioSource.TEACHER_AUDIO),
+    ).rejects.toThrow(/no recording/i);
+  });
+
+  it('accepts a teacher recording for a word that has one', async () => {
+    const service = serviceOver({
+      vocabularyItem: [
+        {
+          id: 'w1',
+          status: ContentStatus.PUBLISHED,
+          media: [{ url: '/api/v1/content/media/m1', mimeType: 'audio/mpeg' }],
+        },
+      ],
+    });
+
+    const progress = await service.markVocabulary(
+      student,
+      'w1',
+      'audio',
+      AudioSource.TEACHER_AUDIO,
+    );
+
+    expect((progress as { audioPlayedAt: Date | null }).audioPlayedAt).not.toBeNull();
+  });
+
+  /** A picture is not a recording. */
+  it('does not mistake a picture on a word for a recording', async () => {
+    const service = serviceOver({
+      vocabularyItem: [
+        {
+          id: 'w1',
+          status: ContentStatus.PUBLISHED,
+          media: [{ url: '/api/v1/content/media/m1', mimeType: 'image/png' }],
+        },
+      ],
+    });
+
+    await expect(
+      service.markVocabulary(student, 'w1', 'audio', AudioSource.TEACHER_AUDIO),
+    ).rejects.toThrow(/no recording/i);
+  });
 });
 
 /**
@@ -468,6 +742,8 @@ describe('LearningService serves only the grammar step', () => {
       question: { count: async () => 0 },
       vocabularyProgress: { findMany: async () => [] },
       sectionProgress: { findMany: async () => [] },
+      // getUnit also reports how the unit's assessment stands for her.
+      activityAttempt: { findMany: async () => [] },
     };
 
     const prisma = {

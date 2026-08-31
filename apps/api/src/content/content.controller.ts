@@ -155,36 +155,63 @@ export class ContentController {
     return this.content.addSectionImage(actor, id, dto);
   }
 
+  /** A picture that belongs to one question. */
+  @Roles(...TEACHER)
+  @Post('questions/:id/images')
+  async addQuestionImage(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UploadImageDto,
+  ) {
+    return this.content.addQuestionImage(actor, id, dto);
+  }
+
+  /** A picture or a recording that belongs to one word. */
+  @Roles(...TEACHER)
+  @Post('vocabulary/:id/media')
+  async addWordMedia(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UploadImageDto,
+  ) {
+    return this.content.addWordMedia(actor, id, dto);
+  }
+
   /**
-   * Serves a picture.
+   * Serves a file.
    *
-   * Students may fetch one too, which is how a grammar page shows its image —
-   * the service only returns pictures on sections they are allowed to see.
-   * The headers are deliberate: the browser is told exactly what the file is
-   * and never to guess, and to display it rather than treat it as a page.
+   * Students may fetch one too, which is how a grammar page shows its image
+   * and how a word plays its recording — the service only returns files
+   * hanging off something they are allowed to see. The headers are deliberate:
+   * the browser is told exactly what the file is and never to guess, and to
+   * display it rather than treat it as a page.
+   *
+   * `images/:id` is the address every file stored before Phase 6 carries, so
+   * it keeps working; `media/:id` is what new ones use, because a recording is
+   * not a picture.
    */
   @Roles(...EVERYONE)
-  @Get('images/:id')
-  async getImage(
+  @Get(['media/:id', 'images/:id'])
+  async getMedia(
     @CurrentUser() actor: Actor,
     @Param('id', ParseUUIDPipe) id: string,
     @Res() response: Response,
   ) {
-    const image = await this.content.getImage(actor, id);
+    const file = await this.content.getMedia(actor, id);
 
-    response.setHeader('Content-Type', image.mimeType);
+    response.setHeader('Content-Type', file.mimeType);
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Content-Disposition', 'inline');
     response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     response.setHeader('Cache-Control', 'private, max-age=300');
-    response.send(image.data);
+    response.send(file.data);
   }
 
   @Roles(...TEACHER)
-  @Delete('images/:id')
+  @Delete(['media/:id', 'images/:id'])
   @HttpCode(HttpStatus.NO_CONTENT)
-  async removeSectionImage(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
-    await this.content.removeSectionImage(actor, id);
+  async removeMedia(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    await this.content.removeMedia(actor, id);
   }
 
   // --- Vocabulary ----------------------------------------------------------

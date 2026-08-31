@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ContentStatus, Question, UserRole } from '@prisma/client';
+import { ContentStatus, Question, QuestionPurpose, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { CurrentUser } from '../auth/auth.types';
@@ -24,13 +24,33 @@ export class QuestionsService {
     return actor.schoolId;
   }
 
-  /** Questions in a unit. Teacher only: the answer keys are included. */
-  async listForUnit(actor: CurrentUser, unitId: string, onlyNeedingReview = false) {
+  /**
+   * Questions in a unit. Teacher only: the answer keys are included.
+   *
+   * `purpose` separates the practice activities from the assessment. Left out,
+   * it returns both, which is what an "everything in this unit" view wants.
+   */
+  async listForUnit(
+    actor: CurrentUser,
+    unitId: string,
+    options: { onlyNeedingReview?: boolean; purpose?: QuestionPurpose } = {},
+  ) {
     return this.prisma.forSchool(this.schoolOf(actor), (tx) =>
       tx.question.findMany({
-        where: { unitId, ...(onlyNeedingReview ? { needsReview: true } : {}) },
+        where: {
+          unitId,
+          ...(options.onlyNeedingReview ? { needsReview: true } : {}),
+          ...(options.purpose ? { purpose: options.purpose } : {}),
+        },
         orderBy: { orderIndex: 'asc' },
-        include: { type: true },
+        include: {
+          type: true,
+          media: {
+            orderBy: { orderIndex: 'asc' },
+            select: { id: true, url: true, mimeType: true, altText: true },
+          },
+          section: { select: { id: true, title: true } },
+        },
       }),
     );
   }
@@ -38,13 +58,29 @@ export class QuestionsService {
   /** How much of an imported unit still needs checking. */
   async reviewSummary(actor: CurrentUser, unitId: string) {
     return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
-      const [total, needingReview, published] = await Promise.all([
-        tx.question.count({ where: { unitId } }),
-        tx.question.count({ where: { unitId, needsReview: true } }),
-        tx.question.count({ where: { unitId, status: ContentStatus.PUBLISHED } }),
-      ]);
+      const [total, needingReview, published, assessmentTotal, assessmentPublished] =
+        await Promise.all([
+          tx.question.count({ where: { unitId } }),
+          tx.question.count({ where: { unitId, needsReview: true } }),
+          tx.question.count({ where: { unitId, status: ContentStatus.PUBLISHED } }),
+          tx.question.count({ where: { unitId, purpose: QuestionPurpose.ASSESSMENT } }),
+          tx.question.count({
+            where: {
+              unitId,
+              purpose: QuestionPurpose.ASSESSMENT,
+              status: ContentStatus.PUBLISHED,
+            },
+          }),
+        ]);
 
-      return { total, needingReview, published, readyToPublish: total - needingReview - published };
+      return {
+        total,
+        needingReview,
+        published,
+        readyToPublish: total - needingReview - published,
+        assessmentTotal,
+        assessmentPublished,
+      };
     });
   }
 
@@ -58,10 +94,16 @@ export class QuestionsService {
       const unit = await tx.unit.findUnique({ where: { id: unitId } });
       if (!unit) throw new NotFoundException('Unit not found.');
 
+      const purpose = dto.purpose ?? QuestionPurpose.ACTIVITY;
+
+      // Numbered within its own list, so the assessment reads 1, 2, 3 rather
+      // than carrying on from where the practice questions left off.
       const last = await tx.question.findFirst({
-        where: { unitId },
+        where: { unitId, purpose },
         orderBy: { orderIndex: 'desc' },
       });
+
+      await this.assertSectionBelongsToUnit(tx, unitId, dto.sectionId);
 
       return tx.question.create({
         data: {
@@ -71,6 +113,8 @@ export class QuestionsService {
           payload: dto.payload as never,
           answerKey: dto.answerKey as never,
           points: dto.points ?? 1,
+          purpose,
+          sectionId: dto.sectionId ?? null,
           orderIndex: (last?.orderIndex ?? -1) + 1,
           status: ContentStatus.DRAFT,
         },
@@ -100,6 +144,10 @@ export class QuestionsService {
         this.engine.assertValid(existing.typeKey, payload, answerKey);
       }
 
+      if (dto.sectionId !== undefined && dto.sectionId !== '') {
+        await this.assertSectionBelongsToUnit(tx, existing.unitId, dto.sectionId);
+      }
+
       return tx.question.update({
         where: { id: questionId },
         data: {
@@ -107,6 +155,9 @@ export class QuestionsService {
           ...(dto.payload ? { payload: dto.payload as never } : {}),
           ...(dto.answerKey ? { answerKey: dto.answerKey as never } : {}),
           ...(dto.points ? { points: dto.points } : {}),
+          ...(dto.purpose ? { purpose: dto.purpose } : {}),
+          // An empty string is the teacher unlinking it from its section.
+          ...(dto.sectionId === undefined ? {} : { sectionId: dto.sectionId || null }),
           // Clearing the flag is the teacher saying she has checked it.
           ...(dto.reviewed === true ? { needsReview: false, reviewNotes: null } : {}),
         },
@@ -171,10 +222,10 @@ export class QuestionsService {
    * Everything here goes through the engine, so no answer key is included and
    * the order follows the seed.
    */
-  async preview(actor: CurrentUser, unitId: string, seed: string) {
+  async preview(actor: CurrentUser, unitId: string, seed: string, purpose?: QuestionPurpose) {
     const questions = await this.prisma.forSchool(this.schoolOf(actor), (tx) =>
       tx.question.findMany({
-        where: { unitId, status: ContentStatus.PUBLISHED },
+        where: { unitId, status: ContentStatus.PUBLISHED, ...(purpose ? { purpose } : {}) },
         orderBy: { orderIndex: 'asc' },
       }),
     );
@@ -201,6 +252,26 @@ export class QuestionsService {
       where: { isActive: true },
       orderBy: { orderIndex: 'asc' },
     });
+  }
+
+  /**
+   * A question may only be linked to a grammar section in its own unit.
+   *
+   * Row-level security already stops another school's section being named
+   * here. This stops a section from the wrong unit of her own course, which
+   * would send a student to an explanation for a different lesson.
+   */
+  private async assertSectionBelongsToUnit(
+    tx: { unitSection: { findUnique: (args: { where: { id: string } }) => Promise<{ unitId: string } | null> } },
+    unitId: string,
+    sectionId?: string,
+  ): Promise<void> {
+    if (!sectionId) return;
+
+    const section = await tx.unitSection.findUnique({ where: { id: sectionId } });
+    if (!section || section.unitId !== unitId) {
+      throw new BadRequestException('That grammar section is not part of this unit.');
+    }
   }
 
   /** Only a teacher may see an answer key, and only for her own school. */
