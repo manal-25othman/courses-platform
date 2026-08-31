@@ -95,6 +95,23 @@ export class UpdateSectionDto {
   @ArrayMaxSize(20)
   examples?: string[];
 
+  /**
+   * A video explanation, as an address.
+   *
+   * Only an address is accepted, and only from a host the settings store
+   * allows; the player is built from its parts in the API. An empty string
+   * clears it.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  videoUrl?: string;
+
+  /** Cleared by a teacher once she has confirmed what the note asks about. */
+  @IsOptional()
+  @IsBoolean()
+  needsReview?: boolean;
+
   @IsOptional()
   @IsInt()
   @Min(0)

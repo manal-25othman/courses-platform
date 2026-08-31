@@ -64,6 +64,19 @@ const GLOBAL_SETTINGS: Array<{ key: string; value: unknown; source: string }> = 
 
   // --- Interface (SRS 39) — English for all roles ---
   { key: 'ui.language', value: 'en', source: 'SRS 39' },
+
+  // Where a grammar video may be hosted. A list rather than a rule in code so
+  // the client can add a host without a release. Only free hosts a teacher
+  // already uses are here; nothing is paid for, and an address on any other
+  // host is refused when it is entered rather than embedded silently.
+  {
+    key: 'grammar.video_allowed_hosts',
+    value: ['youtube.com', 'www.youtube.com', 'youtu.be', 'drive.google.com'],
+    source: 'Client, 2026-08-31',
+  },
+
+  // Whether grammar waits for vocabulary, and the assessment for both.
+  { key: 'learning.sequential_unlock', value: true, source: 'Client, 2026-08-31' },
 ];
 
 async function main(): Promise<void> {

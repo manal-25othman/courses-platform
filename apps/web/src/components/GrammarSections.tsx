@@ -75,6 +75,23 @@ export function GrammarSections({
             </div>
           )}
 
+          {section.video && (
+            <div className="video-frame" data-testid="grammar-video">
+              <iframe
+                src={section.video.embedUrl}
+                title={`Video: ${section.title ?? 'grammar'}`}
+                // The address comes from the API, which built it from parts it
+                // parsed itself. The sandbox is the second line: even so, the
+                // frame gets only what a player needs and nothing else.
+                sandbox="allow-scripts allow-same-origin allow-presentation"
+                allow="encrypted-media; picture-in-picture; fullscreen"
+                referrerPolicy="strict-origin-when-cross-origin"
+                loading="lazy"
+                allowFullScreen
+              />
+            </div>
+          )}
+
           {section.media.map((image) => (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img

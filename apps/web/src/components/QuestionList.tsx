@@ -1017,6 +1017,29 @@ function QuestionEditor({
           Save
         </button>
         <button onClick={onDone}>Cancel</button>
+        {/*
+          Which pool a question sits in is the teacher's decision, not the
+          source's: the curriculum file marks nothing as a test. This is how
+          she builds a unit's assessment out of questions already entered,
+          rather than writing them twice.
+        */}
+        <button
+          className="small"
+          data-testid="move-question-pool"
+          onClick={() =>
+            onSave(
+              () =>
+                api.patch(`/questions/${question.id}`, {
+                  purpose: question.purpose === 'ASSESSMENT' ? 'ACTIVITY' : 'ASSESSMENT',
+                }),
+              question.purpose === 'ASSESSMENT'
+                ? 'Moved back to the activity.'
+                : 'Moved to the assessment.',
+            )
+          }
+        >
+          {question.purpose === 'ASSESSMENT' ? 'Move to activity' : 'Move to assessment'}
+        </button>
         {question.status === 'PUBLISHED' ? (
           <button
             className="small"

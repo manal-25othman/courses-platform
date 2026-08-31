@@ -5,7 +5,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ContentStatus, UserRole } from '@prisma/client';
+import { ContentStatus, SettingScope, UserRole } from '@prisma/client';
+import { SettingsService } from '../settings/settings.service';
+import { SETTING_KEYS } from '../settings/settings.types';
+import { readVideoUrl, UnsupportedVideoError } from './video';
 import { PrismaService, TenantClient } from '../prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { CurrentUser } from '../auth/auth.types';
@@ -43,7 +46,13 @@ export class ContentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly settings: SettingsService,
   ) {}
+
+  /** Where to look for a setting that a unit may override. */
+  private unitScopes(unitId: string) {
+    return [{ scope: SettingScope.UNIT, scopeId: unitId }];
+  }
 
   private schoolOf(actor: CurrentUser): string {
     if (!actor.schoolId) {
@@ -304,12 +313,40 @@ export class ContentService {
               examples: dto.examples.map((e) => e.trim()).filter((e) => e !== ''),
             };
 
+      // The video address is checked here, when she saves it, so an address
+      // that cannot be played is a message on the form rather than an empty
+      // frame for a student later. Only the address is stored; the player is
+      // built from it when the page is drawn, so nothing she typed is ever
+      // rendered as markup.
+      let videoUrl: string | null | undefined;
+      if (dto.videoUrl !== undefined) {
+        const given = dto.videoUrl.trim();
+        if (given === '') {
+          videoUrl = null;
+        } else {
+          const hosts = await this.settings.resolve<string[]>(
+            SETTING_KEYS.GRAMMAR_VIDEO_HOSTS,
+            this.unitScopes(section.unitId),
+          );
+          try {
+            videoUrl = readVideoUrl(given, hosts ?? []).url;
+          } catch (error) {
+            if (error instanceof UnsupportedVideoError) {
+              throw new BadRequestException(error.message);
+            }
+            throw error;
+          }
+        }
+      }
+
       return tx.unitSection.update({
         where: { id: sectionId },
         data: {
           ...(dto.title !== undefined ? { title: dto.title || null } : {}),
           ...(dto.body !== undefined ? { body: dto.body || null } : {}),
           ...(config !== undefined ? { config: config as never } : {}),
+          ...(videoUrl !== undefined ? { videoUrl } : {}),
+          ...(dto.needsReview !== undefined ? { needsReview: dto.needsReview } : {}),
           ...(dto.orderIndex !== undefined ? { orderIndex: dto.orderIndex } : {}),
         },
         include: { type: true, media: { orderBy: { orderIndex: 'asc' } } },

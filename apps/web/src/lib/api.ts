@@ -161,6 +161,10 @@ export interface Section {
   status: ContentStatus;
   type: SectionType;
   media: { id: string; url: string; altText: string | null }[];
+  /** The address the teacher typed, as she typed it. */
+  videoUrl?: string | null;
+  needsReview?: boolean;
+  reviewNotes?: string | null;
 }
 
 export interface VocabularyItem {
@@ -173,6 +177,8 @@ export interface VocabularyItem {
   status: ContentStatus;
   /** Pictures and the teacher's own recording of the word. */
   media?: MediaFile[];
+  needsReview?: boolean;
+  reviewNotes?: string | null;
 }
 
 export interface UnitDetail extends Omit<UnitSummary, '_count'> {
@@ -321,7 +327,13 @@ export interface AssessmentState {
   bestScorePercent: number | null;
   passed: boolean;
   canStart: boolean;
-  blockedBecause: 'no_questions' | 'no_attempts_left' | 'already_passed' | null;
+  blockedBecause:
+    | 'no_questions'
+    | 'no_attempts_left'
+    | 'already_passed'
+    | 'vocabulary_incomplete'
+    | 'grammar_incomplete'
+    | null;
 }
 
 export interface UnitProgress {
@@ -330,6 +342,8 @@ export interface UnitProgress {
   grammar: ComponentProgress;
   activity: ComponentProgress;
   assessment: ComponentProgress;
+  /** Whether grammar is open to her yet, and if not, why not. */
+  grammarLock: SectionLock;
   bestScorePercent: number | null;
   attemptsTaken: number;
   assessmentState: AssessmentState;
@@ -359,6 +373,13 @@ export interface LearnSection {
   orderIndex: number;
   type: SectionType & { progressComponent: string | null };
   media: { id: string; url: string; altText: string | null }[];
+  /**
+   * A player the API built from the stored address, or nothing.
+   *
+   * Never markup, and never the teacher's own text — only an address this
+   * side puts in an iframe.
+   */
+  video: { embedUrl: string; provider: string } | null;
   viewed: boolean;
 }
 
@@ -469,6 +490,12 @@ export interface Message {
 
 // --- The teacher's view of how her class is doing --------------------------
 
+/** Whether a section is open to her yet, and if not, why not. */
+export interface SectionLock {
+  locked: boolean;
+  reason: 'vocabulary_incomplete' | 'grammar_incomplete' | null;
+}
+
 export interface StudentUnitProgress extends UnitProgress {
   title: string;
 }
@@ -566,4 +593,22 @@ export function timeAgo(iso: string | null): string {
   if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
 
   return new Date(iso).toLocaleDateString('en-GB');
+}
+
+/** A bonus review game, and whether this unit has enough content for it. */
+export interface BonusGame {
+  key: string;
+  displayName: string;
+  description: string | null;
+  available: boolean;
+  itemCount: number;
+  minimumItems: number;
+}
+
+/** One round of a bonus game. Nothing about it is stored anywhere. */
+export interface BonusGameRound {
+  gameKey: string;
+  unitId: string;
+  pairs: { id: string; wordEn: string; meaningAr: string }[];
+  questions: { wordEn: string; answer: string; options: string[] }[];
 }

@@ -242,6 +242,11 @@ function SectionList({
                     Done on paper
                   </span>
                 )}
+                {section.needsReview && (
+                  <span className="badge warn" style={{ marginLeft: '.5rem' }}>
+                    Needs your check
+                  </span>
+                )}
               </div>
               <div className="row">
                 <span className={`badge ${section.status === 'PUBLISHED' ? 'active' : 'disabled'}`}>
@@ -266,6 +271,26 @@ function SectionList({
                 This kind of practice is done on paper. It is shown to students for reference and
                 is not answered on screen.
               </p>
+            )}
+
+            {section.needsReview && (
+              <div className="alert warn" style={{ marginTop: '.5rem' }} data-testid="section-review">
+                <p style={{ margin: 0 }}>{section.reviewNotes}</p>
+                <button
+                  className="small"
+                  style={{ marginTop: '.5rem' }}
+                  data-testid="section-review-confirm"
+                  onClick={() =>
+                    onRun(
+                      () =>
+                        api.patch(`/content/sections/${section.id}`, { needsReview: false }),
+                      'Checked.',
+                    )
+                  }
+                >
+                  I have checked this
+                </button>
+              </div>
             )}
 
             {editing?.id === section.id ? (
@@ -307,6 +332,7 @@ function SectionEditor({
   const [body, setBody] = useState(section.body ?? '');
   // One example per line, which is how a teacher would type a list.
   const [examples, setExamples] = useState((section.examples ?? []).join('\n'));
+  const [videoUrl, setVideoUrl] = useState(section.videoUrl ?? '');
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -317,6 +343,7 @@ function SectionEditor({
     await onSave({
       title,
       body,
+      videoUrl,
       examples: examples
         .split('\n')
         .map((line) => line.trim())
@@ -391,6 +418,20 @@ function SectionEditor({
         rows={4}
         data-testid="section-examples"
       />
+
+      <label htmlFor={`v-${section.id}`}>Video link (optional)</label>
+      <input
+        id={`v-${section.id}`}
+        value={videoUrl}
+        onChange={(e) => setVideoUrl(e.target.value)}
+        placeholder="https://www.youtube.com/watch?v=..."
+        data-testid="section-video"
+      />
+      <p className="muted" style={{ marginTop: '-.35rem', fontSize: '.85rem' }}>
+        Paste the link to a YouTube or Google Drive video. Leave empty for no video. The
+        link is checked when you save, so you find out here rather than a student finding
+        an empty player.
+      </p>
 
       <label htmlFor={`i-${section.id}`}>Picture (optional)</label>
       <input
@@ -532,6 +573,16 @@ function VocabularyList({
                       >
                         {item.status === 'PUBLISHED' ? 'Published' : 'Draft'}
                       </span>
+                      {item.needsReview && (
+                        <span
+                          className="badge warn"
+                          style={{ marginLeft: '.35rem' }}
+                          title={item.reviewNotes ?? undefined}
+                          data-testid={`word-review-${item.wordEn}`}
+                        >
+                          Check
+                        </span>
+                      )}
                     </td>
                     <td>
                       <div className="row">

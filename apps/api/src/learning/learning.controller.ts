@@ -13,6 +13,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUser as Actor } from '../auth/auth.types';
 import { LearningService } from './learning.service';
+import { GamesService } from './games.service';
 import { AnswerCheckDto, AudioPlayedDto, SubmitAttemptDto } from './dto/learning.dto';
 
 /**
@@ -26,7 +27,10 @@ import { AnswerCheckDto, AudioPlayedDto, SubmitAttemptDto } from './dto/learning
 @Roles(UserRole.STUDENT)
 @Controller('learn')
 export class LearningController {
-  constructor(private readonly learning: LearningService) {}
+  constructor(
+    private readonly learning: LearningService,
+    private readonly games: GamesService,
+  ) {}
 
   @Get('units')
   async units(@CurrentUser() actor: Actor) {
@@ -81,6 +85,26 @@ export class LearningController {
     @Body() dto: AnswerCheckDto,
   ) {
     return this.learning.answerVocabularyCheck(actor, id, dto.answer);
+  }
+
+  /**
+   * Bonus review games for a unit.
+   *
+   * Never gated and never gating: a game is not a step in the sequence, and
+   * playing one changes nothing about a student's progress.
+   */
+  @Get('units/:id/games')
+  async listGames(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.games.listForUnit(actor, id);
+  }
+
+  @Get('units/:id/games/:key')
+  async gameRound(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('key') key: string,
+  ) {
+    return this.games.round(actor, id, key);
   }
 
   @Post('sections/:id/viewed')

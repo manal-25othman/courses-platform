@@ -24,3 +24,7 @@ npm-debug.log*
 .DS_Store
 .idea/
 .vscode/
+
+# Written by the Next.js dev server on every start.
+apps/web/AGENTS.md
+apps/web/CLAUDE.md

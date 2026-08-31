@@ -16,10 +16,13 @@ import { SettingsService } from '../settings/settings.service';
 import { SETTING_KEYS } from '../settings/settings.types';
 import { QuestionEngineService, StoredQuestion } from '../questions/question-engine.service';
 import { CurrentUser } from '../auth/auth.types';
+import { readVideoUrl } from '../content/video';
 import {
   AssessmentState,
   ComponentProgress,
   QuestionSnapshot,
+  SectionLock,
+  SequentialLocks,
   UnitProgress,
 } from './learning.types';
 import { AudioSource } from './dto/learning.dto';
@@ -120,6 +123,23 @@ export class LearningService {
     return unitId ? [{ scope: SettingScope.UNIT, scopeId: unitId }] : [];
   }
 
+  /**
+   * The player address for a stored video address, or nothing.
+   *
+   * A stored address can stop being playable — the client removes a host from
+   * the allow-list — and that has to show as no video rather than an error on
+   * a student's screen, so this returns null instead of throwing. What reaches
+   * the page is an address the API built, never anything a teacher typed.
+   */
+  private playerFor(url: string, hosts: string[]) {
+    try {
+      const video = readVideoUrl(url, hosts);
+      return { embedUrl: video.embedUrl, provider: video.provider };
+    } catch {
+      return null;
+    }
+  }
+
   // --- Navigation ----------------------------------------------------------
 
   /** The units she can work on, each with how far she has got. */
@@ -163,6 +183,11 @@ export class LearningService {
       });
 
       if (!unit) throw new NotFoundException('Unit not found.');
+
+      const videoHosts = await this.settings.resolve<string[]>(
+        SETTING_KEYS.GRAMMAR_VIDEO_HOSTS,
+        this.scopes(unitId),
+      );
 
       const [sections, vocabulary, questionCount] = await Promise.all([
         tx.unitSection.findMany({
@@ -214,6 +239,9 @@ export class LearningService {
           orderIndex: section.orderIndex,
           type: section.type,
           media: section.media.map((m) => ({ id: m.id, url: m.url, altText: m.altText })),
+          // Built here from the stored address, never from anything a teacher
+          // typed: the page receives a player address, not markup.
+          video: section.videoUrl ? this.playerFor(section.videoUrl, videoHosts ?? []) : null,
           viewed: seenSections.has(section.id),
         })),
         vocabulary: vocabulary.map((item) => {
@@ -251,11 +279,77 @@ export class LearningService {
    * Every rule here is a setting: the mark to reach, how many tries, and which
    * try counts (SRS 17, 18, 19). Nothing is decided in this file.
    */
-  private async assessmentState(
-    tx: Pick<PrismaService, 'question' | 'activityAttempt'>,
+  /**
+   * How much of the work that comes before a section she has actually done.
+   *
+   * A gate only bites where there is something to gate on. A component with
+   * nothing published in it is not "incomplete" — there is nothing she could
+   * do about it — so it counts as satisfied. Without that, a unit whose
+   * vocabulary the teacher has not written yet would lock its grammar and its
+   * assessment forever, which is a dead end rather than a sequence.
+   *
+   * Completion is read from recorded learning actions only. There is no path
+   * here, and none in the API, by which a student marks a component done
+   * herself.
+   */
+  private async sequentialLocks(
+    tx: TenantClient,
     studentId: string,
     unitId: string,
+  ): Promise<SequentialLocks> {
+    const enabled = await this.settings.resolve<boolean>(
+      SETTING_KEYS.LEARNING_SEQUENTIAL_UNLOCK,
+      this.scopes(unitId),
+    );
+
+    if (enabled === false) {
+      return { enabled: false, vocabularyDone: true, grammarDone: true };
+    }
+
+    const [vocabulary, sections] = await Promise.all([
+      tx.vocabularyItem.findMany({
+        where: { unitId, status: ContentStatus.PUBLISHED },
+        select: { id: true },
+      }),
+      // Which sections count towards grammar is a property of the section
+      // type, held as data, so the filter is asked of the database rather
+      // than applied to everything it returns.
+      tx.unitSection.findMany({
+        where: {
+          unitId,
+          status: ContentStatus.PUBLISHED,
+          type: { progressComponent: STUDENT_SECTION_COMPONENT },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    const vocabIds = vocabulary.map((v) => v.id);
+    const learned = vocabIds.length
+      ? await tx.vocabularyProgress.count({
+          where: { studentId, itemId: { in: vocabIds }, learnedAt: { not: null } },
+        })
+      : 0;
+
+    const grammarIds = sections.map((s) => s.id);
+    const viewed = grammarIds.length
+      ? await tx.sectionProgress.count({ where: { studentId, sectionId: { in: grammarIds } } })
+      : 0;
+
+    return {
+      enabled: true,
+      vocabularyDone: vocabIds.length === 0 || learned >= vocabIds.length,
+      grammarDone: grammarIds.length === 0 || viewed >= grammarIds.length,
+    };
+  }
+
+  private async assessmentState(
+    tx: TenantClient,
+    studentId: string,
+    unitId: string,
+    known?: SequentialLocks,
   ): Promise<AssessmentState> {
+    const locks = known ?? (await this.sequentialLocks(tx, studentId, unitId));
     const [passMark, maxAttempts, resultPolicy] = await Promise.all([
       this.settings.resolve<number>(SETTING_KEYS.ASSESSMENT_PASSING_SCORE, this.scopes(unitId)),
       this.settings.resolve<number | null>(
@@ -301,6 +395,9 @@ export class LearningService {
     const attemptsLeft =
       typeof maxAttempts === 'number' ? Math.max(0, maxAttempts - attemptsUsed) : null;
 
+    // Order matters. What she cannot change comes first — there is no
+    // assessment, or she has already passed, or she has no tries left — and
+    // only then the work she still has to do to reach it.
     const blockedBecause: AssessmentState['blockedBecause'] =
       questionCount === 0
         ? 'no_questions'
@@ -308,7 +405,11 @@ export class LearningService {
           ? 'already_passed'
           : attemptsLeft === 0
             ? 'no_attempts_left'
-            : null;
+            : !locks.vocabularyDone
+              ? 'vocabulary_incomplete'
+              : !locks.grammarDone
+                ? 'grammar_incomplete'
+                : null;
 
     return {
       questionCount,
@@ -544,6 +645,17 @@ export class LearningService {
 
       if (!section) throw new NotFoundException('Section not found.');
 
+      // Grammar waits for the words (client, 2026-08-31). Enforced here, not
+      // only on the screen: this is the call that records grammar as read, so
+      // refusing it is what stops a student reaching grammar by typing an
+      // address or calling the API directly.
+      const locks = await this.sequentialLocks(tx, actor.userId, section.unitId);
+      if (locks.enabled && !locks.vocabularyDone) {
+        throw new BadRequestException(
+          'Finish learning the words in this unit before you start the grammar.',
+        );
+      }
+
       const existing = await tx.sectionProgress.findFirst({
         where: { studentId: actor.userId, sectionId },
       });
@@ -620,6 +732,19 @@ export class LearningService {
         }
         if (state.blockedBecause === 'no_attempts_left') {
           throw new BadRequestException('You have used all your tries for this assessment.');
+        }
+        // The same gate the screen shows, enforced here as well. A student who
+        // types the address of the assessment, or calls the API directly, is
+        // refused for exactly the reason the locked tab gives her.
+        if (state.blockedBecause === 'vocabulary_incomplete') {
+          throw new BadRequestException(
+            'Finish learning the words in this unit before you try the assessment.',
+          );
+        }
+        if (state.blockedBecause === 'grammar_incomplete') {
+          throw new BadRequestException(
+            'Read the grammar for this unit before you try the assessment.',
+          );
         }
       } else if (typeof maxAttempts === 'number') {
         // Activities are unlimited for this client (SRS 9), which the settings
@@ -920,7 +1045,7 @@ export class LearningService {
     ]);
 
     {
-      const [unit, vocabulary, sections, questionCount, attempts, assessment] =
+      const [unit, vocabulary, sections, questionCount, attempts, locks] =
         await Promise.all([
           tx.unit.findUnique({
             where: { id: unitId },
@@ -950,8 +1075,14 @@ export class LearningService {
             },
             select: { scorePercent: true },
           }),
-          this.assessmentState(tx, actor.userId, unitId),
+          this.sequentialLocks(tx, actor.userId, unitId),
         ]);
+
+      // Worked out once here and handed to the assessment, rather than let it
+      // count the same rows again: this runs per student per unit on the
+      // teacher's class screen, where the extra queries were what exhausted
+      // the connection pool once already.
+      const assessment = await this.assessmentState(tx, actor.userId, unitId, locks);
 
       const vocabIds = vocabulary.map((v) => v.id);
       const learned = vocabIds.length
@@ -1031,8 +1162,17 @@ export class LearningService {
 
       const overallPercent = totalWeight === 0 ? 0 : Math.round((weighted / totalWeight) * 100);
 
+      // Grammar waits for the words (client, 2026-08-31). The assessment's own
+      // gate lives in `assessmentState`, so both come from the same reading of
+      // what she has done.
+      const grammarLock: SectionLock =
+        locks.enabled && !locks.vocabularyDone
+          ? { locked: true, reason: 'vocabulary_incomplete' }
+          : { locked: false, reason: null };
+
       return {
         unitId,
+        grammarLock,
         vocabulary: vocabProgress,
         grammar: grammarProgress,
         activity: activityProgress,

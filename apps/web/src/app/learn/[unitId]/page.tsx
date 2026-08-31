@@ -13,8 +13,21 @@ import {
 import { VocabularyCards } from '@/components/VocabularyCards';
 import { GrammarSections } from '@/components/GrammarSections';
 import { ActivityRunner } from '@/components/ActivityRunner';
+import { BonusGames } from '@/components/BonusGames';
 
-type Tab = 'vocabulary' | 'grammar' | 'activity' | 'assessment';
+type Tab = 'vocabulary' | 'grammar' | 'activity' | 'assessment' | 'games';
+
+/**
+ * Why a part is not open yet, said plainly.
+ *
+ * She is eleven or twelve. A locked tab that says nothing is a wall; one that
+ * says what to do next is a step. Every one of these names the thing she can
+ * go and do about it.
+ */
+const LOCK_REASONS: Record<string, string> = {
+  vocabulary_incomplete: 'Learn all the words first, then this opens.',
+  grammar_incomplete: 'Read the grammar first, then this opens.',
+};
 
 /** What to call each part when telling her it is missing. */
 const MISSING_LABELS: Record<string, string> = {
@@ -104,6 +117,30 @@ export default function LearnUnitPage() {
   // flow is Words, Grammar, Activity.
   const grammarSections = unit.sections;
 
+  /**
+   * The API decides what is open; this only draws it.
+   *
+   * Disabling a tab is a courtesy, not the rule — the same conditions are
+   * enforced on every call the tab would make, so typing the address or
+   * calling the API directly is refused with the same reason.
+   *
+   * A locked tab must never also be the open one: if she is standing on a tab
+   * that has just locked (she reset her progress, or a teacher published more
+   * words), she is moved back to what she can actually do.
+   */
+  const grammarLocked = progress?.grammarLock.locked ?? false;
+  const assessmentLockReason =
+    unit.assessment.blockedBecause === 'vocabulary_incomplete' ||
+    unit.assessment.blockedBecause === 'grammar_incomplete'
+      ? unit.assessment.blockedBecause
+      : null;
+  const assessmentLocked = assessmentLockReason !== null;
+
+  const activeTab: Tab =
+    (tab === 'grammar' && grammarLocked) || (tab === 'assessment' && assessmentLocked)
+      ? 'vocabulary'
+      : tab;
+
   return (
     <main className="page stack">
       <div className="between">
@@ -156,7 +193,7 @@ export default function LearnUnitPage() {
       <div className="tabs" role="tablist">
         <button
           role="tab"
-          aria-selected={tab === 'vocabulary'}
+          aria-selected={activeTab === 'vocabulary'}
           onClick={() => setTab('vocabulary')}
           data-testid="tab-vocabulary"
         >
@@ -164,15 +201,18 @@ export default function LearnUnitPage() {
         </button>
         <button
           role="tab"
-          aria-selected={tab === 'grammar'}
+          aria-selected={activeTab === 'grammar'}
           onClick={() => setTab('grammar')}
+          disabled={grammarLocked}
+          aria-disabled={grammarLocked}
+          title={grammarLocked ? LOCK_REASONS.vocabulary_incomplete : undefined}
           data-testid="tab-grammar"
         >
-          Grammar ({grammarSections.length})
+          {grammarLocked ? '🔒 ' : ''}Grammar ({grammarSections.length})
         </button>
         <button
           role="tab"
-          aria-selected={tab === 'activity'}
+          aria-selected={activeTab === 'activity'}
           onClick={() => setTab('activity')}
           data-testid="tab-activity"
         >
@@ -180,23 +220,35 @@ export default function LearnUnitPage() {
         </button>
         <button
           role="tab"
-          aria-selected={tab === 'assessment'}
+          aria-selected={activeTab === 'games'}
+          onClick={() => setTab('games')}
+          data-testid="tab-games"
+        >
+          Games
+        </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === 'assessment'}
           onClick={() => setTab('assessment')}
+          disabled={assessmentLocked}
+          aria-disabled={assessmentLocked}
+          title={assessmentLocked ? LOCK_REASONS[assessmentLockReason!] : undefined}
           data-testid="tab-assessment"
         >
+          {assessmentLocked ? '🔒 ' : ''}
           Assessment{unit.assessment.passed ? ' ✓' : ` (${unit.assessment.questionCount})`}
         </button>
       </div>
 
-      {tab === 'vocabulary' && (
+      {activeTab === 'vocabulary' && (
         <VocabularyCards words={unit.vocabulary} onChanged={load} />
       )}
 
-      {tab === 'grammar' && (
+      {activeTab === 'grammar' && (
         <GrammarSections sections={grammarSections} onChanged={load} />
       )}
 
-      {tab === 'activity' && (
+      {activeTab === 'activity' && (
         <ActivityRunner
           unitId={unit.id}
           questionCount={unit.activity.questionCount}
@@ -204,7 +256,17 @@ export default function LearnUnitPage() {
         />
       )}
 
-      {tab === 'assessment' && (
+      {activeTab === 'games' && (
+        <>
+          {/*
+            Never locked and never locking. A game is not a step in the
+            sequence: it cannot be required, and playing one changes nothing.
+          */}
+          <BonusGames unitId={unitId} />
+        </>
+      )}
+
+      {activeTab === 'assessment' && (
         <ActivityRunner
           unitId={unit.id}
           mode="assessment"

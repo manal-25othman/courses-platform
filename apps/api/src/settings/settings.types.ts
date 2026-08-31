@@ -29,6 +29,10 @@ export const SETTING_KEYS = {
   GAMES_AFFECTS_SCORE: 'games.affects_score',
   GAMES_AFFECTS_PROGRESS: 'games.affects_progress',
   UI_LANGUAGE: 'ui.language',
+  /** Hosts a grammar video address may point at. */
+  GRAMMAR_VIDEO_HOSTS: 'grammar.video_allowed_hosts',
+  /** Whether grammar and the assessment unlock in order (SRS 21, 22). */
+  LEARNING_SEQUENTIAL_UNLOCK: 'learning.sequential_unlock',
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

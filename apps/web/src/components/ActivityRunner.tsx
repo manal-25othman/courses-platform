@@ -388,6 +388,9 @@ function AssessmentStanding({ assessment }: { assessment: AssessmentState }) {
     already_passed: 'You have passed this assessment. Well done.',
     no_attempts_left: 'You have used all your tries for this assessment.',
     no_questions: 'Your teacher has not set an assessment for this unit yet.',
+    // The two the sequence adds. Both name the thing she can go and do.
+    vocabulary_incomplete: 'Learn all the words in this unit first, then the assessment opens.',
+    grammar_incomplete: 'Read the grammar for this unit first, then the assessment opens.',
   } as const;
 
   return (

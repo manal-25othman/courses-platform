@@ -63,11 +63,41 @@ export interface AssessmentState {
   passed: boolean;
   /** Whether she may start one now, and if not, why not. */
   canStart: boolean;
-  blockedBecause: 'no_questions' | 'no_attempts_left' | 'already_passed' | null;
+  blockedBecause:
+    | 'no_questions'
+    | 'no_attempts_left'
+    | 'already_passed'
+    /** Words in this unit are still to be learned (client, 2026-08-31). */
+    | 'vocabulary_incomplete'
+    /** Grammar in this unit is still to be read (client, 2026-08-31). */
+    | 'grammar_incomplete'
+    | null;
+}
+
+/**
+ * How much of the work that comes before a section a student has done.
+ *
+ * A component with nothing published in it counts as done: there is nothing
+ * she could do about it, and treating it as unfinished would lock what comes
+ * after it forever.
+ */
+export interface SequentialLocks {
+  /** False where the client has turned the sequence off for this unit. */
+  enabled: boolean;
+  vocabularyDone: boolean;
+  grammarDone: boolean;
+}
+
+/** Whether a section is open to her yet, and if not, why not. */
+export interface SectionLock {
+  locked: boolean;
+  reason: 'vocabulary_incomplete' | 'grammar_incomplete' | null;
 }
 
 export interface UnitProgress {
   unitId: string;
+  /** Whether grammar is open to her yet, and if not, why not. */
+  grammarLock: SectionLock;
   vocabulary: ComponentProgress;
   grammar: ComponentProgress;
   activity: ComponentProgress;
@@ -103,3 +133,29 @@ export interface UnitProgress {
 }
 
 export const PUBLISHED_ONLY = { status: ContentStatus.PUBLISHED } as const;
+
+/** A bonus review game, and whether this unit has enough content for it. */
+export interface BonusGame {
+  key: string;
+  displayName: string;
+  description: string | null;
+  available: boolean;
+  itemCount: number;
+  minimumItems: number;
+}
+
+/**
+ * One round of a bonus game.
+ *
+ * Nothing about a round is stored. There is no attempt, no score and no
+ * progress: closing the page loses it, which is what a game that counts for
+ * nothing should do.
+ */
+export interface BonusGameRound {
+  gameKey: string;
+  unitId: string;
+  /** Memory Match: the pairs to lay out as cards. */
+  pairs: { id: string; wordEn: string; meaningAr: string }[];
+  /** Quick Match: a word and four real meanings from the same unit. */
+  questions: { wordEn: string; answer: string; options: string[] }[];
+}

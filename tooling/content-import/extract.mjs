@@ -122,15 +122,45 @@ const body = paragraphs.filter((p, i, all) => {
 
 const UNIT_TITLES = ['Welcome', 'Living Things', 'Lifestyles', 'Interests', 'Professions', 'Grammar Review'];
 
-/** Which unit a paragraph belongs to, by the last unit heading seen above it. */
+/**
+ * Where each unit's content starts, measured against inline body landmarks.
+ *
+ * Every unit heading in this document lives in a floating text box, and a
+ * floating shape's position in the XML is not its position on the page: Word
+ * stores the shape against an anchor paragraph and then draws it wherever the
+ * layout puts it. Filing questions by "the last heading seen above them" was
+ * therefore ordering against something that has no reliable order, and it put
+ * the last seven Professions questions under Grammar Review — the Grammar
+ * Review header box is stored before the page it heads.
+ *
+ * The bilingual vocabulary table that opens each unit is ordinary inline body
+ * content, so its position *is* its position. Bands are taken from those
+ * tables, and the floating headings are used only to name the band nearest to
+ * each one, which is all they can be trusted for.
+ */
+const bandStarts = body
+  .filter((p) => p.inTable && (p.text === 'Arabic' || p.text === 'English'))
+  .map((p) => p.index);
+
+const headings = body
+  .map((p) => ({
+    index: p.index,
+    title: UNIT_TITLES.find((t) => p.text === t || p.text === `${t} Unit`),
+  }))
+  .filter((h) => h.title);
+
+const bands = bandStarts.map((start, i) => {
+  const nearest = headings.reduce(
+    (best, h) => (Math.abs(h.index - start) < Math.abs(best.index - start) ? h : best),
+    headings[0],
+  );
+  return { unit: nearest?.title ?? null, start, end: bandStarts[i + 1] ?? Infinity };
+});
+
+/** Which unit a paragraph belongs to, or null if it sits before any unit. */
 function unitAt(position) {
-  let current = null;
-  for (const p of body) {
-    if (p.index > position) break;
-    const match = UNIT_TITLES.find((t) => p.text === t || p.text === `${t} Unit`);
-    if (match) current = match;
-  }
-  return current;
+  const band = bands.find((b) => position >= b.start && position < b.end);
+  return band ? band.unit : null;
 }
 
 const INSTRUCTIONS = [
@@ -213,6 +243,22 @@ function correctFromHighlight(options, highlighted) {
   }
 
   return { id: null, reason: `highlighted text "${joined}" matches no option` };
+}
+
+// A unit whose heading exists but which has no inline landmark of its own
+// cannot be attributed anything. Nothing is guessed into it, and the gap is
+// reported: if a later edition adds questions there they will fall into the
+// preceding band, and someone has to know to move them.
+const banded = new Set(bands.map((b) => b.unit));
+for (const title of UNIT_TITLES) {
+  if (headings.some((h) => h.title === title) && !banded.has(title)) {
+    flag(
+      'unit has no inline landmark',
+      `"${title}" appears as a heading but has no vocabulary table to anchor it, so no question can be attributed to it by position. Any question of its own would be filed under the preceding unit and must be moved by hand.`,
+      null,
+      'unit',
+    );
+  }
 }
 
 let currentType = null;

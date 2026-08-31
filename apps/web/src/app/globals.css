@@ -309,3 +309,56 @@ button.match-right.used { opacity: .5; }
   border: 1px solid var(--primary); background: var(--primary); color: var(--primary-text);
 }
 .button-link:hover { filter: brightness(1.08); }
+
+/*
+ * A video keeps its shape on a phone as well as a laptop: the frame holds a
+ * 16:9 box and the player fills it, rather than the player deciding.
+ */
+.video-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #000;
+}
+
+.video-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* A locked tab reads as "not yet", not as "broken". */
+.tabs button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Memory Match: a grid that stays square-ish from phone to desktop. */
+.memory-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: .5rem;
+}
+
+button.memory-card {
+  aspect-ratio: 1;
+  width: 100%;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  padding: .25rem;
+  word-break: break-word;
+}
+
+button.memory-card.open {
+  background: var(--accent-soft, #eef4ff);
+  border-color: var(--accent, #3b6cf0);
+}

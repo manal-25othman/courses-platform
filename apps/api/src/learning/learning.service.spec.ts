@@ -37,6 +37,7 @@ const CONFIRMED: Record<string, unknown> = {
   [SETTING_KEYS.PROGRESS_EMPTY_COUNTS_AS_COMPLETE]: false,
   [SETTING_KEYS.RANDOMIZATION_SHUFFLE_QUESTIONS]: true,
   [SETTING_KEYS.RANDOMIZATION_SHUFFLE_OPTIONS]: true,
+  [SETTING_KEYS.LEARNING_SEQUENTIAL_UNLOCK]: true,
 };
 
 function settingsWith(overrides: Record<string, unknown> = {}): SettingsService {
@@ -58,7 +59,7 @@ interface Tables {
     media?: { url: string; mimeType: string }[];
   }[];
   vocabularyProgress?: Record<string, unknown>[];
-  unitSection?: { id: string; type: { progressComponent: string | null } }[];
+  unitSection?: { id: string; unitId?: string; type: { progressComponent: string | null } }[];
   sectionProgress?: Record<string, unknown>[];
   questions?: number;
   attempts?: { scorePercent: number | null }[];
@@ -110,7 +111,10 @@ function serviceOver(tables: Tables, overrides: Record<string, unknown> = {}) {
     },
     unitSection: {
       findMany: async () => tables.unitSection ?? [],
-      findFirst: async () => null,
+      // `markSectionViewed` looks the section up before recording it, and the
+      // sequence check reads its unit from what comes back.
+      findFirst: async ({ where }: { where?: { id?: string } } = {}) =>
+        (tables.unitSection ?? []).find((s) => s.id === where?.id) ?? null,
     },
     sectionProgress: {
       findMany: async () => tables.sectionProgress ?? [],
@@ -859,5 +863,219 @@ describe('LearningService access', () => {
     // The stand-in returns a unit only when the filter asks for PUBLISHED, so
     // reaching this point at all proves the filter was applied.
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Vocabulary → Grammar → Assessment (client, 2026-08-31).
+ *
+ * Two things are being guarded here at once. That the sequence holds, and that
+ * it cannot become a dead end: a component the teacher has not filled in has
+ * nothing in it for a student to finish, so it must not lock what follows it.
+ */
+describe('sequential unlock', () => {
+  const word = (id: string) => ({ id, status: ContentStatus.PUBLISHED, unitId: 'u1' });
+  const learned = (itemId: string) => ({ id: `p-${itemId}`, itemId, learnedAt: new Date() });
+  const grammarSection = (id: string) => ({
+    id,
+    unitId: 'u1',
+    type: { progressComponent: 'grammar' },
+  });
+
+  // --- Grammar waits for the words ----------------------------------------
+
+  it('locks grammar while words are still to be learned', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1'), word('w2')],
+      vocabularyProgress: [learned('w1')],
+      unitSection: [grammarSection('s1')],
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.grammarLock).toEqual({ locked: true, reason: 'vocabulary_incomplete' });
+  });
+
+  it('opens grammar once every word is learned', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1'), word('w2')],
+      vocabularyProgress: [learned('w1'), learned('w2')],
+      unitSection: [grammarSection('s1')],
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.grammarLock.locked).toBe(false);
+  });
+
+  it('opens grammar in a unit that has no vocabulary at all', async () => {
+    // The trap: with no words published there is nothing she could finish, so
+    // treating vocabulary as unfinished would lock grammar forever.
+    const service = serviceOver({
+      vocabularyItem: [],
+      vocabularyProgress: [],
+      unitSection: [grammarSection('s1')],
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.grammarLock.locked).toBe(false);
+  });
+
+  // --- The assessment waits for both --------------------------------------
+
+  it('blocks the assessment while words are still to be learned', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [],
+      unitSection: [grammarSection('s1')],
+      sectionProgress: [{ sectionId: 's1' }],
+      assessmentQuestions: 5,
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessmentState.blockedBecause).toBe('vocabulary_incomplete');
+    expect(progress.assessmentState.canStart).toBe(false);
+  });
+
+  it('blocks the assessment while grammar is still to be read', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [learned('w1')],
+      unitSection: [grammarSection('s1')],
+      sectionProgress: [],
+      assessmentQuestions: 5,
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessmentState.blockedBecause).toBe('grammar_incomplete');
+  });
+
+  it('opens the assessment once words and grammar are both done', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [learned('w1')],
+      unitSection: [grammarSection('s1')],
+      sectionProgress: [{ sectionId: 's1' }],
+      assessmentQuestions: 5,
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessmentState.blockedBecause).toBeNull();
+    expect(progress.assessmentState.canStart).toBe(true);
+  });
+
+  it('does not require the activity before the assessment', async () => {
+    // Activity is a quarter of the unit but not a gate (client, 2026-08-31):
+    // she may sit the assessment without it, and still not be at 100%.
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [learned('w1')],
+      unitSection: [grammarSection('s1')],
+      sectionProgress: [{ sectionId: 's1' }],
+      questions: 4,
+      attempts: [],
+      assessmentQuestions: 5,
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessmentState.canStart).toBe(true);
+    expect(progress.activity.percent).toBe(0);
+    expect(progress.isComplete).toBe(false);
+  });
+
+  // --- What she cannot change is reported ahead of what she can -----------
+
+  it('reports a passed assessment rather than unfinished words', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [],
+      unitSection: [grammarSection('s1')],
+      assessmentQuestions: 5,
+      assessmentAttempts: [{ scorePercent: 90, passed: true }],
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessmentState.blockedBecause).toBe('already_passed');
+  });
+
+  it('reports an assessment that does not exist rather than unfinished words', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [],
+      unitSection: [grammarSection('s1')],
+      assessmentQuestions: 0,
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessmentState.blockedBecause).toBe('no_questions');
+  });
+
+  // --- The sequence is a setting, not a rule in code -----------------------
+
+  it('locks nothing when the client turns the sequence off', async () => {
+    const service = serviceOver(
+      {
+        vocabularyItem: [word('w1')],
+        vocabularyProgress: [],
+        unitSection: [grammarSection('s1')],
+        sectionProgress: [],
+        assessmentQuestions: 5,
+      },
+      { [SETTING_KEYS.LEARNING_SEQUENTIAL_UNLOCK]: false },
+    );
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.grammarLock.locked).toBe(false);
+    expect(progress.assessmentState.blockedBecause).toBeNull();
+  });
+
+  // --- The server enforces it, not only the screen -------------------------
+
+  it('refuses to start the assessment while words are unlearned', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [],
+      unitSection: [grammarSection('s1')],
+      sectionProgress: [{ sectionId: 's1' }],
+      assessmentQuestions: 5,
+    });
+
+    await expect(
+      service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT),
+    ).rejects.toThrow(/words/i);
+  });
+
+  it('refuses to start the assessment while grammar is unread', async () => {
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [learned('w1')],
+      unitSection: [grammarSection('s1')],
+      sectionProgress: [],
+      assessmentQuestions: 5,
+    });
+
+    await expect(
+      service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT),
+    ).rejects.toThrow(/grammar/i);
+  });
+
+  it('refuses to record grammar as read while words are unlearned', async () => {
+    // This is the call that would otherwise let a student reach grammar by
+    // typing an address, and record it as done on the way past.
+    const service = serviceOver({
+      vocabularyItem: [word('w1')],
+      vocabularyProgress: [],
+      unitSection: [grammarSection('s1')],
+    });
+
+    await expect(service.markSectionViewed(student, 's1')).rejects.toThrow(/words/i);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { ContentStatus, UserRole } from '@prisma/client';
 import { ContentService } from './content.service';
 import { AuditService } from '../audit/audit.service';
+import { SettingsService } from '../settings/settings.service';
 import { CurrentUser } from '../auth/auth.types';
 import type { PrismaService } from '../prisma/prisma.service';
 
@@ -57,7 +58,11 @@ function serviceCapturing(captured: {
     sectionType: tx.sectionType,
   } as unknown as PrismaService;
 
-  return new ContentService(prisma, { record: vi.fn() } as unknown as AuditService);
+  return new ContentService(
+    prisma,
+    { record: vi.fn() } as unknown as AuditService,
+    { resolve: vi.fn() } as unknown as SettingsService,
+  );
 }
 
 describe('ContentService draft visibility', () => {
@@ -166,7 +171,11 @@ describe('ContentService duplicate vocabulary', () => {
       forSchool: async <T>(_schoolId: string, work: (t: typeof tx) => Promise<T>) => work(tx),
     } as unknown as PrismaService;
 
-    return new ContentService(prisma, { record: vi.fn() } as unknown as AuditService);
+    return new ContentService(
+    prisma,
+    { record: vi.fn() } as unknown as AuditService,
+    { resolve: vi.fn() } as unknown as SettingsService,
+  );
   }
 
   it('refuses a word the unit already has', async () => {

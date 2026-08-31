@@ -755,3 +755,218 @@ In order, because each step depends on the one before it:
 7. Only then, the sequential unlock flow and the bonus game framework.
 
 Nothing in steps 1–6 may be published while the source-rights hold stands.
+
+---
+
+# Full content entry, 2026-08-31
+
+The inventory was approved and the content it described has been entered. What
+follows is what actually went in, what did not, and why.
+
+Everything below is DRAFT. The source-rights hold stands: no unit, question,
+word or grammar section is published, and nothing here is visible to a student.
+
+## The seven mis-filed questions are back where they belong
+
+`unitAt()` used to attribute a question to the last unit heading above it in
+the file. Every unit heading in this document is a floating text box, and a
+floating shape's position in the XML is not its position on the page — so the
+Grammar Review header, stored before the page it heads, captured the last seven
+Professions questions.
+
+The fix stops ordering against headings at all. Each unit opens with a
+bilingual vocabulary table, which is ordinary inline body content and therefore
+*is* where it appears; those tables now mark the unit boundaries, and the
+floating headings only supply the name of the band nearest each one. Re-running
+the extractor moved exactly seven questions and changed nothing else — 72 of 79
+byte-identical, no content edits, no questions gained or lost.
+
+A unit that has a heading but no vocabulary table can no longer be attributed
+anything, and says so: the extractor now emits a flag naming Grammar Review
+explicitly, so a later edition that adds questions there cannot have them
+silently filed under Professions.
+
+`tooling/content-import/extract.spec.ts` guards this with a miniature document
+that reproduces the trap. Reverting `unitAt()` to the old logic fails it.
+
+Professions now holds 21 questions and Grammar Review none.
+
+## Vocabulary: 132 pairs, exactly as the source writes them
+
+| Unit | Pairs | Needing a teacher |
+|---|---|---|
+| Welcome | 18 | 2 |
+| Living Things | 26 | 0 |
+| Lifestyles | 36 | 0 |
+| Interests | 26 | 0 |
+| Professions | 26 | 0 |
+
+Nothing was translated, inferred or rewritten. The two flagged entries are
+`hundred` and `thousand`, whose meanings the source gives as `100` and `1000` —
+digits, not Arabic. They are stored exactly as written and marked for review,
+because changing them would be inventing a meaning and dropping them would be
+losing curriculum.
+
+One extraction bug is worth recording because it is the same one that produced
+the original wrong finding about this file. `<w:t[^>]*>` also matches `<w:tbl>`,
+`<w:tc>` and `<w:tr>`, and the lazy capture after it then swallows markup as if
+it were text. The first extractor survives this only because it strips tags
+afterwards. Requiring `<w:t>` or `<w:t ` is what makes a table readable.
+
+## Grammar: eight scans, prepared and flagged
+
+The eight teaching sheets are attached as grammar sections, two per core unit,
+re-encoded to about 500 KB each so they sit under the platform's 2 MB picture
+limit and a teacher can replace one through the normal upload screen.
+Resolution is unchanged and the text is fully legible.
+
+**All eight are marked "needs your check".** The mapping follows each sheet's
+own worked examples, because the document's headings group them 1/3/2/2 and
+contradict the content; every image is a floating anchor, so the file's order
+is not the page's. The manifest at `tooling/content-import/grammar-scans.json`
+records the evidence for each pairing. A teacher confirms them against the
+printed pages before anything is published.
+
+No teaching text was written, summarised or generated. The `body` of each
+section is deliberately empty: the teaching content is the sheet.
+
+## Optional grammar video
+
+A grammar section can now carry a video address. The design is the one the
+inventory recommended, and its safety rests on two rules:
+
+- **Only an address is ever stored, and the player is built from its parts in
+  the API.** Nothing a teacher types is rendered as markup. Paste an
+  `<iframe>` into the field and it is refused as not being a web address.
+- **The allowed hosts are a setting** (`grammar.video_allowed_hosts`,
+  seeded with YouTube and Google Drive), so the client can add one without a
+  release, and an address anywhere else is refused when she saves it rather
+  than becoming an empty frame on a student's screen.
+
+`javascript:` and `data:` addresses are refused before host matching. Host
+matching is equality, not a suffix test — `notyoutube.com` does not pass. The
+player iframe is sandboxed.
+
+No video hosting is bought or added; there is no new dependency and no bill.
+
+`src/content/video.spec.ts` covers all of this. The lookalike-host test is
+written to require the allow-list's own wording, because a host check written
+with `endsWith` still refuses that address further down, where no provider
+claims it — asserting only "it throws" passed against the very bug it guards.
+
+## Activities: 69 more questions
+
+Everything the first extractor refused, wherever the source states the answer.
+
+| Kind | Entered | Where the answer comes from |
+|---|---|---|
+| Matching | 5 | The middle column numbers each answer to its stem |
+| Spelling | 18 | The answer word is printed under the picture |
+| Missing letter | 20 | Derived — see below |
+| Word ordering | 10 | The finished sentence is written under the scrambled words |
+| Picture matching | 6 | Each picture carries the number of the word it shows |
+| Word for a picture | 6 | The answer word is printed under the picture |
+| Grammar transformation | 4 | The corrected sentence is written under the task |
+
+All 69 were checked against the real question engine — the same validators the
+API runs when a teacher saves a question — before any of them was written.
+
+**Missing letter is the one derived answer, and it is derived from the source,
+not from us.** The file gives three letter choices and never marks which is
+right. A choice is accepted only where it is the only one that completes the
+word into a word this document's own vocabulary defines. Where none fits or
+more than one does, the question is entered with no answer and marked for a
+teacher: 17 of 20 resolved, 3 did not.
+
+Two defects were found by checking rather than by reading, and both are fixed:
+
+- The scrambled-letters row was being found by content ("a row with letters and
+  no pictures"), which matched the instruction row at the top of the table. 17
+  of 18 spelling questions lost their clue. Rows are now identified by position
+  relative to the pictures, with the widths required to agree.
+- Word ordering matched one answer word against one token, so every sentence
+  built from a phrase ("a musician", "the wild", "the missing boy") failed. The
+  answer is now consumed a token at a time, longest first.
+
+## What a teacher still has to answer
+
+Six items, and no more:
+
+| Where | What | Why |
+|---|---|---|
+| Welcome | `hundred` = `100` | The source gives digits, not Arabic |
+| Welcome | `thousand` = `1000` | The source gives digits, not Arabic |
+| Welcome | `p104` | The highlighting covers a word fragment |
+| Interests | `p1140` | The highlighting covers a word fragment |
+| Interests | `p1168` | The highlighting covers a word fragment |
+| Lifestyles | `_lives` (e/i/o) | No choice completes a word the document defines |
+| Professions | `_fficer` (o/i/a) | No choice completes a word the document defines |
+
+Plus the eight grammar scans, whose unit pairing needs visual confirmation.
+
+**The 18 "Circle ✓ or ×" items were not entered at all.** The source marks no
+answer for any of them, so entering them would mean either guessing eighteen
+answers or creating eighteen empty questions. They are left for the teacher to
+enter with their answers, and are listed in the next-steps section below.
+
+One Lifestyles ordering exercise is flagged because the source itself is
+inconsistent: its scrambled list contains "broken" twice and a stray "watch"
+that the answer does not use.
+
+## Sequential unlock
+
+Vocabulary → Grammar → Assessment, enforced on the server and reflected in the
+screen. The rule the implementation turns on:
+
+> A gate only bites where there is something to gate on.
+
+A component with nothing published in it counts as satisfied. Without that, a
+unit whose vocabulary the teacher has not written yet would lock its grammar
+and its assessment forever — a dead end rather than a sequence.
+
+- `AssessmentState.blockedBecause` gained `vocabulary_incomplete` and
+  `grammar_incomplete`, after the three reasons a student cannot change.
+- `startActivity` refuses an assessment for either reason, and
+  `markSectionViewed` — the call that records grammar as read — refuses while
+  vocabulary is unfinished. That second one is what stops a student reaching
+  grammar by typing an address.
+- The student's tabs are disabled and say what to do next, and a locked tab can
+  never be the open one.
+
+The weighting is untouched: 25/25/25/25, Activity is not a gate but is still
+required for 100%, and bonus games are in none of these conditions.
+
+Whether the sequence applies at all is a setting (`learning.sequential_unlock`),
+so it is the client's to change without a release.
+
+## Bonus games
+
+Two games, Memory Match and Quick Match, both drawing rounds from vocabulary
+already stored. No new curriculum content and no duplicate copy of any.
+
+The guarantee that they count for nothing is structural rather than promised:
+`GamesService` has no write path at all. It reads vocabulary and returns a
+round. There is no attempt row it could create by mistake, which also means a
+game cannot spend one of the two assessment tries.
+
+Wrong answers in Quick Match are always other real meanings from the same unit.
+The distractor pool is made unique before three are taken from it — two words in
+this curriculum can share a meaning, and offering the right answer twice makes
+a question unanswerable. That was found by a test, not by reading.
+
+Which games exist is a registry table, so a third is a row and a view rather
+than a change to how games are listed.
+
+## What was verified, and how
+
+The unlock rules were checked twice over: through the raw HTTP API with no
+browser involved, and in a real browser on a phone-sized screen with taps
+rather than clicks. Seventeen API checks and ten browser checks, all passing.
+Both ran against an isolated fixture in its own school — the only published
+rows in the database while they ran — which was removed afterwards, leaving no
+attempts, no progress and no extra school behind.
+
+Mutation testing was used on the rules where being wrong would be expensive:
+treating an empty component as incomplete (the dead end), removing the server's
+refusal to start a blocked assessment, and weakening the video host check to a
+suffix test. All three were caught.

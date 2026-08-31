@@ -1,59 +1,82 @@
-# Importing curriculum questions from the Word source
+# Importing curriculum from the Word source
 
-Two scripts. `extract.mjs` reads the document; `restore-missing.mjs` puts back
-what the database has lost. Neither invents, corrects or completes anything:
-text is taken as written, and anything the file does not state plainly is
-flagged for a teacher rather than guessed.
+Four extractors and four importers. None of them invents, corrects or completes
+anything: text is taken as written, an answer is used only where the source
+states it, and anything ambiguous is flagged for a teacher rather than guessed.
 
 ```bash
 cd apps/api
+SRC=/path/to/Top_Goal_3_Term_1_answers.docx
 
-# 1. Read the document. Writes nothing; prints JSON.
-node ../../tooling/content-import/extract.mjs <file.docx> > questions.json
-
-# 2. First import into an empty course.
+# 1. Questions the file states in plain text, with the answer highlighted.
+node ../../tooling/content-import/extract.mjs "$SRC" > questions.json
 DIRECT_URL=… npm run db:import-questions -- questions.json
 
-# 3. Put back only what is missing, after questions have been lost.
-DRY=1 DIRECT_URL=… node ../../tooling/content-import/restore-missing.mjs questions.json --unit "Lifestyles"
-DIRECT_URL=…     node ../../tooling/content-import/restore-missing.mjs questions.json --unit "Lifestyles"
+# 2. Put back questions the database has lost, without duplicating the rest.
+DIRECT_URL=… node ../../tooling/content-import/restore-missing.mjs questions.json
+
+# 3. Move questions the extractor once filed under the wrong unit.
+DIRECT_URL=… node ../../tooling/content-import/refile-questions.mjs questions.json
+
+# 4. The bilingual vocabulary tables.
+node ../../tooling/content-import/extract-vocabulary.mjs "$SRC" > vocabulary.json
+DIRECT_URL=… node ../../tooling/content-import/import-vocabulary.mjs vocabulary.json
+
+# 5. The exercises whose structure is the table they sit in.
+node ../../tooling/content-import/extract-activities.mjs "$SRC" > activities.json
+npx ts-node prisma/validate-extracted.ts activities.json      # against the real engine
+DIRECT_URL=… node ../../tooling/content-import/import-activities.mjs activities.json "$SRC"
+
+# 6. The grammar teaching scans. Needs python3 with Pillow.
+DIRECT_URL=… node ../../tooling/content-import/import-grammar-scans.mjs "$SRC"
 ```
 
-## `source_ref` is the identity
+Every importer takes `DRY=1` to show what it would write without writing it,
+and every one is safe to run twice: a second run writes nothing.
 
-Every extracted question carries a `source_ref` of the form `p<n>`, where `n` is
+## Two things make this safe to re-run
+
+**`source_ref` is the identity.** Each extracted question carries `p<n>`, from
 the paragraph's position in `word/document.xml`. The same file always yields
-the same reference for the same question, which is what makes the two scripts
-safe to run against a database that already holds some of their output:
+the same reference for the same question, so an importer can tell what it has
+already written. It follows that **the file must not be edited between runs** —
+adding a paragraph shifts every reference below it. Check the file's checksum
+against the one in `grammar-scans.json` before trusting a restore.
 
-- `restore-missing.mjs` inserts a question only if its reference is absent from
-  the database **across all units**, so a second run inserts nothing.
-- The references are checked repository-wide rather than per unit, because a
-  question filed under the wrong unit by an earlier run would otherwise be
-  inserted a second time.
+**Vocabulary is identified by `(unit, word)`**, which the database holds unique.
+A word already present is left alone rather than overwritten, so a teacher's
+correction is never undone by a later import.
 
-It follows that the file must not be edited between runs. Adding a paragraph
-shifts every reference below it, and the comparison stops meaning anything.
-Check the file's checksum against the one recorded in
-`docs/CURRICULUM-FINDINGS.md` before trusting a restore.
+## Why headings are not used for ordering
 
-## What restoration will not do
+Every unit heading in the supplied file lives in a floating text box, and a
+floating shape's position in the XML is not its position on the page: Word
+stores it against an anchor paragraph and draws it wherever the layout puts it.
+Filing questions by "the last heading above them" therefore put the last seven
+Professions questions under Grammar Review.
 
-- It never updates, reorders or deletes an existing row. It only inserts.
-- It refuses the whole run if any missing question names a unit that does not
-  exist, rather than filing it under a guess.
-- Everything it inserts is a DRAFT, and a question whose answer the extractor
-  could not read is marked `needs_review` so it cannot be published as it
-  stands.
-- `order_index` continues after whatever the unit already holds, so a restored
-  question cannot collide with a surviving one.
+The bilingual vocabulary table that opens each unit is ordinary inline body
+content, so its position *is* its position. Those tables mark the bands; the
+headings only name the band nearest each one. A unit with no such landmark —
+Grammar Review has none — can be attributed nothing, and the extractor says so
+in its flags rather than letting a future edition be mis-filed silently.
+
+`extract.spec.ts` guards this with a miniature document that reproduces the
+trap, and runs in the ordinary test suite.
+
+## The regex that eats tables
+
+`<w:t[^>]*>` also matches `<w:tbl>`, `<w:tc>`, `<w:tr>` and `<w:tabs>`, and the
+lazy capture that follows swallows everything up to the first real `</w:t>` —
+markup, not words. `extract.mjs` survives this only because it strips tags
+from the joined text afterwards. Anything that reads a table needs
+`<w:t(?:\s[^>]*)?>`, or the cells come back full of XML. This is what made the
+vocabulary look absent on the first pass.
 
 ## Why these run through `../prisma-client.mjs`
 
 Node resolves an ESM import from the importing file's own directory upwards,
-not from the working directory. The Prisma client is installed in
-`apps/api/node_modules` rather than hoisted to the repository root, so a bare
-`import … from '@prisma/client'` inside `tooling/` fails whatever directory the
-script is launched from. `tooling/prisma-client.mjs` resolves it against the
-API package's manifest, which is what the scripts actually mean: use the same
-generated client the API uses.
+not from the working directory, and the Prisma client is installed in
+`apps/api/node_modules` rather than hoisted to the repository root. A bare
+`import … from '@prisma/client'` inside `tooling/` therefore fails whatever
+directory the script is launched from.

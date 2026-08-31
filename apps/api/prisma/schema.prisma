@@ -358,6 +358,19 @@ model UnitSection {
   /// column per kind.
   config     Json?
 
+  /// An optional video explanation, as an address rather than an embed.
+  ///
+  /// Only the address is stored, and the player is built from it here: markup
+  /// supplied by a teacher is never rendered. Which hosts are allowed is a
+  /// setting, not a rule in code, so the list changes without a release.
+  videoUrl   String? @map("video_url")
+
+  /// Set where something about this section still needs a person to confirm
+  /// it — a scan whose pairing to a unit was read from its content rather
+  /// than stated by the source, for instance.
+  needsReview Boolean @default(false) @map("needs_review")
+  reviewNotes String? @map("review_notes")
+
   status    ContentStatus @default(DRAFT)
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
@@ -388,6 +401,13 @@ model VocabularyItem {
   /// Only set if a specific recording is ever supplied; normally empty,
   /// because pronunciation is produced automatically (SRS 7).
   audioUrl        String? @map("audio_url")
+
+  /// Set where the source gave something the import would not interpret.
+  /// Two words are glossed with digits rather than Arabic ("hundred" as
+  /// "100"), which is what the file says and so what is stored; a teacher
+  /// decides whether that is the meaning she wants shown.
+  needsReview Boolean @default(false) @map("needs_review")
+  reviewNotes String? @map("review_notes")
 
   status    ContentStatus @default(DRAFT)
   createdAt DateTime      @default(now()) @map("created_at")
@@ -458,6 +478,29 @@ model MediaAsset {
 // SRS 10 but does not appear in the file. Both are recorded rather than
 // forced into a neighbouring kind.
 // ---------------------------------------------------------------------------
+
+/// The kinds of bonus review game the platform can offer.
+///
+/// A registry rather than a list in code, for the same reason question types
+/// are: which games exist, and whether one is offered at all, is a decision
+/// the client can change without a deploy. A game never records an attempt and
+/// never touches progress, so there is no table of results to go with this —
+/// only what may be offered, and out of which content.
+model BonusGameType {
+  key         String  @id
+  displayName String  @map("display_name")
+  description String?
+  /// Which stored content the game draws its rounds from — "vocabulary"
+  /// today. Named as data so a later game can read something else without a
+  /// change to how games are listed.
+  contentPool String  @map("content_pool")
+  /// How many items the pool must hold before the game is worth offering.
+  minimumItems Int    @default(4) @map("minimum_items")
+  isActive    Boolean @default(true) @map("is_active")
+  orderIndex  Int     @map("order_index")
+
+  @@map("bonus_game_types")
+}
 
 model QuestionType {
   key                   String  @id
