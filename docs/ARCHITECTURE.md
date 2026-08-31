@@ -37,6 +37,7 @@ Decisions approved by the client during architecture review. Each is now **[C] C
 
 | Date | Ref | Decision |
 |---|---|---|
+| 2026-08-31 | Product | **Confirmed product name: TOP GOAL 3 — Smart Shift.** Recorded here as the name; applying it to the interface belongs with the branding pass, which is deliberately not done yet. The name currently shown on screen is still "TOP GOAL" |
 | 2026-08-30 | SRS §39 | English-only interface for **all** roles (Student, Teacher, Admin); no Arabic UI text anywhere. Arabic permitted in educational *content* only |
 | 2026-08-30 | §37.8 / §2 | Stack: Next.js + NestJS + PostgreSQL, separate web and API deployments, token-based auth, API built for future mobile reuse |
 | 2026-08-30 | SRS §28.1–28.4 | Dual password recovery: student self-service by email **and** teacher-assisted reset. Student email **optional**. No phone or guardian contact. Username alone never resets a password |
