@@ -254,9 +254,13 @@ button.choice:disabled { opacity: 1; cursor: default; }
 /* Short answers — a letter, a word — read better as a row of tiles. */
 .tile-row { display: flex; flex-wrap: wrap; gap: .5rem; }
 button.tile {
+  /* `button.choice` sets width:100%, which inside a flex row made every letter
+     tile take a line of its own — the stacked bars the tile layout exists to
+     avoid. `button.choice.tile` below matches its specificity and wins. */
   min-width: 3rem; min-height: 2.75rem; text-align: center;
   font-size: 1.05rem; font-weight: 600;
 }
+button.choice.tile { width: auto; flex: 0 0 auto; }
 button.tile.placed { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
 button.tile.placed:hover:not(:disabled) { background: var(--primary); filter: brightness(1.08); }
 button.tile.placed.right, button.tile.placed.right:hover:not(:disabled) {

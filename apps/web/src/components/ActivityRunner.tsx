@@ -48,6 +48,16 @@ export function ActivityRunner({
     ? `/learn/units/${unitId}/assessment/attempts`
     : `/learn/units/${unitId}/attempts`;
   const [attempt, setAttempt] = useState<Attempt | null>(null);
+  /**
+   * How many assessment tries were used when this one started.
+   *
+   * The result appears the moment the marking comes back, a beat before the
+   * page has refetched how the assessment now stands. Without this, that beat
+   * showed "Try again" after her last try — a button the API would refuse.
+   * Comparing against the count at the start says whether what is on screen
+   * has caught up yet.
+   */
+  const [attemptsAtStart, setAttemptsAtStart] = useState<number | null>(null);
   const [responses, setResponses] = useState<Record<string, unknown>>({});
   const [past, setPast] = useState<AttemptSummary[]>([]);
   const [busy, setBusy] = useState(false);
@@ -95,6 +105,7 @@ export function ActivityRunner({
     setBusy(true);
     setError(null);
     try {
+      setAttemptsAtStart(assessment?.attemptsUsed ?? 0);
       const started = await api.post<Attempt>(startPath);
       setAttempt(started);
       // An attempt resumed after closing the page brings her answers back.
@@ -164,22 +175,30 @@ export function ActivityRunner({
           </p>
         )}
 
-        <div className="row">
-          <button
-            className="primary"
-            onClick={start}
-            disabled={busy || (isAssessment && assessment ? !assessment.canStart : false)}
-            data-testid={isAssessment ? 'start-assessment' : 'start-activity'}
-          >
-            {busy
-              ? 'Starting…'
-              : isAssessment
-                ? assessment && assessment.attemptsUsed > 0
-                  ? 'Try the assessment again'
-                  : 'Start the assessment'
-                : 'Start the activity'}
-          </button>
-        </div>
+        {/*
+          A blocked assessment has no button at all rather than a greyed-out
+          one. The message above already says why she cannot sit it; offering
+          a dead "Try again" beside "You have passed this assessment" reads
+          like something has gone wrong.
+        */}
+        {(!isAssessment || (assessment?.canStart ?? true)) && (
+          <div className="row">
+            <button
+              className="primary"
+              onClick={start}
+              disabled={busy}
+              data-testid={isAssessment ? 'start-assessment' : 'start-activity'}
+            >
+              {busy
+                ? 'Starting…'
+                : isAssessment
+                  ? assessment && assessment.attemptsUsed > 0
+                    ? 'Try the assessment again'
+                    : 'Start the assessment'
+                  : 'Start the activity'}
+            </button>
+          </div>
+        )}
 
         <PastTries past={past} onOpen={openPast} isAssessment={isAssessment} />
       </div>
@@ -221,7 +240,11 @@ export function ActivityRunner({
               screen's: an assessment has a limited number and a pass ends it.
               The button is only offered when it would work.
             */}
-            {(!isAssessment || (assessment?.canStart ?? false)) && (
+            {(!isAssessment ||
+              (assessment !== undefined &&
+                attemptsAtStart !== null &&
+                assessment.attemptsUsed > attemptsAtStart &&
+                assessment.canStart)) && (
               <button
                 className="primary"
                 onClick={() => {
