@@ -1,364 +1,987 @@
-/*
- * Neutral design tokens.
- *
- * The final logo, colours and typography are still to be decided (SRS 41), so
- * every visual value lives here as a token. Applying the real branding later
- * means changing these values, not rewriting components.
- */
+/* ==========================================================================
+   TOP GOAL 3 — Smart Shift
+   Design system: "Marked"
+
+   The source material for this course is hand-marked worksheets: a coloured
+   pen underlines the live thing, circles the answer, ticks it or crosses it.
+   That is the vocabulary the design borrows, because it is the vocabulary
+   these students already read on paper — and it is drawn in violet and pink
+   rather than a teacher's red biro, because the reader is an eleven-year-old
+   girl and the product should feel like it was made for her.
+
+   Two rules hold the system together:
+
+   1. Colour means something. Words are violet, grammar aqua, activity pink,
+      the test indigo — the order of the sequence, so the colour itself says
+      where in a unit she stands. Mint means finished and nothing else.
+   2. Every value here is a token. There are no one-off colours, radii or
+      durations in components.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,500;9..144,600;9..144,700;9..144,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap');
+
 :root {
-  --bg: #f6f7fb;
-  --surface: #ffffff;
-  --border: #e2e5ee;
-  --text: #1f2430;
-  --muted: #6b7280;
-  --primary: #4338ca;
-  --primary-text: #ffffff;
-  --danger: #b42318;
-  --danger-bg: #fef3f2;
-  --success: #067647;
-  --success-bg: #ecfdf3;
-  --warning: #b54708;
-  --warning-bg: #fffaeb;
-  --radius: 10px;
-  --gap: 1rem;
+  /* --- ink and ground ---------------------------------------------------
+     Navy for type and high contrast; the greys carry a violet bias so they
+     sit inside the palette instead of reading as unconsidered grey. The page
+     is lavender-tinted, the cards are white — that difference is what gives
+     the surfaces their lift without a heavy shadow. */
+  --ink:          #1B1739;
+  --ink-2:        #4A4370;
+  --ink-3:        #635C87;
+  --ink-4:        #A9A2C7;
+  --ground:       #F7F5FF;
+  --ground-2:     #EFEBFB;
+  --surface:      #FFFFFF;
+  --line:         #EAE5F8;
+  --line-2:       #D6CDF0;
+
+  /* --- brand -------------------------------------------------------------
+     Violet leads; pink is the energy beside it, never the whole surface. */
+  --brand:        #6C4CE0;   /* primary action, navigation, focus */
+  --brand-ink:    #4B2FB0;   /* pressed, and type on a soft violet ground */
+  --brand-soft:   #F0EBFF;
+  --signal:       #FF5FA2;   /* "you are here", streaks, celebration — fills only */
+  --signal-ink:   #C42561;   /* the same pink where it has to carry text */
+  --signal-soft:  #FFEBF3;
+
+  /* --- what kind of work -------------------------------------------------
+     Read in order, these are the four steps of a unit: violet, aqua, pink,
+     indigo. Colour is therefore a second reading of the sequence. */
+  --vocab:        #6C4CE0;  --vocab-soft:    #F0EBFF;  --vocab-ink:    #5334C9;
+  --grammar:      #17BFC0;  --grammar-soft:  #E2F8F8;  --grammar-ink:  #0A7B7C;
+  --activity:     #FF5FA2;  --activity-soft: #FFEBF3;  --activity-ink: #C42561;
+  --assess:       #3D2E8F;  --assess-soft:   #E9E5FA;  --assess-ink:   #3D2E8F;
+  --games:        #3BA0FF;  --games-soft:    #E6F2FF;  --games-ink:    #1567C4;
+
+  /* --- state -------------------------------------------------------------
+     Mint is reserved: it means finished, and it is used for nothing else. */
+  --ok:           #0FB98E;  --ok-soft:     #E0F8F1;  --ok-ink:      #067A5E;
+  --warn:         #C77800;  --warn-soft:   #FFF3DF;
+  --bad:          #E23D6D;  --bad-soft:    #FFE9EF;
+  --locked:       #A9A2C7;  --locked-soft: #F2EFFB;
+
+  /* --- type --------------------------------------------------------------
+     Fraunces is set soft and slightly wonky: a serif with warmth rather than
+     a formal one, so headings feel written rather than typeset. Jakarta
+     carries everything that has to be read quickly. */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-ui:      'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ar:      'IBM Plex Sans Arabic', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --wonk: 'SOFT' 60, 'WONK' 1;
+
+  /* --- spacing: a 4px rhythm, named by use not by number ----------------- */
+  --s1: .25rem; --s2: .5rem;  --s3: .75rem; --s4: 1rem;
+  --s5: 1.5rem; --s6: 2rem;   --s7: 3rem;   --s8: 4rem;
+
+  /* --- radius: chosen by what the thing is, not one value everywhere ----- */
+  --r-chip:  999px;
+  --r-sm:    10px;
+  --r-md:    16px;
+  --r-lg:    22px;
+  --r-xl:    30px;
+
+  /* --- elevation: tinted violet, never black -----------------------------
+     Three roles only: resting, lifted, and the one hero surface. */
+  --e1: 0 1px 2px rgba(43, 24, 94, .05), 0 1px 1px rgba(43, 24, 94, .03);
+  --e2: 0 6px 18px rgba(43, 24, 94, .07), 0 1px 3px rgba(43, 24, 94, .04);
+  --e3: 0 16px 40px rgba(43, 24, 94, .16), 0 3px 10px rgba(43, 24, 94, .07);
+  --e-press: inset 0 2px 6px rgba(43, 24, 94, .12);
+
+  /* The single gradient in the product, on the single most important card. */
+  /* Every stop is dark enough for white text: the label runs the full width. */
+  --hero-grad: linear-gradient(118deg, #6C4CE0 0%, #8B4FDB 46%, #CE2970 100%);
+
+  /* --- motion ------------------------------------------------------------
+     Four durations and three curves, so movement across the product feels
+     like one hand made it. `--pop` overshoots a little; nothing else does. */
+  --t-tap:   120ms;
+  --t-state: 200ms;
+  --t-enter: 320ms;
+  --t-party: 520ms;
+  --ease:      cubic-bezier(.2, .8, .2, 1);
+  --ease-in:   cubic-bezier(.4, 0, .8, .2);
+  --pop:       cubic-bezier(.34, 1.4, .64, 1);
+
+  --page-max: 68rem;
+  --read-max: 44rem;
 }
 
+/* Colour code as data, so a component can be told which family it belongs to
+   with one attribute instead of a branch per case. */
+[data-kind='vocabulary'] { --kind: var(--vocab);    --kind-soft: var(--vocab-soft);    --kind-ink: var(--vocab-ink); }
+[data-kind='grammar']    { --kind: var(--grammar);  --kind-soft: var(--grammar-soft);  --kind-ink: var(--grammar-ink); }
+[data-kind='activity']   { --kind: var(--activity); --kind-soft: var(--activity-soft); --kind-ink: var(--activity-ink); }
+[data-kind='assessment'] { --kind: var(--assess);   --kind-soft: var(--assess-soft);   --kind-ink: var(--assess-ink); }
+[data-kind='games']      { --kind: var(--games);    --kind-soft: var(--games-soft);    --kind-ink: var(--games-ink); }
+[data-kind='locked']     { --kind: var(--locked);   --kind-soft: var(--locked-soft);   --kind-ink: var(--ink-3); }
+[data-kind='done']       { --kind: var(--ok);       --kind-soft: var(--ok-soft);       --kind-ink: var(--ok-ink); }
+
 * { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.page { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-.center { max-width: 24rem; margin: 3rem auto; padding: 0 1rem; }
+/* Arabic curriculum content, wherever it appears. */
+[lang='ar'], [dir='rtl'] { font-family: var(--font-ar); line-height: 1.8; }
 
+/* ==========================================================================
+   Type scale
+   ========================================================================== */
+h1, h2, h3, .display {
+  font-family: var(--font-display);
+  /* The soft and wonk axes are the whole reason for this face: they take the
+     formality out of a serif without making it a novelty. */
+  font-variation-settings: var(--wonk);
+  font-weight: 700;
+  letter-spacing: -.005em;
+  text-wrap: balance;
+  margin: 0;
+}
+h1 { font-size: clamp(1.65rem, 5.5vw, 2.25rem); line-height: 1.1; }
+h2 { font-size: 1.2rem; line-height: 1.25; }
+h3 { font-size: 1rem; }
+
+/* A quiet label. Sentence case: the weight and the colour do the separating,
+   which is what a label is for — not a tracked-out shout above every heading. */
+.label { font-size: .8125rem; font-weight: 600; color: var(--ink-3); }
+.muted { color: var(--ink-3); font-size: .875rem; font-weight: 500; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+
+/* ==========================================================================
+   Layout
+   ========================================================================== */
+.page { max-width: var(--page-max); margin: 0 auto; padding: var(--s5) var(--s4) var(--s8); }
+.center { max-width: 25rem; margin: 0 auto; padding: var(--s4); }
+.row { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+.between { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); flex-wrap: wrap; }
+.stack > * + * { margin-top: var(--s4); }
+.grid { display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.cards { display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ==========================================================================
+   Surfaces
+   ========================================================================== */
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s4);
+}
+.card.raised { box-shadow: var(--e2); border-color: transparent; }
+
+/* ==========================================================================
+   Controls
+   ========================================================================== */
+button, .button-link {
+  font-family: var(--font-ui);
+  font-size: .9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  /* 44px minimum, so every control is a real touch target. */
+  min-height: 2.75rem;
+  padding: var(--s2) var(--s4);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background var(--t-state) var(--ease), border-color var(--t-state) var(--ease),
+              transform var(--t-tap) var(--ease), box-shadow var(--t-state) var(--ease);
+}
+button:hover:not(:disabled), .button-link:hover { background: var(--ground-2); }
+/* Tactile: the control moves under the finger, then settles. */
+button:active:not(:disabled) { transform: translateY(1px) scale(.985); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+button.primary {
+  background: var(--brand); border-color: var(--brand); color: #fff;
+  box-shadow: 0 2px 0 var(--brand-ink);
+}
+button.primary:hover:not(:disabled) { background: var(--brand-ink); border-color: var(--brand-ink); }
+button.primary:active:not(:disabled) { box-shadow: none; transform: translateY(2px) scale(.99); }
+
+button.signal {
+  background: var(--signal); border-color: var(--signal); color: #fff;
+  box-shadow: 0 2px 0 #D8431F;
+}
+button.signal:hover:not(:disabled) { filter: brightness(1.05); }
+button.signal:active:not(:disabled) { box-shadow: none; transform: translateY(2px) scale(.99); }
+
+button.ghost { background: transparent; border-color: transparent; }
+button.ghost:hover:not(:disabled) { background: var(--ground-2); }
+
+button.danger { color: var(--bad); border-color: #F0C6C2; background: var(--surface); }
+button.danger:hover:not(:disabled) { background: var(--bad-soft); }
+
+button.small { min-height: 2.25rem; padding: var(--s1) var(--s3); font-size: .8125rem; }
+
+/* One focus treatment everywhere, visible on every ground. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
 }
 
-h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
-h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
-.muted { color: var(--muted); font-size: .875rem; }
-
-label { display: block; font-size: .875rem; font-weight: 600; margin: .75rem 0 .25rem; }
-input {
-  width: 100%; padding: .6rem .7rem; font-size: 1rem;
-  border: 1px solid var(--border); border-radius: 8px; background: #fff; color: inherit;
+/* ==========================================================================
+   Forms
+   ========================================================================== */
+label { display: block; font-size: .8125rem; font-weight: 600; color: var(--ink-2); margin: var(--s3) 0 var(--s1); }
+input, textarea, select {
+  width: 100%;
+  font: inherit;
+  padding: var(--s3);
+  min-height: 2.75rem;
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color var(--t-state) var(--ease), box-shadow var(--t-state) var(--ease);
 }
-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
-
-button {
-  font: inherit; font-weight: 600; cursor: pointer;
-  padding: .55rem .9rem; border-radius: 8px;
-  border: 1px solid var(--border); background: #fff; color: var(--text);
+input:focus, textarea:focus, select:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px var(--brand-soft);
+  outline: none;
 }
-/*
- * The plain hover, and then the coloured buttons put back.
- *
- * `button:hover:not(:disabled)` is more specific than `button.primary`, so on
- * its own it repainted every primary button light grey while the text stayed
- * white — unreadable, on every "Sign in", "Save" and "Send" in the platform.
- * The coloured rules below are written with matching specificity so they win
- * on hover rather than losing to it.
- */
-button:hover:not(:disabled) { background: #f3f4f6; }
-button:disabled { opacity: .55; cursor: not-allowed; }
-button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
-button.primary:hover:not(:disabled) {
-  background: var(--primary);
-  filter: brightness(1.08);
-}
-button.danger:hover:not(:disabled) { background: var(--danger-bg); }
-button.danger { color: var(--danger); border-color: #f3c4c0; }
-button.small { padding: .35rem .6rem; font-size: .8125rem; }
+.fieldset { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s4); }
 
-.row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
-.between { display: flex; justify-content: space-between; align-items: center; gap: var(--gap); flex-wrap: wrap; }
-.stack > * + * { margin-top: var(--gap); }
-
-.alert { padding: .7rem .85rem; border-radius: 8px; font-size: .9rem; }
-.alert.error { background: var(--danger-bg); color: var(--danger); }
-.alert.ok { background: var(--success-bg); color: var(--success); }
-.alert.warn { background: var(--warning-bg); color: var(--warning); }
-
+/* ==========================================================================
+   Status: never colour alone. Each carries a glyph or a label too.
+   ========================================================================== */
 .badge {
-  display: inline-block; padding: .15rem .5rem; border-radius: 999px;
-  font-size: .75rem; font-weight: 700;
+  display: inline-flex; align-items: center; gap: var(--s1);
+  font-size: .75rem; font-weight: 700; letter-spacing: .01em;
+  padding: .2rem .55rem; border-radius: var(--r-chip);
+  background: var(--ground-2); color: var(--ink-2);
 }
-.badge.active { background: var(--success-bg); color: var(--success); }
-.badge.disabled { background: var(--warning-bg); color: var(--warning); }
-.badge.deleted { background: var(--danger-bg); color: var(--danger); }
+.badge.active  { background: var(--ok-soft);   color: var(--ok); }
+.badge.warn    { background: var(--warn-soft); color: var(--warn); }
+.badge.bad     { background: var(--bad-soft);  color: var(--bad); }
+.badge.disabled{ background: var(--locked-soft); color: var(--locked); }
 
-/* The table scrolls inside its own box, so the page never scrolls sideways. */
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: .9375rem; }
-th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--border); }
-th { font-size: .8125rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-tr.is-deleted td { opacity: .55; }
-
-code.temp {
-  display: inline-block; font-size: 1.05rem; font-weight: 700;
-  padding: .3rem .55rem; background: #fff; border: 1px dashed var(--border); border-radius: 6px;
-  letter-spacing: .06em;
+.alert {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  font-size: .9rem;
+  border: 1px solid transparent;
+  border-left-width: 4px;
 }
+.alert.error { background: var(--bad-soft);  color: #8E241E; border-left-color: var(--bad); }
+.alert.ok    { background: var(--ok-soft);   color: #0B6B31; border-left-color: var(--ok); }
+.alert.warn  { background: var(--warn-soft); color: #8A5106; border-left-color: var(--warn); }
 
-button, .badge { white-space: nowrap; }
-
-/*
- * On a phone a wide table either clips its buttons or forces sideways
- * scrolling, so each student becomes a card instead. Same markup, so there is
- * no second version of the list to keep in step.
- */
-@media (max-width: 40rem) {
-  .hide-sm { display: none; }
-
-  table, tbody, tr, td { display: block; width: 100%; }
-  thead { display: none; }
-
-  tr {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: .75rem;
-    margin-bottom: .75rem;
-  }
-
-  td { border: none; padding: .2rem 0; }
-
-  /* Name first and prominent, then the label/value pairs. */
-  td:first-child { font-weight: 700; font-size: 1.05rem; padding-bottom: .35rem; }
-
-  td[data-label]::before {
-    content: attr(data-label) ": ";
-    color: var(--muted);
-    font-size: .8125rem;
-    font-weight: 600;
-  }
-
-  td:last-child { padding-top: .6rem; }
-  td:last-child .row { gap: .4rem; }
-  td:last-child button { flex: 1 1 auto; min-width: 7.5rem; }
-}
-
-/*
- * Phase 5 — the student's screens.
- *
- * Sizes are relative and the grids collapse by available width, so the same
- * markup serves a phone, a tablet and a desktop without a second layout to
- * keep in step (SRS 42).
- */
-textarea {
-  width: 100%; padding: .6rem .7rem; font: inherit;
-  border: 1px solid var(--border); border-radius: 8px; background: #fff; color: inherit;
-}
-textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
-
-fieldset input[type='radio'], input[type='checkbox'] { width: auto; }
-
-/* A bar showing how far through something a student is. */
+/* ==========================================================================
+   Meter — one progress language for the whole product
+   ========================================================================== */
 .meter {
-  height: .5rem; border-radius: 999px; background: #e5e7eb; overflow: hidden;
+  position: relative; height: .5rem; border-radius: var(--r-chip);
+  background: var(--ground-2); overflow: hidden;
 }
-.meter > span { display: block; height: 100%; background: var(--primary); }
+.meter > span {
+  display: block; height: 100%; border-radius: inherit;
+  /* Deliberately NOT var(--kind): this bar means "how far through the unit",
+     and a bar that repaints when she changes tab reads as a different fact. */
+  background: var(--brand);
+  transition: width var(--t-party) var(--ease);
+}
+.meter[data-done='true'] > span { background: var(--ok); }
 
-/* Cards that reflow: three across on a desktop, two on a tablet, one on a
-   phone — decided by the space available, not by a device guess. */
-.grid {
-  display: grid; gap: var(--gap);
-  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+/* ==========================================================================
+   Motion primitives
+   ========================================================================== */
+@keyframes rise   { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes popIn  { from { opacity: 0; transform: scale(.9); }       to { opacity: 1; transform: none; } }
+@keyframes nudge  { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@keyframes pulse  { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.12); opacity: .75; } }
+@keyframes sheen  { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/*
+ * Motion that nobody asked for happens in exactly one place: the journey
+ * assembling itself when a student opens Home. Everywhere else, movement is a
+ * reply to something she did — a tap, an answer, an unlock. Entrances on every
+ * section and a lift on every card are the generic default, and they read as
+ * one.
+ */
+.journey-in > * { animation: rise var(--t-enter) var(--ease) both; }
+.journey-in > *:nth-child(1) { animation-delay: 40ms; }
+.journey-in > *:nth-child(2) { animation-delay: 110ms; }
+.journey-in > *:nth-child(3) { animation-delay: 180ms; }
+.journey-in > *:nth-child(4) { animation-delay: 250ms; }
+.journey-in > *:nth-child(n+5) { animation-delay: 300ms; }
+.pop { animation: popIn var(--t-state) var(--pop) both; }
+.shake { animation: nudge 320ms var(--ease); }
+
+/* Skeletons, so a loading screen is never blank. */
+.skeleton {
+  border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--ground-2) 25%, #F2F5FC 37%, var(--ground-2) 63%);
+  background-size: 200% 100%;
+  animation: sheen 1.3s linear infinite;
 }
 
-/* A vocabulary card. Arabic sets its own direction, the page stays English. */
-.word-en { font-size: 1.35rem; font-weight: 700; }
-.word-ar { font-size: 1.15rem; }
-
-.choice {
-  display: flex; gap: .6rem; align-items: flex-start;
-  padding: .6rem .7rem; border: 1px solid var(--border); border-radius: 8px;
-  cursor: pointer; background: #fff;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
-.choice:hover { background: #f9fafb; }
-.choice.picked { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
-.choice.right { border-color: var(--success); background: var(--success-bg); }
-.choice.wrong { border-color: var(--danger); background: var(--danger-bg); }
-.choice input { width: auto; margin-top: .2rem; }
 
-.tabs { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+/* ==========================================================================
+   APP SHELL
+   The student carries a bottom bar on a phone and a top bar on a desk; the
+   teacher always gets the top bar, because her work is wider than her thumb.
+   ========================================================================== */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  background: rgba(255, 255, 255, .92);
+  backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner {
+  max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s3) var(--s4);
+  display: flex; align-items: center; gap: var(--s3);
+}
+.brandmark { display: flex; align-items: center; gap: var(--s2); font-family: var(--font-ui); font-weight: 800; letter-spacing: -.02em; }
+.brandmark .mark {
+  width: 1.75rem; height: 1.75rem; border-radius: 9px;
+  background: var(--brand); color: #fff;
+  display: grid; place-items: center; flex: none;
+}
+.brandmark .name { font-size: 1rem; line-height: 1; }
+.brandmark .sub { display: block; font-family: var(--font-ui); font-size: .6875rem; font-weight: 700;
+  letter-spacing: .01em; color: var(--signal-ink); }
+
+.avatar {
+  width: 2rem; height: 2rem; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  background: var(--brand); color: #fff;
+  font-weight: 700; font-size: .875rem;
+}
+
+.navbar {
+  position: fixed; inset: auto 0 0 0; z-index: 40;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: saturate(1.4) blur(12px);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.navbar a {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: var(--s2) 0 var(--s3);
+  font-size: .6875rem; font-weight: 600; color: var(--ink-3);
+  text-decoration: none; min-height: 3.25rem;
+  transition: color var(--t-state) var(--ease);
+}
+.navbar a[aria-current='page'] { color: var(--brand); }
+.navbar a[aria-current='page'] .ico { transform: translateY(-1px) scale(1.08); }
+.navbar .ico { transition: transform var(--t-state) var(--pop); }
+.has-navbar { padding-bottom: 5.5rem; }
+@media (min-width: 48rem) { .avatar {
+  width: 2rem; height: 2rem; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  background: var(--brand); color: #fff;
+  font-weight: 700; font-size: .875rem;
+}
+
+.navbar { display: none; } .has-navbar { padding-bottom: var(--s8); } }
+
+.ico { width: 1.25rem; height: 1.25rem; flex: none; }
+.ico-lg { width: 1.5rem; height: 1.5rem; }
+
+/* ==========================================================================
+   THE JOURNEY — student home
+   A route line with a station per unit. The line is the spine of the screen:
+   it is what makes four units read as one course rather than four cards.
+   ========================================================================== */
+.journey { position: relative; padding-left: 2.75rem; }
+.journey::before {
+  content: ''; position: absolute; left: 1.1rem; top: .5rem; bottom: 2rem;
+  width: 3px; border-radius: 2px;
+  background: linear-gradient(var(--line-2), var(--line-2));
+}
+.station { position: relative; margin-bottom: var(--s4); }
+.station::before {
+  content: ''; position: absolute; left: -2.1rem; top: 1.4rem;
+  width: 1rem; height: 1rem; border-radius: 50%;
+  background: var(--surface); border: 3px solid var(--line-2);
+  z-index: 1; transition: background var(--t-state) var(--ease), border-color var(--t-state) var(--ease);
+}
+.station[data-state='current']::before { border-color: var(--signal); background: var(--signal); box-shadow: 0 0 0 6px var(--signal-soft); }
+.station[data-state='done']::before    { border-color: var(--ok); background: var(--ok); }
+.station[data-state='locked']::before  { border-color: var(--line-2); background: var(--ground-2); }
+
+.station-card {
+  background: var(--surface);
+  display: block; width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: var(--s4);
+  min-height: auto; box-shadow: var(--e1);
+  transition: transform var(--t-state) var(--ease), box-shadow var(--t-state) var(--ease),
+              border-color var(--t-state) var(--ease);
+}
+.station-card:hover:not(:disabled) { background: var(--surface); border-color: var(--line-2); }
+.station-card:active:not(:disabled) { transform: translateY(0) scale(.995); }
+.station[data-state='current'] .station-card {
+  background: var(--surface); border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft), var(--e2); }
+.station[data-state='locked'] .station-card {
+  background: var(--surface); background: var(--ground-2); border-style: dashed; box-shadow: none; }
+
+.station-no { font-size: .75rem; font-weight: 700; color: var(--ink-3); }
+.station-title {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 1.35rem; font-weight: 700; letter-spacing: -.005em; line-height: 1.15;
+}
+
+/* The four parts of a unit, as a compact readout rather than a table. */
+.parts { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); margin: 0; }
+.parts > div { text-align: center; padding: var(--s2) var(--s1); border-radius: var(--r-sm); background: var(--ground); }
+.parts dt { font-size: .75rem; font-weight: 500; color: var(--ink-3); margin: 0; }
+.parts dd { margin: 2px 0 0; font-size: .8125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
+   THE STEP TRACK — the four parts of a unit, as the sequence they are
+   Words, then grammar, then the activity, then the test. The order is not a
+   presentation choice: it is what the server enforces, so drawing it as four
+   equal boxes threw away the most useful thing the card knows. Here the
+   connector between two steps fills only when the earlier one is finished,
+   which makes "where am I, what is next, how far along" one glance.
+   Every state drawn here is a state the API actually reports. Nothing is
+   shown as locked unless it really is.
+   ========================================================================== */
+.track { display: flex; align-items: flex-start; gap: 0; margin: 0; padding: 0; }
+.track-step {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: var(--s2); position: relative; min-width: 0;
+  padding-inline: var(--s1);
+}
+/* The rail runs behind the nodes, drawn per-step so it can fill per-step. */
+.track-step::before,
+.track-step::after {
+  content: ''; position: absolute; top: 1.125rem; height: 3px;
+  background: var(--ground-2); border-radius: 2px;
+}
+.track-step::before { left: 0;  right: 50%; margin-right: 1.375rem; }
+.track-step::after  { left: 50%; right: 0;  margin-left: 1.375rem; }
+.track-step:first-child::before,
+.track-step:last-child::after { display: none; }
+/* A filled connector means the step behind it is done — the pen has run on. */
+.track-step[data-fill-before='true']::before,
+.track-step[data-fill-after='true']::after { background: var(--ok); }
+
+.track-node {
+  width: 2.25rem; height: 2.25rem; border-radius: 50%;
+  display: grid; place-items: center; flex: none; position: relative; z-index: 1;
+  background: var(--surface); color: var(--kind, var(--ink-4));
+  border: 2px solid var(--ground-2);
+  transition: transform var(--t-state) var(--pop), background var(--t-state) var(--ease),
+              border-color var(--t-state) var(--ease), color var(--t-state) var(--ease);
+}
+.track-step[data-state='done'] .track-node {
+  background: var(--ok); border-color: var(--ok); color: #fff;
+}
+.track-step[data-state='current'] .track-node {
+  background: var(--kind); border-color: var(--kind); color: #fff;
+  box-shadow: 0 0 0 5px var(--kind-soft);
+}
+.track-step[data-state='todo'] .track-node { color: var(--ink-3); }
+.track-step[data-state='locked'] .track-node {
+  border-style: dashed; border-color: var(--line-2); color: var(--locked);
+}
+/* Nothing built here yet: an outline with no promise in it. */
+.track-step[data-state='empty'] .track-node { border-color: var(--line); color: var(--ink-4); opacity: .55; }
+
+.track-label {
+  font-size: .6875rem; font-weight: 600; color: var(--ink-3);
+  text-align: center; line-height: 1.2; max-width: 100%;
+}
+.track-value {
+  font-size: .75rem; font-weight: 600; color: var(--ink-3); text-align: center;
+  font-variant-numeric: tabular-nums; line-height: 1.2;
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.track-step[data-state='done'] .track-value { color: var(--ok-ink); font-weight: 700; }
+.track-step[data-state='current'] .track-value { color: var(--kind-ink, var(--ink)); font-weight: 700; }
+.track-step[data-state='locked'] .track-value,
+.track-step[data-state='empty'] .track-value { color: var(--ink-3); font-weight: 600; }
+
+/* "What do I do now?" — one clear next action, never a guess. */
+.next-up {
+  display: flex; align-items: center; gap: var(--s4); text-align: left;
+  /* The only gradient in the product. It is here because this is the one
+     card she is meant to press, and nothing else may compete with it. */
+  background: var(--hero-grad); color: #fff;
+  border-radius: var(--r-xl); padding: var(--s5);
+  box-shadow: var(--e3);
+  transition: transform var(--t-tap) var(--ease), box-shadow var(--t-state) var(--ease);
+}
+.next-up:active { transform: translateY(2px) scale(.995); box-shadow: var(--e2); }
+.next-up .what {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 1.3rem; font-weight: 700; letter-spacing: -.005em; display: block;
+}
+.next-up .why { font-size: .875rem; color: rgba(255, 255, 255, .93); }
+/* Her progress through the step she is on, on the card that names it. */
+.next-up .tally i { background: rgba(255, 255, 255, .3); }
+.next-up .tally i[data-on='true'] { background: #fff; }
+.next-up .go {
+  width: 2.5rem; height: 2.5rem; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, .18); color: #fff;
+}
+.next-up .badge-icon {
+  width: 3rem; height: 3rem; border-radius: 50%; flex: none;
+  display: grid; place-items: center; background: #fff; color: var(--kind, var(--brand));
+}
+
+/* --- Home at desktop width ---------------------------------------------
+   One column stretched to 1280px turns the step track into a sparse row and
+   strands the unit percentage at the far edge. On a wide screen the two
+   things she reads are different questions — "what now?" and "how far?" — so
+   they become two columns, and the first one stays with her as she scrolls. */
+/* On a phone the two blocks simply stack, with the page's own rhythm. Both
+   columns are grids at every width, so spacing comes from one place — mixing
+   grid gap with .stack's margins doubled it at desktop. */
+.home-grid { display: grid; gap: var(--s5); }
+.home-aside, .home-main { display: grid; gap: var(--s4); align-content: start; }
+/* An underline is a mark on a phrase, so it stops where the phrase does. */
+.home-main > .marked-title { justify-self: start; }
+@media (min-width: 64rem) {
+  .home-grid {
+    grid-template-columns: 22rem minmax(0, 1fr);
+    gap: var(--s7); align-items: start;
+  }
+  .home-aside { position: sticky; top: 5rem; }
+}
+
+/* --- Home: the greeting, and the run of units -------------------------- */
+.greeting { display: grid; gap: var(--s2); }
+.greeting-line { margin: 0; color: var(--ink-3); font-size: .9375rem; max-width: 34ch; }
+
+.station-pct {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 1.5rem; font-weight: 700; color: var(--brand); line-height: 1;
+}
+/* Finished is the one place mint appears on this screen, so it needs no
+   other decoration to be read. */
+.finished-mark {
+  display: inline-flex; align-items: center; gap: var(--s1); flex: none;
+  color: var(--ok-ink); font-size: .8125rem; font-weight: 700;
+}
+
+/* Revision sits beside the course, not in it: same family, lighter build,
+   and no progress language anywhere on it. */
+.aside-card {
+  width: 100%; text-align: left; display: flex; align-items: center; gap: var(--s3);
+  background: transparent; border: 1.5px dashed var(--line-2);
+  border-radius: var(--r-lg); padding: var(--s4);
+}
+.aside-card:hover { background: var(--surface); border-color: var(--kind, var(--line-2)); }
+.aside-icon {
+  width: 2.5rem; height: 2.5rem; border-radius: var(--r-sm); flex: none;
+  display: grid; place-items: center;
+  background: var(--kind-soft); color: var(--kind);
+}
+.aside-title {
+  display: block; font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 1.05rem; font-weight: 700; color: var(--ink);
+}
+
+/* ==========================================================================
+   LEARNING COMPONENT TABS
+   Colour tells her which kind of work she is in; the lock tells her what is
+   not open yet and why.
+   ========================================================================== */
+.tabs {
+  display: flex; gap: var(--s2); overflow-x: auto; padding-bottom: var(--s2);
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+/* A cut-off word is a bug; a fade is a scrollbar she can read. */
+.tabs-wrap { position: relative; }
+.tabs-wrap::after {
+  content: ''; position: absolute; top: 0; bottom: var(--s2); right: 0; width: 2rem;
+  background: linear-gradient(to right, transparent, var(--ground));
+  pointer-events: none;
+}
+@media (min-width: 48rem) { .tabs-wrap::after { display: none; } }
 .tabs button {
-  border: none; border-bottom: 2px solid transparent; border-radius: 0;
-  background: none; padding: .6rem .8rem;
+  flex: none; min-height: 2.5rem; padding: var(--s2) var(--s3);
+  border-radius: var(--r-chip); border: 1.5px solid var(--line);
+  background: var(--surface); color: var(--ink-2); font-size: .875rem; font-weight: 600;
 }
-.tabs button[aria-selected='true'] { border-bottom-color: var(--primary); color: var(--primary); }
-
-/* The three parts of a unit, on its card. */
-.parts { display: flex; gap: 1.25rem; margin: 0; }
-.parts > div { min-width: 0; }
-.parts dt {
-  font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--muted); margin: 0 0 .1rem;
+.tabs button[aria-selected='true'] {
+  background: var(--kind-soft, var(--brand-soft));
+  border-color: var(--kind, var(--brand));
+  color: var(--kind-ink, var(--brand-ink));
 }
-.parts dd { margin: 0; font-weight: 700; font-size: .95rem; }
+.tabs button:disabled { background: var(--ground-2); border-style: dashed; color: var(--locked); opacity: 1; }
 
-/* Worked examples under a grammar explanation. */
-.examples { margin: .5rem 0 0; padding-inline-start: 1.1rem; }
-.examples li { margin-bottom: .25rem; }
+/* A locked area is an invitation, not a dead end. */
+.locked-note {
+  display: flex; gap: var(--s3); align-items: flex-start;
+  background: var(--locked-soft); border: 1.5px dashed var(--line-2);
+  border-radius: var(--r-lg); padding: var(--s5); text-align: left;
+}
+.locked-note .ico { color: var(--locked); margin-top: 2px; }
+.locked-note strong { display: block; font-family: var(--font-display); font-size: 1.0625rem; }
 
-/* A message in a conversation. */
-.msg { padding: .7rem .85rem; border-radius: 10px; max-width: 44ch; }
-.msg.from-them { background: #fff; border: 1px solid var(--border); }
-.msg.from-me { background: var(--primary); color: var(--primary-text); margin-inline-start: auto; }
-.msg .who { font-size: .72rem; opacity: .8; margin-bottom: .2rem; }
-.msg .when { font-size: .7rem; opacity: .7; margin-top: .3rem; }
-.thread { display: flex; flex-direction: column; gap: .5rem; }
+/* ==========================================================================
+   VOCABULARY — the word is the hero
+   ========================================================================== */
+.word-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-xl); padding: var(--s5);
+  box-shadow: var(--e2); text-align: center;
+  display: flex; flex-direction: column; gap: var(--s3); align-items: center;
+}
+.word-en { font-family: var(--font-display); font-size: clamp(2rem, 9vw, 3rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
+.word-ar { font-family: var(--font-ar); font-size: clamp(1.25rem, 5vw, 1.75rem); color: var(--ink-2); direction: rtl; }
+.word-picture { max-width: 100%; max-height: 12rem; border-radius: var(--r-lg); object-fit: contain; }
 
-/* ---------------------------------------------------------------------------
- * Answering a question.
- *
- * A choice is a card she taps, not a radio button beside a line of text: this
- * is a phone screen for eleven-year-olds. That makes every choice a <button>,
- * which brings the same specificity trap the note beside `button.primary`
- * describes — `button:hover:not(:disabled)` (0,2,1) outweighs `.choice.right`
- * (0,2,0) and would repaint a correct answer grey the moment a cursor crossed
- * it. The marked states below are written as `button.choice.right` (0,3,0) so
- * they hold on hover.
- * ------------------------------------------------------------------------- */
+/* Seen / heard / checked, as three lamps rather than a checklist form. */
+.lamps { display: flex; gap: var(--s2); }
+.lamp {
+  display: flex; align-items: center; gap: var(--s1);
+  font-size: .75rem; font-weight: 600; color: var(--ink-3); padding: .25rem .6rem; border-radius: var(--r-chip);
+  background: var(--ground-2); transition: all var(--t-state) var(--ease);
+}
+.lamp[data-on='true'] { background: var(--vocab-soft); color: var(--vocab); }
+.lamp[data-on='true'] .dot { background: var(--vocab); }
+.dot { width: .4rem; height: .4rem; border-radius: 50%; background: var(--ink-4); flex: none; }
+
+.speak-btn {
+  width: 4rem; height: 4rem; border-radius: 50%; padding: 0;
+  background: var(--vocab); border-color: var(--vocab); color: #fff; box-shadow: var(--e2);
+}
+.speak-btn:hover:not(:disabled) { background: var(--vocab); filter: brightness(1.06); }
+.speak-btn[data-playing='true'] { animation: pulse 1s var(--ease) infinite; }
+
+/* ==========================================================================
+   QUESTIONS — answering should feel like playing, not filling a form
+   ========================================================================== */
+.choices, .choice-stack { display: grid; gap: var(--s3); }
+@media (min-width: 32rem) { .choices { grid-template-columns: 1fr 1fr; } }
 
 button.choice {
-  width: 100%; text-align: start; font-weight: 400;
-  min-height: 2.75rem; /* comfortably tappable with a finger */
+  width: 100%; min-height: 3.5rem; padding: var(--s3) var(--s4);
+  text-align: left; justify-content: flex-start;
+  font-size: 1rem; font-weight: 600;
+  border: 2px solid var(--line-2); border-radius: var(--r-md);
+  background: var(--surface); box-shadow: 0 2px 0 var(--line);
 }
-button.choice:hover:not(:disabled) { background: #f9fafb; }
-button.choice.picked,
-button.choice.picked:hover:not(:disabled) {
-  border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary);
-  background: #fff;
-}
-button.choice.right,
-button.choice.right:hover:not(:disabled) {
-  border-color: var(--success); background: var(--success-bg);
-}
-button.choice.wrong,
-button.choice.wrong:hover:not(:disabled) {
-  border-color: var(--danger); background: var(--danger-bg);
-}
-button.choice:disabled { opacity: 1; cursor: default; }
+button.choice:hover:not(:disabled) { border-color: var(--ink-4); background: var(--surface); }
+button.choice[aria-pressed='true'] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+/* Specificity note: written as button.choice.x so the generic :hover cannot
+   repaint a marked answer — that bug has bitten this file before. */
+button.choice.right { border-color: var(--ok); background: var(--ok-soft); color: #0B6B31; box-shadow: 0 2px 0 #B9E6C9; }
+button.choice.wrong { border-color: var(--bad); background: var(--bad-soft); color: #8E241E; box-shadow: 0 2px 0 #F3C9C5; }
+button.choice:active:not(:disabled) { box-shadow: none; transform: translateY(2px); }
 
-.choice-stack { gap: .4rem; }
-.choice-stack > * + * { margin-top: 0; }
+/* True / false: two deliberate, opposing choices. */
+button.big-choice {
+  min-height: 6rem; flex-direction: column; gap: var(--s2);
+  font-family: var(--font-display); font-size: 1.25rem; font-weight: 700;
+  border: 2px solid var(--line-2); border-radius: var(--r-lg);
+  box-shadow: 0 3px 0 var(--line);
+}
+button.big-choice[aria-pressed='true'] { border-color: var(--brand); background: var(--brand-soft); }
+button.big-choice.right { border-color: var(--ok); background: var(--ok-soft); }
+button.big-choice.wrong { border-color: var(--bad); background: var(--bad-soft); }
+button.big-choice:active:not(:disabled) { box-shadow: none; transform: translateY(3px); }
 
-/* Short answers — a letter, a word — read better as a row of tiles. */
-.tile-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+/* True or false: two opposed choices, always side by side. The glyphs are the
+   worksheet's shorthand, drawn neutral — the marking colours mean marked. */
+.tf-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.tf-glyph { color: var(--ink-3); display: grid; place-items: center; }
+button.big-choice[aria-pressed='true'] .tf-glyph { color: var(--brand); }
+button.big-choice.right .tf-glyph { color: var(--ok); }
+button.big-choice.wrong .tf-glyph { color: var(--bad); }
+
+/* Word tiles for ordering: as wide as the word they carry. */
+.word-bank { display: flex; gap: var(--s2); flex-wrap: wrap; }
+button.word-tile {
+  min-height: 2.75rem; padding: var(--s2) var(--s3); width: auto;
+  font-size: 1rem; font-weight: 600;
+  border: 2px solid var(--line-2); border-radius: var(--r-md);
+  background: var(--surface); box-shadow: 0 3px 0 var(--line);
+}
+button.word-tile.placed { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+button.word-tile.right { border-color: var(--ok); background: var(--ok-soft); color: #0B6B31; }
+button.word-tile.wrong { border-color: var(--bad); background: var(--bad-soft); color: #8E241E; }
+button.word-tile:active:not(:disabled) { box-shadow: none; transform: translateY(3px); }
+
+/* Letter tiles. Width is capped so they read as tiles, not as bars. */
+.tile-row { display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: center; }
 button.tile {
-  /* `button.choice` sets width:100%, which inside a flex row made every letter
-     tile take a line of its own — the stacked bars the tile layout exists to
-     avoid. `button.choice.tile` below matches its specificity and wins. */
-  min-width: 3rem; min-height: 2.75rem; text-align: center;
-  font-size: 1.05rem; font-weight: 600;
+  width: 3.25rem; height: 3.25rem; padding: 0;
+  font-family: var(--font-display); font-size: 1.375rem; font-weight: 800;
+  border: 2px solid var(--line-2); border-radius: var(--r-md);
+  box-shadow: 0 3px 0 var(--line);
 }
-button.choice.tile { width: auto; flex: 0 0 auto; }
-button.tile.placed { background: var(--primary); border-color: var(--primary); color: var(--primary-text); }
-button.tile.placed:hover:not(:disabled) { background: var(--primary); filter: brightness(1.08); }
-button.tile.placed.right, button.tile.placed.right:hover:not(:disabled) {
-  background: var(--success); border-color: var(--success); color: #fff;
-}
-button.tile.placed.wrong, button.tile.placed.wrong:hover:not(:disabled) {
-  background: var(--danger); border-color: var(--danger); color: #fff;
-}
+button.tile[aria-pressed='true'] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+button.tile.right { border-color: var(--ok); background: var(--ok-soft); }
+button.tile.wrong { border-color: var(--bad); background: var(--bad-soft); }
+button.tile:active:not(:disabled) { box-shadow: none; transform: translateY(3px); }
 
-button.big-choice { flex: 1 1 8rem; justify-content: center; font-size: 1.05rem; min-height: 3.25rem; }
+/* Matching: tap one side then the other. Drag is an extra, never the only way. */
+.match-columns { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+button.match-left, button.match-right {
+  width: 100%; min-height: 3rem; justify-content: flex-start; text-align: left;
+  border: 2px solid var(--line-2); border-radius: var(--r-md); font-size: .9375rem;
+}
+button.match-left[aria-pressed='true'], button.match-right[aria-pressed='true'] {
+  border-color: var(--brand); background: var(--brand-soft);
+}
+.match-partner { font-size: .75rem; font-weight: 700; color: var(--activity-ink); }
+button.match-left.right, button.match-right.right { border-color: var(--ok); background: var(--ok-soft); }
+button.match-left.wrong, button.match-right.wrong { border-color: var(--bad); background: var(--bad-soft); }
 
-/* The sentence she is building, in a word-ordering question. */
+/* Word ordering: the sentence assembles in a tray above the word bank. */
 .sentence-tray {
-  display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
-  min-height: 3.5rem; padding: .6rem;
-  border: 2px dashed var(--border); border-radius: 10px; background: #fff;
+  min-height: 4rem; display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center;
+  padding: var(--s3); border-radius: var(--r-md);
+  background: var(--ground); border: 2px dashed var(--line-2);
+}
+.sentence-tray:empty::after { content: 'Tap the words below to build the sentence'; color: var(--ink-3); font-size: .875rem; }
+
+.question-pictures { display: flex; gap: var(--s3); flex-wrap: wrap; justify-content: center; }
+.question-pictures img {
+  max-width: 100%; max-height: 14rem; width: auto; object-fit: contain;
+  border-radius: var(--r-md); background: #fff; border: 1px solid var(--line);
 }
 
-/* Matching: the two columns, side by side even on a narrow phone. */
-.match-columns { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-button.match-left { flex-direction: column; align-items: flex-start; gap: .15rem; }
-button.match-right.used { opacity: .5; }
-.match-partner { font-size: .8rem; color: var(--muted); }
+.answer-box { display: grid; gap: var(--s2); }
+.hint { font-size: .8125rem; color: var(--ink-3); }
+.result-verdict { font-family: var(--font-display); font-weight: 700; }
 
-.hint { font-size: .85rem; }
+/* ==========================================================================
+   GRAMMAR — a lesson, set to be read
+   The examples are the lesson. Most of them are transformations the teacher
+   writes out in full ("Ali cleans the car." becomes "The car is cleaned."),
+   so the pair is set as a pair and the result carries the pen mark.
+   ========================================================================== */
+.lesson { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.lesson-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3);
+  padding: var(--s5) var(--s5) 0;
+}
+.lesson-body {
+  padding: var(--s4) var(--s5) var(--s5);
+  max-width: 38em; font-size: .9375rem; line-height: 1.6; color: var(--ink-2);
+  white-space: pre-wrap;
+}
+/* The examples sit on the ruled ground of a worksheet, not in a card of their own. */
+.examples-set { margin: 0; list-style: none; border-top: 1px solid var(--line); background: var(--ground); padding: var(--s4) var(--s5); }
+.example { display: grid; gap: 2px; padding: var(--s2) 0; }
+.example + .example { border-top: 1px dashed var(--line-2); }
+.example .from { font-size: .9375rem; color: var(--ink-3); }
+.example .to {
+  font-size: 1rem; font-weight: 600; color: var(--ink);
+  box-shadow: inset 0 -.4em 0 var(--grammar-soft); width: fit-content;
+}
+/* A plain example — no transformation to show — reads as a single line. */
+.example.plain .to { font-weight: 500; box-shadow: none; color: var(--ink-2); }
 
-/* A picture that is part of a question, or of a word. */
-.question-pictures { display: flex; flex-wrap: wrap; gap: .5rem; }
-.question-pictures img, .word-picture {
-  max-width: 100%; max-height: 14rem; border-radius: 8px; border: 1px solid var(--border);
+/* Reading is the whole task here, so the control says exactly that, and the
+   finished state is the course's own tick rather than another coloured pill. */
+.read-state { display: flex; align-items: center; gap: var(--s2); font-size: .8125rem; font-weight: 600; color: var(--ok); }
+
+/* --- Answering: where she is, and what is left ------------------------- */
+/* The bar follows her down a page that is many screens long on a phone. */
+.running { position: sticky; top: 3.25rem; z-index: 20; }
+.running-in {
+  display: flex; align-items: center; gap: var(--s3);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: var(--s3) var(--s4); box-shadow: var(--e2);
+}
+.running-in .tally { flex: 1; }
+.running-in p { flex: none; font-variant-numeric: tabular-nums; }
+@media (max-width: 30rem) { .running-in .tally { display: none; } }
+
+.q-card { scroll-margin-top: 7rem; }
+/* When a paper comes back marked, the mark is on the edge of the answer —
+   the same place a pen would leave it. */
+.q-card[data-marked='right'] { border-left: 4px solid var(--ok); }
+.q-card[data-marked='wrong'] { border-left: 4px solid var(--bad); }
+.q-no { font-size: .75rem; font-weight: 600; color: var(--ink-3); }
+.q-prompt { margin: 0; font-size: 1.0625rem; font-weight: 600; line-height: 1.45; max-width: 40ch; }
+
+/* --- Past tries -------------------------------------------------------- */
+.tries { list-style: none; margin: 0; padding: 0; }
+.try {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3) 0; border-top: 1px solid var(--line);
+}
+.try:first-child { border-top: 0; }
+.try-score {
+  font-family: var(--font-display); font-size: 1.375rem; font-weight: 800;
+  min-width: 3.5rem; letter-spacing: -.02em;
+}
+.try-what { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.try-no { font-size: .875rem; font-weight: 600; }
+.try .mark { width: 1.5rem; height: 1.5rem; }
+.try .mark svg { width: .875rem; height: .875rem; }
+
+/* --- Result ------------------------------------------------------------ */
+.result-panel { text-align: center; align-items: center; }
+.result-panel > * { margin-inline: auto; }
+.result-panel .tries, .result-panel .marked-title { text-align: left; width: 100%; }
+.result-line {
+  font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;
+  letter-spacing: -.02em; margin: 0;
 }
 
-.answer-box { font-size: 1.05rem; padding: .6rem .7rem; }
-
-/* Passed or not, above the score. */
-.result-verdict { align-self: flex-start; font-size: .95rem; padding: .35rem .7rem; }
-
-/* A group of related fields in the teacher's forms. */
-.fieldset { border: 1px solid var(--border); border-radius: 8px; padding: .75rem; }
-.fieldset legend { padding: 0 .4rem; font-size: .9rem; }
-
-/* A link that acts as a button — an outward one, so it stays an anchor. */
-.button-link {
-  display: inline-block; font: inherit; font-weight: 600; text-decoration: none;
-  padding: .55rem .9rem; border-radius: 8px;
-  border: 1px solid var(--primary); background: var(--primary); color: var(--primary-text);
-}
-.button-link:hover { filter: brightness(1.08); }
-
-/*
- * A video keeps its shape on a phone as well as a laptop: the frame holds a
- * 16:9 box and the player fills it, rather than the player deciding.
- */
-.video-frame {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  background: #000;
-}
-
-.video-frame iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-
-/* A locked tab reads as "not yet", not as "broken". */
-.tabs button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-/* Memory Match: a grid that stays square-ish from phone to desktop. */
-.memory-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: .5rem;
-}
-
+/* ==========================================================================
+   GAMES
+   ========================================================================== */
+.memory-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr)); gap: var(--s2); }
 button.memory-card {
-  aspect-ratio: 1;
-  width: 100%;
-  font-size: 1rem;
-  font-weight: 600;
-  border-radius: 10px;
-  border: 2px solid var(--border);
-  background: var(--surface);
-  cursor: pointer;
-  padding: .25rem;
-  word-break: break-word;
+  aspect-ratio: 1; width: 100%; padding: var(--s1); min-height: 0;
+  font-size: .9375rem; font-weight: 700; word-break: break-word;
+  border: 2px solid var(--line-2); border-radius: var(--r-md);
+  background: var(--games); color: transparent;
+  box-shadow: var(--e1);
+  transition: transform var(--t-state) var(--pop), background var(--t-state) var(--ease);
+}
+button.memory-card::after { content: '?'; color: #fff; font-family: var(--font-display); font-size: 1.5rem; }
+button.memory-card.open {
+  background: var(--surface); color: var(--ink); border-color: var(--games);
+  transform: rotateY(180deg) scaleX(-1);
+}
+button.memory-card.open::after { content: none; }
+button.memory-card.done { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); transform: none; }
+
+/* ==========================================================================
+   ASSESSMENT
+   ========================================================================== */
+.exam-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: var(--s2); }
+.exam-rule { text-align: center; padding: var(--s3); border-radius: var(--r-md); background: var(--assess-soft); }
+.exam-rule b { display: block; font-family: var(--font-display); font-size: 1.5rem; color: var(--assess); }
+.exam-rule span { font-size: .75rem; color: var(--ink-3); }
+
+.score-ring { position: relative; width: 9rem; height: 9rem; margin: 0 auto; }
+.score-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+.score-ring .track { stroke: var(--ground-2); }
+.score-ring .fill { stroke: var(--kind, var(--assess)); stroke-linecap: round;
+  transition: stroke-dashoffset var(--t-party) var(--ease); }
+.score-ring .value {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--font-display); font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums;
 }
 
-button.memory-card.open {
-  background: var(--accent-soft, #eef4ff);
-  border-color: var(--accent, #3b6cf0);
+/* Celebration. Short, and only for a real milestone. */
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.confetti i {
+  position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px;
+  animation: fall 1.6s var(--ease-in) forwards;
 }
+@keyframes fall {
+  to { transform: translateY(105vh) rotate(680deg); opacity: 0; }
+}
+
+/* ==========================================================================
+   MESSAGES
+   ========================================================================== */
+.thread { display: flex; flex-direction: column; gap: var(--s3); max-height: 22rem; overflow-y: auto; padding-right: var(--s1); }
+.msg { max-width: 85%; padding: var(--s3); border-radius: var(--r-md); background: var(--ground-2); }
+.msg.mine { margin-left: auto; background: var(--brand); color: #fff; }
+.msg .who { font-size: .75rem; font-weight: 600; opacity: .8; }
+.msg .when { font-size: .6875rem; opacity: .7; }
+
+/* ==========================================================================
+   TEACHER — same DNA, calmer voice. No gamification here.
+   ========================================================================== */
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--s3); }
+.stat {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: var(--s4); border-top: 3px solid var(--kind, var(--brand));
+}
+.stat b { display: block; font-family: var(--font-display); font-size: 1.875rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat span { font-size: .8125rem; color: var(--ink-3); }
+
+table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+th { text-align: left; font-size: .8125rem; font-weight: 600; color: var(--ink-3);
+     padding: var(--s2) var(--s3); border-bottom: 1.5px solid var(--line-2); }
+td { padding: var(--s3); border-bottom: 1px solid var(--line); }
+tbody tr:hover { background: var(--ground); }
+tr.is-deleted { opacity: .55; }
+
+.examples { margin: 0; padding-left: var(--s5); }
+.examples li { margin-bottom: var(--s1); }
+.video-frame {
+  position: relative; width: 100%; aspect-ratio: 16 / 9;
+  border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--line); background: #000;
+}
+.video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); padding: .1rem .35rem; border-radius: 4px; }
+
+@media (max-width: 40rem) {
+  .hide-sm { display: none; }
+  .parts { grid-template-columns: repeat(2, 1fr); }
+  .match-columns { gap: var(--s2); }
+}
+
+/* ==========================================================================
+   "MARKED" — the signature device
+   The source material for this course is hand-marked worksheets: a coloured
+   pen underlines the live thing, circles the answer, ticks or crosses it.
+   That vocabulary is borrowed here and made precise. It is the one place the
+   design is allowed to be bold; everything around it stays quiet.
+   ========================================================================== */
+
+/* A stroke under the thing that is live. Drawn on, not faded in — a pen
+   travels across the page, so the mark grows from where it started. */
+.stroke { position: relative; }
+.stroke::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -.35rem; height: 3px;
+  border-radius: 2px; background: var(--kind, var(--brand));
+  transform: scaleX(0); transform-origin: left;
+  transition: transform var(--t-state) var(--ease);
+}
+.stroke[data-on='true']::after { transform: scaleX(1); }
+
+/* The heading of a section, marked the way a teacher marks a worksheet. */
+.marked-title {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 1.2rem; font-weight: 700;
+  letter-spacing: -.005em; padding-bottom: .3rem;
+  border-bottom: 3px solid var(--kind, var(--brand));
+  display: inline-block;
+}
+
+/* Tick and cross: the course's own marking language, so feedback speaks in a
+   vocabulary these students already read on paper. */
+.mark {
+  width: 1.75rem; height: 1.75rem; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+}
+.mark.tick  { background: var(--ok-soft);  color: var(--ok); }
+.mark.cross { background: var(--bad-soft); color: var(--bad); }
+.mark svg { width: 1rem; height: 1rem; }
+
+/* A row of marks instead of a bar, where the thing being counted is discrete
+   — words learned, questions right. Reads as ticking items off. */
+.tally { display: flex; gap: 3px; flex-wrap: wrap; }
+.tally i {
+  width: .75rem; height: .3rem; border-radius: 2px;
+  background: var(--ground-2); transition: background var(--t-state) var(--ease);
+}
+.tally i[data-on='true'] { background: var(--kind, var(--brand)); }

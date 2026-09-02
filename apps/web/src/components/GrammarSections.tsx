@@ -1,6 +1,38 @@
 'use client';
 
 import { api, apiUrl, LearnSection } from '@/lib/api';
+import { Icon } from './Icon';
+
+/**
+ * One worked example.
+ *
+ * Most grammar examples in this course are transformations: the teacher writes
+ * the original, an arrow, then the result. Splitting on the arrow lets the
+ * result be marked — which is what the pen would do on paper — instead of the
+ * pair arriving as one undifferentiated line of text.
+ *
+ * The split is on the text as the teacher wrote it. An example with no arrow
+ * is not a transformation and is left exactly as it is.
+ */
+function Example({ text }: { text: string }) {
+  const at = text.search(/[→>]{1,2}|=>/);
+  const arrow = text.match(/→|=>|-->|->/);
+  if (at < 0 || !arrow) {
+    return (
+      <li className="example plain">
+        <span className="to">{text}</span>
+      </li>
+    );
+  }
+  const from = text.slice(0, at).trim();
+  const to = text.slice(at + arrow[0].length).trim();
+  return (
+    <li className="example">
+      <span className="from">{from}</span>
+      <span className="to">{to}</span>
+    </li>
+  );
+}
 
 /**
  * The grammar for a unit.
@@ -18,8 +50,14 @@ export function GrammarSections({
 }) {
   if (sections.length === 0) {
     return (
-      <div className="card">
-        <p className="muted">Your teacher has not added the grammar for this unit yet.</p>
+      <div className="locked-note">
+        <Icon name="grammar" />
+        <div>
+          <strong>No grammar here yet</strong>
+          <p className="muted" style={{ margin: '.25rem 0 0' }}>
+            Your teacher is still writing this part. The words and the activity are ready now.
+          </p>
+        </div>
       </div>
     );
   }
@@ -33,45 +71,30 @@ export function GrammarSections({
   return (
     <div className="stack">
       {sections.map((section) => (
-        <div key={section.id} className="card stack" data-testid="section-card">
-          <div className="between">
-            <div>
-              <strong>{section.title ?? section.type.displayName}</strong>{' '}
-              <span className="muted">· {section.type.displayName}</span>
-            </div>
-            <div className="row">
-              {section.viewed ? (
-                <span className="badge active" data-testid="section-read">
-                  Read
+        <article key={section.id} className="lesson" data-testid="section-card">
+          <div className="lesson-head">
+            {/* The tab already says Grammar; repeating the type here would tell
+                her nothing she cannot see. Only the lesson's own name is set. */}
+            <h2 className="marked-title" style={{ margin: 0 }}>
+              {section.title ?? section.type.displayName}
+            </h2>
+            {section.viewed ? (
+              <span className="read-state" data-testid="section-read">
+                <span className="mark tick" aria-hidden="true">
+                  <Icon name="tick" />
                 </span>
-              ) : (
-                <button
-                  className="small"
-                  onClick={() => markViewed(section)}
-                  data-testid="mark-read"
-                >
-                  Mark as read
-                </button>
-              )}
-            </div>
+                Read
+              </span>
+            ) : null}
           </div>
 
           {section.body ? (
-            <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{section.body}</p>
+            <div className="lesson-body">{section.body}</div>
           ) : (
-            <p className="muted" style={{ margin: 0 }}>
-              Your teacher has not added the text for this grammar lesson yet.
-            </p>
-          )}
-
-          {section.examples.length > 0 && (
-            <div data-testid="grammar-examples">
-              <strong style={{ fontSize: '.9rem' }}>Examples</strong>
-              <ul className="examples">
-                {section.examples.map((example, i) => (
-                  <li key={i}>{example}</li>
-                ))}
-              </ul>
+            <div className="lesson-body">
+              <span className="muted">
+                Your teacher has not written this lesson yet.
+              </span>
             </div>
           )}
 
@@ -99,10 +122,26 @@ export function GrammarSections({
               src={apiUrl(image.url)}
               alt={image.altText ?? ''}
               data-testid="grammar-image"
-              style={{ borderRadius: 8, border: '1px solid var(--border)' }}
+              style={{ display: 'block', width: '100%' }}
             />
           ))}
-        </div>
+
+          {section.examples.length > 0 && (
+            <ul className="examples-set" data-testid="grammar-examples">
+              {section.examples.map((example, i) => (
+                <Example key={i} text={example} />
+              ))}
+            </ul>
+          )}
+
+          {!section.viewed && (
+            <div style={{ padding: 'var(--s4) var(--s5) var(--s5)' }}>
+              <button className="primary" onClick={() => markViewed(section)} data-testid="mark-read">
+                I have read this
+              </button>
+            </div>
+          )}
+        </article>
       ))}
     </div>
   );

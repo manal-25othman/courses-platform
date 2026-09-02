@@ -10,6 +10,7 @@ import {
   AttemptSummary,
 } from '@/lib/api';
 import { QuestionBody, QuestionPictures } from './QuestionViews';
+import { Icon } from './Icon';
 
 /**
  * The activity, and the unit's assessment.
@@ -147,10 +148,15 @@ export function ActivityRunner({
 
   if (questionCount === 0) {
     return (
-      <div className="card">
-        <p className="muted">
-          There is no {isAssessment ? 'assessment' : 'activity'} in this unit yet.
-        </p>
+      <div className="locked-note">
+        <Icon name={isAssessment ? 'assessment' : 'activity'} />
+        <div>
+          <strong>Nothing to answer here yet</strong>
+          <p className="muted" style={{ margin: '.25rem 0 0' }}>
+            Your teacher is still writing the{' '}
+            {isAssessment ? 'test' : 'activity'} for this unit.
+          </p>
+        </div>
       </div>
     );
   }
@@ -158,14 +164,40 @@ export function ActivityRunner({
   if (!attempt) {
     return (
       <div className="card stack">
-        <h2 style={{ margin: 0 }}>{isAssessment ? 'Unit assessment' : 'Activity'}</h2>
-
-        <p className="muted">
-          {questionCount} question{questionCount === 1 ? '' : 's'}.{' '}
-          {isAssessment && assessment
-            ? `You need ${assessment.passMarkPercent}% to pass.`
-            : 'You can try this as many times as you like.'}
-        </p>
+        {/*
+          The rules, as figures rather than a sentence. What she wants to know
+          before she starts is how long it is and what it takes to pass, and
+          those are numbers — so they are set as numbers.
+        */}
+        {isAssessment && assessment ? (
+          <dl className="exam-rules" data-testid="exam-rules">
+            <div className="exam-rule">
+              <b className="num">{questionCount}</b>
+              <span>question{questionCount === 1 ? '' : 's'}</span>
+            </div>
+            <div className="exam-rule">
+              <b className="num">{assessment.passMarkPercent}%</b>
+              <span>to pass</span>
+            </div>
+            <div className="exam-rule">
+              <b className="num">
+                {assessment.maxAttempts === null
+                  ? '∞'
+                  : assessment.maxAttempts - assessment.attemptsUsed}
+              </b>
+              <span>
+                {assessment.maxAttempts === null
+                  ? 'tries'
+                  : `of ${assessment.maxAttempts} tries left`}
+              </span>
+            </div>
+          </dl>
+        ) : (
+          <p className="muted" style={{ margin: 0 }}>
+            {questionCount} question{questionCount === 1 ? '' : 's'}. Practise as often as you
+            like — this does not count towards your test.
+          </p>
+        )}
 
         {isAssessment && assessment && <AssessmentStanding assessment={assessment} />}
 
@@ -211,26 +243,36 @@ export function ActivityRunner({
   return (
     <div className="stack">
       {finished ? (
-        <div className="card stack" data-testid="activity-result">
-          <h2 style={{ margin: 0 }}>Your result</h2>
+        <div className="card stack result-panel" data-testid="activity-result">
+          {/*
+            One orchestrated moment, and only for a real milestone: passing the
+            unit's assessment. Practice never gets it, and a reduced-motion
+            setting turns it off in CSS.
+          */}
+          {attempt.passed === true && <Confetti />}
+
+          <ScoreRing percent={attempt.scorePercent ?? 0} passed={attempt.passed} />
+
+          <p className="result-line">
+            {attempt.passed === true
+              ? 'You passed.'
+              : attempt.passed === false
+                ? 'Not passed this time.'
+                : `${attempt.correctCount ?? 0} of ${(attempt.correctCount ?? 0) + (attempt.incorrectCount ?? 0)} right.`}
+          </p>
 
           {attempt.passed !== null && attempt.passed !== undefined && (
-            <p
-              className={`badge ${attempt.passed ? 'active' : 'deleted'} result-verdict`}
-              data-testid="assessment-verdict"
-            >
+            <span hidden data-testid="assessment-verdict">
               {attempt.passed ? 'Passed' : 'Not passed'}
-            </p>
+            </span>
           )}
 
-          <p style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0 }}>
-            <span data-testid="score-percent">{attempt.scorePercent}%</span>
-          </p>
+          {/* The marks she got, said once, plainly. */}
           <p className="muted" style={{ margin: 0 }}>
-            {attempt.correctCount} right, {attempt.incorrectCount} wrong — {attempt.pointsAwarded}{' '}
-            of {attempt.pointsAvailable} marks
+            {attempt.correctCount} right and {attempt.incorrectCount} wrong,{' '}
+            {attempt.pointsAwarded} of {attempt.pointsAvailable} marks
             {typeof attempt.passMarkPercent === 'number'
-              ? `. You needed ${attempt.passMarkPercent}%.`
+              ? `. You needed ${attempt.passMarkPercent}% to pass.`
               : '.'}
           </p>
 
@@ -272,18 +314,31 @@ export function ActivityRunner({
           <PastTries past={past} onOpen={openPast} isAssessment={isAssessment} />
         </div>
       ) : (
-        <div className="card between">
-          <p className="muted" style={{ margin: 0 }} data-testid="answered-count">
-            {answered} of {attempt.questions.length} answered
-          </p>
-          <button
-            className="primary"
-            onClick={submit}
-            disabled={busy}
-            data-testid="submit-activity"
-          >
-            {busy ? 'Sending…' : 'Finish and see my score'}
-          </button>
+        /*
+          Follows her down the page, because on a phone the questions are far
+          longer than the screen and "how many left?" is the question she asks
+          at every one. The tally is the same device the unit card uses, so it
+          means the same thing in both places: one mark, one item done.
+        */
+        <div className="running">
+          <div className="running-in">
+            <div className="tally" aria-hidden="true">
+              {attempt.questions.map((q) => (
+                <i key={q.answerId} data-on={responses[q.answerId] !== undefined} />
+              ))}
+            </div>
+            <p className="muted" style={{ margin: 0 }} data-testid="answered-count">
+              {answered} of {attempt.questions.length} answered
+            </p>
+            <button
+              className="primary"
+              onClick={submit}
+              disabled={busy}
+              data-testid="submit-activity"
+            >
+              {busy ? 'Sending…' : 'Finish'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -343,36 +398,110 @@ function PastTries({
 
   return (
     <div className="stack" style={{ marginTop: '.5rem' }}>
-      <h3 style={{ margin: 0, fontSize: '.95rem' }}>
-        {isAssessment ? 'Your assessment attempts' : 'Your past tries'}
+      <h3 className="marked-title" style={{ margin: 0, fontSize: '1rem' }}>
+        {isAssessment ? 'Your tries at the test' : 'Your past tries'}
       </h3>
-      <ul style={{ margin: 0, paddingInlineStart: 0, listStyle: 'none' }} data-testid="past-tries">
+      {/*
+        A try is a row of facts, not a sentence of them strung together. The
+        score leads because that is what she came to look at; the date is the
+        quietest thing on the row because it is the least useful.
+      */}
+      <ul className="tries" data-testid="past-tries">
         {past.map((tryOut, index) => (
-          <li key={tryOut.id} className="between" style={{ padding: '.4rem 0' }}>
-            <span className="muted">
-              Try {past.length - index}
-              {tryOut.submittedAt
-                ? ` · ${new Date(tryOut.submittedAt).toLocaleDateString('en-GB')}`
-                : ''}{' '}
-              · {tryOut.correctCount} right
+          <li key={tryOut.id} className="try">
+            <span className="try-score num" data-testid="past-score">
+              {tryOut.scorePercent}%
             </span>
-            <span className="row">
-              {typeof tryOut.passed === 'boolean' && (
-                <span
-                  className={`badge ${tryOut.passed ? 'active' : 'deleted'}`}
-                  data-testid="past-verdict"
-                >
-                  {tryOut.passed ? 'Passed' : 'Not passed'}
-                </span>
-              )}
-              <strong data-testid="past-score">{tryOut.scorePercent}%</strong>
-              <button className="small" onClick={() => onOpen(tryOut.id)} data-testid="open-past">
-                See my answers
-              </button>
+            <span className="try-what">
+              <span className="try-no">Try {past.length - index}</span>
+              <span className="muted">
+                {tryOut.correctCount} right
+                {tryOut.submittedAt
+                  ? `, ${new Date(tryOut.submittedAt).toLocaleDateString('en-GB')}`
+                  : ''}
+              </span>
             </span>
+            {typeof tryOut.passed === 'boolean' && (
+              <span
+                className={`mark ${tryOut.passed ? 'tick' : 'cross'}`}
+                title={tryOut.passed ? 'Passed' : 'Not passed'}
+                data-testid="past-verdict"
+              >
+                <Icon name={tryOut.passed ? 'tick' : 'cross'} />
+                <span hidden>{tryOut.passed ? 'Passed' : 'Not passed'}</span>
+              </span>
+            )}
+            <button className="small" onClick={() => onOpen(tryOut.id)} data-testid="open-past">
+              See my answers
+            </button>
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * The score, drawn.
+ *
+ * A percentage is the one number she actually reads on this screen, so it is
+ * given the space to be read: the ring is the figure, not a decoration around
+ * it. The ring fills to the score, which is the only entrance animation on the
+ * page and answers something she just did.
+ */
+function ScoreRing({ percent, passed }: { percent: number; passed?: boolean | null }) {
+  const r = 62;
+  const circumference = 2 * Math.PI * r;
+  const kind = passed === true ? 'assessment' : passed === false ? 'wrong' : 'activity';
+  return (
+    <div className="score-ring" data-kind={kind === 'wrong' ? undefined : kind}>
+      <svg viewBox="0 0 144 144" aria-hidden="true">
+        <circle className="track" cx="72" cy="72" r={r} fill="none" strokeWidth="12" />
+        <circle
+          className="fill"
+          cx="72"
+          cy="72"
+          r={r}
+          fill="none"
+          strokeWidth="12"
+          stroke={passed === false ? 'var(--bad)' : undefined}
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - Math.max(0, Math.min(100, percent)) / 100)}
+        />
+      </svg>
+      <span className="value">
+        <span data-testid="score-percent">{percent}</span>%
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A short burst of paper, for passing a unit's test and nothing else.
+ *
+ * Kept to a fixed set of pieces so it costs nothing to run, and removed from
+ * the tree once it has landed. `prefers-reduced-motion` hides it in CSS.
+ */
+function Confetti() {
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setGone(true), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+  if (gone) return null;
+  const colours = ['var(--signal)', 'var(--brand)', 'var(--assess)', 'var(--activity)', 'var(--games)'];
+  return (
+    <div className="confetti" aria-hidden="true">
+      {Array.from({ length: 28 }, (_, i) => (
+        <i
+          key={i}
+          style={{
+            left: `${(i * 37) % 100}%`,
+            background: colours[i % colours.length],
+            animationDelay: `${(i % 7) * 90}ms`,
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -395,18 +524,24 @@ function AssessmentStanding({ assessment }: { assessment: AssessmentState }) {
 
   return (
     <div className="stack" style={{ gap: '.4rem' }} data-testid="assessment-standing">
-      <p className="muted" style={{ margin: 0 }}>
-        <span data-testid="assessment-attempts">
-          {assessment.attemptsUsed} of{' '}
-          {assessment.maxAttempts === null ? 'unlimited' : assessment.maxAttempts} tries used
-        </span>
-        {assessment.bestScorePercent !== null && (
-          <>
-            {' · '}
-            <span data-testid="assessment-best">best {assessment.bestScorePercent}%</span>
-          </>
-        )}
-      </p>
+      {/*
+        Only worth saying once she has actually sat it. Before that the rules
+        above already carry the tries, and repeating them reads as a warning.
+      */}
+      {assessment.attemptsUsed > 0 && (
+        <p className="muted" style={{ margin: 0 }}>
+          <span data-testid="assessment-attempts">
+            {assessment.attemptsUsed} of{' '}
+            {assessment.maxAttempts === null ? 'unlimited' : assessment.maxAttempts} tries used
+          </span>
+          {assessment.bestScorePercent !== null && (
+            <>
+              {', '}
+              <span data-testid="assessment-best">best {assessment.bestScorePercent}%</span>
+            </>
+          )}
+        </p>
+      )}
 
       {assessment.blockedBecause && (
         <p
@@ -444,7 +579,12 @@ function QuestionCard({
   onAnswer: (value: unknown) => void;
 }) {
   return (
-    <div className="card stack" data-testid="activity-question" data-type={question.typeKey}>
+    <div
+      className="card stack q-card"
+      data-testid="activity-question"
+      data-type={question.typeKey}
+      data-marked={finished ? (question.isCorrect ? 'right' : 'wrong') : undefined}
+    >
       <div className="between">
         {/*
           Where she is, kept clear of the question itself. The imported text
@@ -453,19 +593,21 @@ function QuestionCard({
           our count in front of it read as "1. 6)". The count moves here, and
           the question is shown exactly as the teacher approved it.
         */}
-        <span className="muted" style={{ fontSize: '.8rem' }} data-testid="question-position">
+        <span className="q-no num" data-testid="question-position">
           Question {number} of {total}
         </span>
         {finished && (
-          <span className={`badge ${question.isCorrect ? 'active' : 'deleted'}`}>
-            {question.isCorrect ? 'Right' : 'Wrong'}
+          /* Marked the way her paper is marked, rather than with another word. */
+          <span className={`mark ${question.isCorrect ? 'tick' : 'cross'}`}>
+            <Icon name={question.isCorrect ? 'tick' : 'cross'} />
+            <span hidden>{question.isCorrect ? 'Right' : 'Wrong'}</span>
           </span>
         )}
       </div>
 
-      <strong style={{ display: 'block' }} data-testid="question-prompt">
+      <p className="q-prompt" data-testid="question-prompt">
         {question.prompt}
-      </strong>
+      </p>
 
       <QuestionPictures question={question} />
 

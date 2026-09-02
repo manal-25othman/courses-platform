@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError, apiUrl, CheckAnswerResult, LearnWord, VocabularyCheck } from '@/lib/api';
 import { canSpeak, playRecording, speak } from '@/lib/speech';
+import { Icon } from './Icon';
 
 /**
  * The word list.
@@ -221,10 +222,17 @@ export function VocabularyCards({
 
   return (
     <div className="stack">
-      <p className="muted" data-testid="vocab-summary">
-        {learned} of {words.length} words learned. A word counts once you have read it, heard it and
-        answered its check.
-      </p>
+      <div data-kind="vocabulary">
+        <p className="muted" data-testid="vocab-summary" style={{ margin: '0 0 .5rem' }}>
+          {learned} of {words.length} words learned. A word counts once you have read it, heard it
+          and answered its check.
+        </p>
+        <div className="tally" aria-hidden="true">
+          {words.map((w) => (
+            <i key={w.id} data-on={w.learned} />
+          ))}
+        </div>
+      </div>
 
       {/*
         A word cannot be finished until it has been heard, and she may not
@@ -240,7 +248,7 @@ export function VocabularyCards({
           {silentWords.length === 0 ? (
             <p style={{ margin: 0 }}>
               This browser has no voice installed. Every word here has a recording from your
-              teacher, so you can still finish them all — use the 🎧 button.
+              teacher, so you can still finish them all. Use “Your teacher’s voice” on each card.
             </p>
           ) : (
             <>
@@ -274,24 +282,22 @@ export function VocabularyCards({
         </p>
       )}
 
-      <div className="grid">
+      <div className="grid" data-kind="vocabulary">
         {words.map((word) => (
           <div
             key={word.id}
-            className="card stack"
+            className="word-card"
             data-testid="word-card"
             data-learned={word.learned}
+            data-kind="vocabulary"
           >
-            <div className="between">
-              <span className="word-en">{word.wordEn}</span>
-              {word.learned ? (
-                <span className="badge active" data-testid="word-learned">
-                  Learned
-                </span>
-              ) : (
-                <span className="badge disabled">Not yet</span>
-              )}
-            </div>
+            {/*
+              The word itself is the largest thing on the screen. Everything
+              else on this card — the picture, the meaning, the three lamps —
+              is support for it, which is why it gets the display face at full
+              size and nothing else competes.
+            */}
+            <span className="word-en">{word.wordEn}</span>
 
             {word.pictureUrl && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -303,31 +309,62 @@ export function VocabularyCards({
               />
             )}
 
-            {word.partOfSpeech && <p className="muted" style={{ margin: 0 }}>{word.partOfSpeech}</p>}
-
             {/* The interface is English; only the meaning is Arabic, so the
-                direction is set on this element and not on the page (SRS 39). */}
+                direction is set here and not on the page (SRS 39). */}
             {word.meaningAr && (
               <p className="word-ar" dir="rtl" lang="ar" style={{ margin: 0 }}>
                 {word.meaningAr}
               </p>
             )}
 
+            {word.partOfSpeech && (
+              <p className="muted" style={{ margin: 0 }}>{word.partOfSpeech}</p>
+            )}
             {word.exampleSentence && (
-              <p className="muted" style={{ margin: 0 }}>
-                {word.exampleSentence}
-              </p>
+              <p className="muted" style={{ margin: 0 }}>{word.exampleSentence}</p>
             )}
 
-            <div className="row">
-              <button
-                onClick={() => play(word)}
-                disabled={speaking === word.id}
-                data-testid={`play-${word.wordEn}`}
-                aria-label={`Hear the word ${word.wordEn}`}
-              >
-                {speaking === word.id ? 'Playing…' : '🔊 Hear it'}
-              </button>
+            {/* Hearing the word is a step, so the control for it is the one
+                that looks like the main thing to press. */}
+            <button
+              className="speak-btn"
+              onClick={() => play(word)}
+              disabled={speaking === word.id}
+              data-playing={speaking === word.id}
+              data-testid={`play-${word.wordEn}`}
+              aria-label={`Hear the word ${word.wordEn}`}
+            >
+              <Icon name="sound" className="ico-lg" />
+            </button>
+
+            {/*
+              Read, heard, checked — as three lamps rather than a checklist.
+              She can see at a glance what is still outstanding without the
+              card turning into a form.
+            */}
+            <div className="lamps" data-testid="word-lamps">
+              <span className="lamp" data-on={word.seen}>
+                <i className="dot" />
+                Read
+              </span>
+              <span className="lamp" data-on={word.audioPlayed}>
+                <i className="dot" />
+                Heard
+              </span>
+              <span className="lamp" data-on={word.checked}>
+                <i className="dot" />
+                Checked
+              </span>
+            </div>
+
+            {word.learned && (
+              <span className="badge active" data-testid="word-learned">
+                <Icon name="tick" size={12} />
+                Learned
+              </span>
+            )}
+
+            <div className="row" style={{ justifyContent: 'center' }}>
               {word.teacherAudioUrl && (
                 <button
                   className="small"
@@ -336,7 +373,7 @@ export function VocabularyCards({
                   data-testid={`teacher-audio-${word.wordEn}`}
                   aria-label={`Hear your teacher say ${word.wordEn}`}
                 >
-                  🎧 Teacher&rsquo;s voice
+                  Your teacher&rsquo;s voice
                 </button>
               )}
               {!word.seen && (
@@ -370,13 +407,6 @@ export function VocabularyCards({
                 }}
               />
             )}
-
-            {verdict && !verdict.correct && (!checking || checking.itemId !== word.id) && null}
-
-            <p className="muted" style={{ margin: 0, fontSize: '.8rem' }}>
-              Read {word.seen ? '✓' : '—'} · Heard {word.audioPlayed ? '✓' : '—'} · Checked{' '}
-              {word.checked ? '✓' : '—'}
-            </p>
           </div>
         ))}
       </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { apiUrl, AttemptQuestion } from '@/lib/api';
+import { Icon } from './Icon';
 
 /**
  * How each kind of question looks and behaves for the student.
@@ -156,7 +157,13 @@ export function TrueFalseQuestion({
       : null;
 
   return (
-    <div className="tile-row">
+    /*
+      Two opposed choices, side by side. The tick and cross are the worksheet's
+      own shorthand for true and false, so they belong here — but they are
+      drawn in the neutral glyph colour, not the marking colours. Green on
+      "True" before she has answered reads as the answer being given away.
+    */
+    <div className="tf-pair">
       {[true, false].map((value) => (
         <button
           key={String(value)}
@@ -171,7 +178,10 @@ export function TrueFalseQuestion({
           onClick={() => onAnswer({ value })}
           data-testid={`tf-${question.answerId}-${value}`}
         >
-          <span aria-hidden="true">{value ? '✓' : '✗'}</span> {value ? 'True' : 'False'}
+          <span className="tf-glyph" aria-hidden="true">
+            <Icon name={value ? 'tick' : 'cross'} size={22} />
+          </span>
+          {value ? 'True' : 'False'}
         </button>
       ))}
     </div>
@@ -275,7 +285,7 @@ export function MatchingQuestion({
                   </span>
                 )}
                 {finished && rightAnswer !== undefined && partner !== rightAnswer && (
-                  <span className="match-partner muted">✓ {textOf(rightAnswer)}</span>
+                  <span className="match-partner">{textOf(rightAnswer)}</span>
                 )}
               </button>
             );
@@ -359,7 +369,7 @@ export function OrderingQuestion({
             key={`${id}-${index}`}
             type="button"
             disabled={finished}
-            className={`tile placed${
+            className={`word-tile placed${
               finished ? (expected && expected[index] === id ? ' right' : ' wrong') : ''
             }`}
             onClick={() => onAnswer({ order: order.filter((o) => o !== id) })}
@@ -371,14 +381,16 @@ export function OrderingQuestion({
       </div>
 
       {!finished && (
-        <div className="tile-row">
+        <div className="word-bank">
           {remaining.map((token) => (
             <button
               key={token.id}
               type="button"
               draggable
               onDragStart={(e) => e.dataTransfer.setData('text/plain', token.id)}
-              className="tile"
+              /* A word is as wide as the word. The square tile is for single
+                 letters; using it here ran "eaten" and "dogs" together. */
+              className="word-tile"
               onClick={() => onAnswer({ order: [...order, token.id] })}
               data-testid={`ordering-token-${token.id}`}
             >

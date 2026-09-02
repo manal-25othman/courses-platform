@@ -14,20 +14,10 @@ import { VocabularyCards } from '@/components/VocabularyCards';
 import { GrammarSections } from '@/components/GrammarSections';
 import { ActivityRunner } from '@/components/ActivityRunner';
 import { BonusGames } from '@/components/BonusGames';
+import { StudentNav, TopBar } from '@/components/Shell';
+import { Icon } from '@/components/Icon';
 
 type Tab = 'vocabulary' | 'grammar' | 'activity' | 'assessment' | 'games';
-
-/**
- * Why a part is not open yet, said plainly.
- *
- * She is eleven or twelve. A locked tab that says nothing is a wall; one that
- * says what to do next is a step. Every one of these names the thing she can
- * go and do about it.
- */
-const LOCK_REASONS: Record<string, string> = {
-  vocabulary_incomplete: 'Learn all the words first, then this opens.',
-  grammar_incomplete: 'Read the grammar first, then this opens.',
-};
 
 /** What to call each part when telling her it is missing. */
 const MISSING_LABELS: Record<string, string> = {
@@ -97,19 +87,27 @@ export default function LearnUnitPage() {
   if (!me || (!unit && !error)) {
     return (
       <main className="page">
-        <p className="muted">Loading…</p>
+        <div className="skeleton" style={{ height: '2rem', width: '11rem' }} />
+        <div className="skeleton" style={{ height: '.5rem', marginTop: '1rem' }} />
+        <div className="skeleton" style={{ height: '2.5rem', marginTop: '1.5rem' }} />
+        <div className="skeleton" style={{ height: '14rem', marginTop: '1rem' }} />
       </main>
     );
   }
 
   if (!unit) {
     return (
-      <main className="page stack">
-        <p className="alert error" role="alert">
-          {error}
-        </p>
-        <button onClick={() => router.push('/home')}>Back to my units</button>
-      </main>
+      <>
+        <TopBar />
+        <main className="page stack">
+          <p className="alert error" role="alert">
+            {error ?? 'That unit could not be opened.'}
+          </p>
+          <button className="primary" onClick={() => router.push('/home')}>
+            Back to my course
+          </button>
+        </main>
+      </>
     );
   }
 
@@ -141,140 +139,167 @@ export default function LearnUnitPage() {
       ? 'vocabulary'
       : tab;
 
+  const kindOf: Record<Tab, string> = {
+    vocabulary: 'vocabulary', grammar: 'grammar', activity: 'activity',
+    assessment: 'assessment', games: 'games',
+  };
+
   return (
-    <main className="page stack">
-      <div className="between">
+    <>
+      <TopBar
+        right={
+          <button className="ghost small" onClick={() => router.push('/home')}>
+            <Icon name="back" />
+            <span className="hide-sm">My course</span>
+          </button>
+        }
+      />
+
+      <main className="page has-navbar stack" data-kind={kindOf[activeTab]}>
         <div>
           <h1>{unit.title}</h1>
           {progress && (
-            <p className="muted" data-testid="unit-progress">
-              {progress.overallPercent}% done · words {progress.vocabulary.done}/
-              {progress.vocabulary.total}
-              {progress.bestScorePercent !== null && ` · best score ${progress.bestScorePercent}%`}
-              {progress.assessmentState.passed && ' · assessment passed'}
-            </p>
-          )}
-          {progress && !progress.countsTowardCompletion && (
-            <p className="muted" style={{ margin: 0 }} data-testid="not-counted-unit">
-              This unit is extra practice. It does not count towards your course.
-            </p>
-          )}
-          {/*
-            A part with nothing in it holds the unit below 100%. Saying which
-            part is missing is the difference between "you have not finished"
-            and "there is nothing here to finish" — she can stop looking for
-            work that does not exist yet.
-          */}
-          {progress && progress.missingContent.length > 0 && (
-            <p className="muted" style={{ margin: 0 }} data-testid="missing-content">
-              Your teacher has not added the{' '}
-              {progress.missingContent
-                .map((part) => MISSING_LABELS[part] ?? part)
-                .join(', ')}{' '}
-              for this unit yet, so it cannot be finished.
+            <p className="muted" data-testid="unit-progress" style={{ marginTop: '.25rem' }}>
+              {progress.assessmentState.passed
+                ? 'Finished — you passed the test'
+                : `${progress.overallPercent}% of this unit done`}
             </p>
           )}
         </div>
-        <button onClick={() => router.push('/home')}>Back to my units</button>
-      </div>
 
-      {progress && (
-        <div className="meter" aria-label={`${progress.overallPercent} percent done`}>
-          <span style={{ width: `${progress.overallPercent}%` }} />
+        {progress && (
+          <div
+            className="meter"
+            data-done={progress.overallPercent === 100}
+            aria-label={`${progress.overallPercent} percent done`}
+          >
+            <span style={{ width: `${progress.overallPercent}%` }} />
+          </div>
+        )}
+
+        {progress && !progress.countsTowardCompletion && (
+          <p className="muted" style={{ margin: 0 }} data-testid="not-counted-unit">
+            Extra practice. This one does not change your course progress.
+          </p>
+        )}
+
+        {/*
+          A part with nothing in it holds the unit below 100%. Naming the part
+          is the difference between "you have not finished" and "there is
+          nothing here to finish" — she can stop looking for work that does not
+          exist yet.
+        */}
+        {progress && progress.missingContent.length > 0 && (
+          <p className="alert warn" data-testid="missing-content">
+            Your teacher is still adding the{' '}
+            {progress.missingContent.map((part) => MISSING_LABELS[part] ?? part).join(' and ')} for
+            this unit, so it cannot reach 100% yet.
+          </p>
+        )}
+
+        {error && (
+          <p className="alert error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="tabs-wrap">
+        <div className="tabs" role="tablist">
+          <button
+            role="tab"
+            aria-selected={activeTab === 'vocabulary'}
+            onClick={() => setTab('vocabulary')}
+            data-kind="vocabulary"
+            data-testid="tab-vocabulary"
+          >
+            <Icon name="words" size={16} />
+            Words {unit.vocabulary.length > 0 && <span className="num">{unit.vocabulary.length}</span>}
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'grammar'}
+            onClick={() => setTab('grammar')}
+            disabled={grammarLocked}
+            aria-disabled={grammarLocked}
+            data-kind="grammar"
+            data-testid="tab-grammar"
+          >
+            <Icon name={grammarLocked ? 'lock' : 'grammar'} size={16} />
+            Grammar {grammarSections.length > 0 && <span className="num">{grammarSections.length}</span>}
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'activity'}
+            onClick={() => setTab('activity')}
+            data-kind="activity"
+            data-testid="tab-activity"
+          >
+            <Icon name="activity" size={16} />
+            Activity
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'assessment'}
+            onClick={() => setTab('assessment')}
+            disabled={assessmentLocked}
+            aria-disabled={assessmentLocked}
+            data-kind="assessment"
+            data-testid="tab-assessment"
+          >
+            <Icon name={assessmentLocked ? 'lock' : unit.assessment.passed ? 'tick' : 'assessment'} size={16} />
+            Test
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'games'}
+            onClick={() => setTab('games')}
+            data-kind="games"
+            data-testid="tab-games"
+          >
+            <Icon name="games" size={16} />
+            Games
+          </button>
         </div>
-      )}
+        </div>
 
-      {error && (
-        <p className="alert error" role="alert">
-          {error}
-        </p>
-      )}
+        {activeTab === 'vocabulary' && (
+          <VocabularyCards words={unit.vocabulary} onChanged={load} />
+        )}
 
-      <div className="tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={activeTab === 'vocabulary'}
-          onClick={() => setTab('vocabulary')}
-          data-testid="tab-vocabulary"
-        >
-          Words ({unit.vocabulary.length})
-        </button>
-        <button
-          role="tab"
-          aria-selected={activeTab === 'grammar'}
-          onClick={() => setTab('grammar')}
-          disabled={grammarLocked}
-          aria-disabled={grammarLocked}
-          title={grammarLocked ? LOCK_REASONS.vocabulary_incomplete : undefined}
-          data-testid="tab-grammar"
-        >
-          {grammarLocked ? '🔒 ' : ''}Grammar ({grammarSections.length})
-        </button>
-        <button
-          role="tab"
-          aria-selected={activeTab === 'activity'}
-          onClick={() => setTab('activity')}
-          data-testid="tab-activity"
-        >
-          Activity ({unit.activity.questionCount})
-        </button>
-        <button
-          role="tab"
-          aria-selected={activeTab === 'games'}
-          onClick={() => setTab('games')}
-          data-testid="tab-games"
-        >
-          Games
-        </button>
-        <button
-          role="tab"
-          aria-selected={activeTab === 'assessment'}
-          onClick={() => setTab('assessment')}
-          disabled={assessmentLocked}
-          aria-disabled={assessmentLocked}
-          title={assessmentLocked ? LOCK_REASONS[assessmentLockReason!] : undefined}
-          data-testid="tab-assessment"
-        >
-          {assessmentLocked ? '🔒 ' : ''}
-          Assessment{unit.assessment.passed ? ' ✓' : ` (${unit.assessment.questionCount})`}
-        </button>
-      </div>
+        {activeTab === 'grammar' && (
+          <GrammarSections sections={grammarSections} onChanged={load} />
+        )}
 
-      {activeTab === 'vocabulary' && (
-        <VocabularyCards words={unit.vocabulary} onChanged={load} />
-      )}
+        {activeTab === 'activity' && (
+          <ActivityRunner
+            unitId={unit.id}
+            questionCount={unit.activity.questionCount}
+            onFinished={load}
+          />
+        )}
 
-      {activeTab === 'grammar' && (
-        <GrammarSections sections={grammarSections} onChanged={load} />
-      )}
+        {activeTab === 'games' && (
+          <>
+            {/*
+              Never locked and never locking. A game is not a step in the
+              sequence: it cannot be required, and playing one changes nothing.
+            */}
+            <BonusGames unitId={unitId} />
+          </>
+        )}
 
-      {activeTab === 'activity' && (
-        <ActivityRunner
-          unitId={unit.id}
-          questionCount={unit.activity.questionCount}
-          onFinished={load}
-        />
-      )}
+        {activeTab === 'assessment' && (
+          <ActivityRunner
+            unitId={unit.id}
+            mode="assessment"
+            questionCount={unit.assessment.questionCount}
+            assessment={unit.assessment}
+            onFinished={load}
+          />
+        )}
+      </main>
 
-      {activeTab === 'games' && (
-        <>
-          {/*
-            Never locked and never locking. A game is not a step in the
-            sequence: it cannot be required, and playing one changes nothing.
-          */}
-          <BonusGames unitId={unitId} />
-        </>
-      )}
-
-      {activeTab === 'assessment' && (
-        <ActivityRunner
-          unitId={unit.id}
-          mode="assessment"
-          questionCount={unit.assessment.questionCount}
-          assessment={unit.assessment}
-          onFinished={load}
-        />
-      )}
-    </main>
+      <StudentNav />
+    </>
   );
 }

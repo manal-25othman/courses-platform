@@ -2,22 +2,137 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { api, ApiError, homeFor, LearnUnitSummary, Me, MyTeacher } from '@/lib/api';
-import { Conversation } from '@/components/Conversation';
+import { api, ApiError, homeFor, LearnUnitSummary, Me } from '@/lib/api';
+import { Avatar, StudentNav, TopBar } from '@/components/Shell';
+import { Icon } from '@/components/Icon';
 
 /**
- * Where a student starts: her units, and how far she has got with each.
+ * Where a student starts: her course, drawn as the run of units it is.
  *
- * Only units her teacher has approved appear here. That is not a filter this
- * page applies — the API returns published units only, so unapproved material
- * is not something the page has to remember to hide.
+ * The screen answers two questions in the order she asks them — "what do I do
+ * now?" at the top, then "where am I up to?" below. The run of stations is the
+ * progress view; there is no separate dashboard, because a second view of the
+ * same numbers would only be something else to keep in step.
+ *
+ * Only units her teacher has published appear. That is the API's doing, not a
+ * filter this page has to remember to apply.
  */
+
+/** One of the four parts of a unit, as it stands for her right now. */
+interface Step {
+  kind: 'vocabulary' | 'grammar' | 'activity' | 'assessment';
+  label: string;
+  /** What to say under the node: a count, a score, a verdict. */
+  value: string;
+  /**
+   * `done`   — finished.
+   * `current`— the next thing she can actually do here.
+   * `todo`   — open, but not next.
+   * `locked` — the server refuses it until something earlier is finished.
+   * `empty`  — her teacher has not built this part yet.
+   */
+  state: 'done' | 'current' | 'todo' | 'locked' | 'empty';
+}
+
+/**
+ * The four parts of a unit, read from her progress and from nothing else.
+ *
+ * `locked` is never a guess: vocabulary gating grammar and grammar gating the
+ * test are the API's own rules, and they arrive here as `grammarLock.locked`
+ * and `assessmentState.blockedBecause`. If the server would let her in, the
+ * screen does not draw a padlock.
+ */
+function stepsOf(unit: LearnUnitSummary): Step[] {
+  const p = unit.progress;
+
+  const vocabulary: Step = {
+    kind: 'vocabulary',
+    label: 'Words',
+    value: p.vocabulary.empty ? 'None yet' : `${p.vocabulary.done}/${p.vocabulary.total}`,
+    state: p.vocabulary.empty ? 'empty' : p.vocabulary.percent === 100 ? 'done' : 'todo',
+  };
+
+  const grammarBlocked = p.grammarLock.locked;
+  const grammar: Step = {
+    kind: 'grammar',
+    label: 'Grammar',
+    value: p.grammar.empty ? 'None yet' : `${p.grammar.done}/${p.grammar.total}`,
+    state: p.grammar.empty
+      ? 'empty'
+      : p.grammar.percent === 100
+        ? 'done'
+        : grammarBlocked
+          ? 'locked'
+          : 'todo',
+  };
+
+  const activity: Step = {
+    kind: 'activity',
+    label: 'Activity',
+    value: p.activity.empty
+      ? 'None yet'
+      : p.bestScorePercent === null
+        ? 'Not tried'
+        : `${p.bestScorePercent}%`,
+    state: p.activity.empty ? 'empty' : p.activity.percent === 100 ? 'done' : 'todo',
+  };
+
+  // The test is locked only where the API says so, and only for the two
+  // reasons that are about the sequence. Having used up her tries, or having
+  // already passed, is not a lock — it is a finished state.
+  const why = p.assessmentState.blockedBecause;
+  const testLocked = why === 'vocabulary_incomplete' || why === 'grammar_incomplete';
+  const assessment: Step = {
+    kind: 'assessment',
+    label: 'Test',
+    value: p.assessment.empty
+      ? 'None yet'
+      : p.assessmentState.passed
+        ? 'Passed'
+        : p.assessmentState.bestScorePercent !== null
+          ? `${p.assessmentState.bestScorePercent}%`
+          : 'Not tried',
+    state: p.assessment.empty
+      ? 'empty'
+      : p.assessmentState.passed
+        ? 'done'
+        : testLocked
+          ? 'locked'
+          : 'todo',
+  };
+
+  const steps = [vocabulary, grammar, activity, assessment];
+  // Exactly one step is "current": the first she can actually get on with.
+  const next = steps.find((step) => step.state === 'todo');
+  if (next) next.state = 'current';
+  return steps;
+}
+
+/** The single next action across the whole course, said in her words. */
+function nextAction(unit: LearnUnitSummary, steps: Step[]) {
+  const p = unit.progress;
+  const current = steps.find((step) => step.state === 'current');
+  if (!current) return null;
+  const wording: Record<Step['kind'], { what: string; why: string }> = {
+    vocabulary: {
+      what: 'Learn the words',
+      why: `${p.vocabulary.done} of ${p.vocabulary.total} learned`,
+    },
+    grammar: { what: 'Read the grammar', why: 'Your words are done' },
+    activity: { what: 'Play the activity', why: 'Practise as often as you like' },
+    assessment: {
+      what: 'Take the test',
+      why: `${p.assessmentState.questionCount} questions to pass the unit`,
+    },
+  };
+  return { ...wording[current.kind], kind: current.kind, step: current };
+}
+
 export default function StudentHomePage() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [units, setUnits] = useState<LearnUnitSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [teacher, setTeacher] = useState<MyTeacher | null>(null);
 
   useEffect(() => {
     api
@@ -39,15 +154,8 @@ export default function StudentHomePage() {
       .then(setUnits)
       .catch((caught) => {
         setUnits([]);
-        setError(caught instanceof ApiError ? caught.message : 'Could not load your units.');
+        setError(caught instanceof ApiError ? caught.message : 'Your units could not be loaded. Try again in a moment.');
       });
-
-    // Her own teacher, and only if that teacher has set a number. Not having
-    // one is ordinary, so a failure here changes nothing on the page.
-    api
-      .get<MyTeacher | null>('/teachers/mine')
-      .then(setTeacher)
-      .catch(() => setTeacher(null));
   }, [me]);
 
   async function signOut() {
@@ -57,171 +165,228 @@ export default function StudentHomePage() {
 
   if (!me) {
     return (
-      <main className="page">
-        <p className="muted">Loading…</p>
-      </main>
+      <>
+        <TopBar />
+        <main className="page">
+          <div className="skeleton" style={{ height: '2rem', width: '12rem' }} />
+          <div className="skeleton" style={{ height: '6rem', marginTop: '1.5rem' }} />
+          <div className="skeleton" style={{ height: '9rem', marginTop: '1rem' }} />
+        </main>
+      </>
     );
   }
 
+  const core = (units ?? []).filter((u) => u.progress.countsTowardCompletion);
+  const extra = (units ?? []).filter((u) => !u.progress.countsTowardCompletion);
+  // Where she is up to: the first unit she has not finished.
+  const currentId = core.find((u) => !u.progress.isComplete)?.id;
+  const current = core.find((u) => u.id === currentId);
+  const action = current ? nextAction(current, stepsOf(current)) : null;
+  const finishedUnits = core.filter((u) => u.progress.isComplete).length;
+
   return (
-    <main className="page stack">
-      <div className="between">
-        <div>
-          <h1>Hello, {me.displayName}</h1>
-          <p className="muted">TOP GOAL</p>
-        </div>
-        <button onClick={signOut}>Sign out</button>
-      </div>
-
-      {error && (
-        <p className="alert error" role="alert">
-          {error}
-        </p>
-      )}
-
-      <h2 style={{ margin: 0 }}>Your units</h2>
-
-      {units === null ? (
-        <p className="muted">Loading your units…</p>
-      ) : units.length === 0 ? (
-        <div className="card">
-          <h2>Nothing to do just yet</h2>
-          <p className="muted">
-            Your teacher is still preparing your units. They will appear here as soon as she is
-            ready.
-          </p>
-        </div>
-      ) : (
-        <div className="grid" data-testid="unit-grid">
-          {units.map((unit) => (
-            <button
-              key={unit.id}
-              className="card stack"
-              data-testid="unit-card"
-              onClick={() => router.push(`/learn/${unit.id}`)}
-              style={{ textAlign: 'left', cursor: 'pointer' }}
-            >
-              <div className="between">
-                <strong style={{ fontSize: '1.05rem' }}>{unit.title}</strong>
-                {unit.progress.isComplete && <span className="badge active">Finished</span>}
-              </div>
-
-              <div>
-                <div className="meter" aria-hidden="true">
-                  <span style={{ width: `${unit.progress.overallPercent}%` }} />
-                </div>
-                <p className="muted" style={{ marginTop: '.4rem' }}>
-                  {unit.progress.overallPercent}% done
-                </p>
-              </div>
-
-              {/*
-                The four parts, each read from what she has actually recorded.
-                Nothing here is something she can set herself: there is no
-                "mark this unit done". A dash means the teacher has not added
-                that part yet, which is why the unit cannot reach 100%.
-              */}
-              <dl className="parts" data-testid="unit-parts">
-                <div>
-                  <dt>Words</dt>
-                  <dd data-testid="part-vocabulary">
-                    {unit.progress.vocabulary.empty
-                      ? '—'
-                      : `${unit.progress.vocabulary.done}/${unit.progress.vocabulary.total}`}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Grammar</dt>
-                  <dd data-testid="part-grammar">
-                    {unit.progress.grammar.empty
-                      ? '—'
-                      : `${unit.progress.grammar.done}/${unit.progress.grammar.total}`}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Activity</dt>
-                  <dd data-testid="part-activity">
-                    {unit.progress.activity.empty
-                      ? '—'
-                      : unit.progress.bestScorePercent === null
-                        ? 'not tried'
-                        : `${unit.progress.bestScorePercent}%`}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Assessment</dt>
-                  <dd data-testid="part-assessment">
-                    {unit.progress.assessment.empty
-                      ? '—'
-                      : unit.progress.assessmentState.passed
-                        ? 'passed'
-                        : `${unit.progress.assessmentState.attemptsUsed} of ${
-                            unit.progress.assessmentState.maxAttempts ?? '∞'
-                          } tries`}
-                  </dd>
-                </div>
-              </dl>
-
-              {unit.progress.missingContent.length > 0 && (
-                <p className="muted" style={{ margin: 0, fontSize: '.8rem' }}>
-                  Not ready yet — your teacher is still preparing part of this unit.
-                </p>
-              )}
+    <>
+      <TopBar
+        right={
+          <span className="row" style={{ gap: '.5rem', flexWrap: 'nowrap' }}>
+            <button className="ghost small" onClick={signOut}>
+              <Icon name="signout" />
+              <span className="hide-sm">Sign out</span>
             </button>
-          ))}
-        </div>
-      )}
-
-      <Conversation
-        loadPath="/messages/mine"
-        sendPath="/messages/mine"
-        readPath="/messages/mine/read"
-        placeholder="Write to your teacher…"
-        emptyText="No messages yet. Your teacher will write here when she has something for you."
+            <Avatar name={me.displayName} />
+          </span>
+        }
       />
 
-      {/*
-        Offered only while her own teacher has a number set. There is no
-        number anywhere in this platform's code: with none set, the button is
-        simply not here (SRS 26).
-      */}
-      {teacher?.whatsappUrl && (
-        <div className="card">
-          <h2>Ask your teacher</h2>
-          <p className="muted">
-            Message {teacher.title ? `${teacher.title} ` : ''}
-            {teacher.displayName} on WhatsApp if you are stuck on something.
+      <main className="page has-navbar home-grid">
+        <div className="home-aside">
+        <header className="greeting">
+          <h1>Hello, {me.displayName.split(' ')[0]}</h1>
+          {/*
+            One line, and it has to earn its place: what is actually true of
+            her course right now, not a slogan. An empty course says so.
+          */}
+          <p className="greeting-line">
+            {core.length === 0
+              ? 'Your course opens as soon as your teacher adds the first unit.'
+              : finishedUnits === core.length
+                ? 'You have finished every unit. Play a game, or go back over one.'
+                : finishedUnits === 0
+                  ? `${core.length} units to work through. Start whenever you are ready.`
+                  : `${finishedUnits} of ${core.length} units finished. Keep going.`}
           </p>
-          <div className="row" style={{ marginTop: '.75rem' }}>
-            <a
-              className="button-link"
-              href={`${teacher.whatsappUrl}?text=${encodeURIComponent(
-                `Hello, this is ${me.displayName} from TOP GOAL.`,
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="contact-teacher-whatsapp"
-            >
-              Message my teacher on WhatsApp
-            </a>
-          </div>
-        </div>
-      )}
+        </header>
 
-      <div className="card">
-        <h2>Your account</h2>
-        <p className="muted">
-          Signed in as <strong>{me.username}</strong>.
-        </p>
-        <div className="row" style={{ marginTop: '.75rem' }}>
-          <button onClick={() => router.push('/change-password')}>Change my password</button>
+        {error && (
+          <p className="alert error" role="alert">
+            {error}
+          </p>
+        )}
+
+        {/* The one thing she should do next, said once and said plainly. */}
+        {current && action && (
+          <button
+            className="next-up"
+            data-kind={action.kind}
+            onClick={() => router.push(`/learn/${current.id}`)}
+            data-testid="next-action"
+          >
+            <span className="badge-icon" aria-hidden="true">
+              <Icon
+                name={
+                  action.kind === 'assessment'
+                    ? 'assessment'
+                    : action.kind === 'grammar'
+                      ? 'grammar'
+                      : action.kind === 'activity'
+                        ? 'activity'
+                        : 'words'
+                }
+                size={22}
+              />
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span className="what">{action.what}</span>
+              {/* Her unit, then her standing in it — as two facts on two
+                  lines, not a string of them joined by dots. */}
+              <span className="why" style={{ display: 'block' }}>
+                {current.title}
+              </span>
+              <span className="why" style={{ display: 'block' }}>
+                {action.why}
+              </span>
+              {action.kind === 'vocabulary' && current.progress.vocabulary.total > 0 && (
+                <span className="tally" aria-hidden="true" style={{ marginTop: '.5rem' }}>
+                  {Array.from({ length: current.progress.vocabulary.total }, (_, n) => (
+                    <i key={n} data-on={n < current.progress.vocabulary.done} />
+                  ))}
+                </span>
+              )}
+            </span>
+            <span className="go" aria-hidden="true">
+              <Icon name="play" size={16} />
+            </span>
+          </button>
+        )}
+
         </div>
-        <p className="muted" style={{ marginTop: '.75rem' }}>
-          Forgotten your password?{' '}
-          <a href="/forgot-password">Send a reset link to your e-mail</a>, or ask your teacher to
-          reset it for you.
-        </p>
-      </div>
-    </main>
+
+        <div className="home-main">
+        <h2 className="marked-title">Your course</h2>
+
+        {units === null ? (
+          <div className="stack">
+            <div className="skeleton" style={{ height: '7rem' }} />
+            <div className="skeleton" style={{ height: '7rem' }} />
+          </div>
+        ) : core.length === 0 ? (
+          <div className="card">
+            <h2>Your units are on their way</h2>
+            <p className="muted" style={{ marginTop: '.5rem' }}>
+              Your teacher is still putting this course together. It will show up here as soon as
+              she opens the first unit.
+            </p>
+          </div>
+        ) : (
+          <div className="journey journey-in" data-testid="unit-grid">
+            {core.map((unit, i) => {
+              const p = unit.progress;
+              const state = p.isComplete ? 'done' : unit.id === currentId ? 'current' : 'todo';
+              const steps = stepsOf(unit);
+              return (
+                <div className="station" data-state={state} key={unit.id}>
+                  <button
+                    className="station-card"
+                    data-testid="unit-card"
+                    onClick={() => router.push(`/learn/${unit.id}`)}
+                  >
+                    <div className="between" style={{ gap: '.75rem' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <span className="station-no">Unit {i + 1}</span>
+                        <span className="station-title" style={{ display: 'block' }}>
+                          {unit.title}
+                        </span>
+                      </div>
+                      {p.isComplete ? (
+                        <span className="finished-mark">
+                          <Icon name="tick" size={14} />
+                          Finished
+                        </span>
+                      ) : (
+                        <strong className="station-pct num">{p.overallPercent}%</strong>
+                      )}
+                    </div>
+
+                    {/*
+                      The four parts, drawn as the sequence the server actually
+                      enforces. A connector fills only behind a finished step,
+                      so the line itself shows how far she has come.
+                    */}
+                    <ol className="track" data-testid="unit-parts">
+                      {steps.map((step, at) => (
+                        <li
+                          className="track-step"
+                          key={step.kind}
+                          data-kind={step.kind}
+                          data-state={step.state}
+                          data-fill-before={at > 0 && steps[at - 1].state === 'done'}
+                          data-fill-after={step.state === 'done'}
+                        >
+                          <span className="track-node" aria-hidden="true">
+                            {step.state === 'done' ? (
+                              <Icon name="tick" size={15} />
+                            ) : step.state === 'locked' ? (
+                              <Icon name="lock" size={14} />
+                            ) : (
+                              <Icon name={step.kind === 'vocabulary' ? 'words' : step.kind} size={15} />
+                            )}
+                          </span>
+                          <span className="track-label">{step.label}</span>
+                          <span className="track-value" data-testid={`part-${step.kind}`}>
+                            {step.value}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+
+                    {p.missingContent.length > 0 && (
+                      <p className="muted" style={{ margin: '.75rem 0 0', fontSize: '.8rem' }}>
+                        Your teacher is still adding part of this unit.
+                      </p>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/*
+          Grammar Review sits after the course rather than inside it: it is
+          revision, and it does not count towards finishing the four units.
+        */}
+        {extra.map((unit) => (
+          <button
+            key={unit.id}
+            className="aside-card"
+            data-kind="grammar"
+            onClick={() => router.push(`/learn/${unit.id}`)}
+          >
+            <span className="aside-icon" aria-hidden="true">
+              <Icon name="grammar" size={20} />
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <strong className="aside-title">{unit.title}</strong>
+              <span className="muted" style={{ display: 'block' }}>
+                Extra revision. It does not change your course progress.
+              </span>
+            </span>
+          </button>
+        ))}
+        </div>
+      </main>
+
+      <StudentNav />
+    </>
   );
 }
