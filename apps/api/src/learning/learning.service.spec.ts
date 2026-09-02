@@ -38,6 +38,7 @@ const CONFIRMED: Record<string, unknown> = {
   [SETTING_KEYS.RANDOMIZATION_SHUFFLE_QUESTIONS]: true,
   [SETTING_KEYS.RANDOMIZATION_SHUFFLE_OPTIONS]: true,
   [SETTING_KEYS.LEARNING_SEQUENTIAL_UNLOCK]: true,
+  [SETTING_KEYS.ASSESSMENT_QUESTION_COUNT]: 10,
 };
 
 function settingsWith(overrides: Record<string, unknown> = {}): SettingsService {
@@ -277,11 +278,30 @@ describe('LearningService progress (SRS 16, 21)', () => {
     expect(progress.vocabulary).toEqual({ total: 2, done: 1, percent: 50, empty: false });
     expect(progress.grammar).toEqual({ total: 1, done: 1, percent: 100, empty: false });
     expect(progress.activity.percent).toBe(100);
-    // This unit has no assessment yet, so that quarter is not earned.
-    expect(progress.assessment).toEqual({ total: 0, done: 0, percent: 0, empty: true });
-    expect(progress.missingContent).toEqual(['assessment']);
+    // The unit's own approved questions are what its assessment draws from
+    // (client, 2026-09-02), so a unit with questions has an assessment even
+    // before a teacher curates one. It is unpassed, so the quarter is unearned.
+    expect(progress.assessment).toEqual({ total: 1, done: 0, percent: 0, empty: false });
+    expect(progress.missingContent).toEqual([]);
     // (50 + 100 + 100 + 0) / 4 components of equal weight
     expect(progress.overallPercent).toBe(63);
+  });
+
+  it('names the assessment as missing only when the unit has no questions at all', async () => {
+    // With nothing to draw from there is genuinely no assessment, and saying so
+    // is what stops a unit looking finishable when it is not.
+    const service = serviceOver({
+      vocabularyItem: [{ id: 'w1', status: ContentStatus.PUBLISHED }],
+      vocabularyProgress: [{ id: 'p1', itemId: 'w1', learnedAt: new Date() }],
+      unitSection: [{ id: 's1', type: { progressComponent: 'grammar' } }],
+      sectionProgress: [{ sectionId: 's1' }],
+      questions: 0,
+    });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessment).toEqual({ total: 0, done: 0, percent: 0, empty: true });
+    expect(progress.missingContent).toEqual(['activity', 'assessment']);
   });
 
   /**
@@ -1077,5 +1097,167 @@ describe('sequential unlock', () => {
     });
 
     await expect(service.markSectionViewed(student, 's1')).rejects.toThrow(/words/i);
+  });
+});
+
+/**
+ * Where a unit's assessment gets its questions (client, 2026-09-02).
+ *
+ * The rule: a teacher may curate a pool by moving questions into the
+ * assessment, and where she has not, the assessment draws from the unit's own
+ * approved questions. What must never happen is an assessment built from
+ * another unit's questions, from questions still waiting on an answer, or with
+ * the same question asked twice in one attempt.
+ */
+describe('assessment question pool', () => {
+  interface Captured {
+    counts: Record<string, unknown>[];
+    find?: Record<string, unknown>;
+  }
+
+  /** Records what the service asked the database for, to prove the filters. */
+  function serviceCapturingPool(
+    captured: Captured,
+    tables: { curated: number; activity: number; drawn?: number },
+  ) {
+    const drawn = Array.from({ length: tables.drawn ?? 0 }, (_, i) => ({
+      id: `q${i + 1}`,
+      typeKey: 'true_false',
+      prompt: `Question ${i + 1}`,
+      payload: {},
+      answerKey: { correct: true },
+      points: 1,
+      media: [],
+    }));
+
+    const written: Record<string, unknown>[] = [];
+
+    const tx = {
+      unit: {
+        findFirst: async () => ({ id: 'u1', title: 'Unit', status: ContentStatus.PUBLISHED }),
+        findUnique: async () => ({ countsTowardCompletion: true }),
+      },
+      vocabularyItem: { findMany: async () => [] },
+      vocabularyProgress: { count: async () => 0 },
+      unitSection: { findMany: async () => [] },
+      sectionProgress: { count: async () => 0 },
+      question: {
+        count: async ({ where }: { where: Record<string, unknown> }) => {
+          captured.counts.push(where);
+          return where.purpose === QuestionPurpose.ASSESSMENT ? tables.curated : tables.activity;
+        },
+        findMany: async ({ where }: { where: Record<string, unknown> }) => {
+          captured.find = where;
+          return drawn;
+        },
+      },
+      activityAttempt: {
+        findMany: async () => [],
+        findFirst: async () => null,
+        count: async () => 0,
+        create: async ({ data }: { data: Record<string, unknown> }) => ({ id: 'a1', ...data }),
+        findUnique: async () => ({
+          id: 'a1',
+          unitId: 'u1',
+          purpose: QuestionPurpose.ASSESSMENT,
+          status: AttemptStatus.IN_PROGRESS,
+          startedAt: new Date(),
+          // What the attempt actually froze, which is what the student is
+          // handed back — an empty list here would hide the very thing these
+          // tests are counting.
+          answers: written,
+        }),
+        update: async () => ({}),
+      },
+      attemptAnswer: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          written.push({ id: `ans-${written.length}`, response: null, ...data });
+          return data;
+        },
+        update: async () => ({}),
+      },
+    };
+
+    const prisma = {
+      forSchool: async <T>(_s: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+    } as unknown as PrismaService;
+
+    return new LearningService(prisma, settingsWith(), new QuestionEngineService());
+  }
+
+  it('draws from the unit’s own questions when nothing has been curated', async () => {
+    const captured: Captured = { counts: [] };
+    const service = serviceCapturingPool(captured, { curated: 0, activity: 30, drawn: 30 });
+
+    await service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT);
+
+    expect(captured.find?.purpose).toBe(QuestionPurpose.ACTIVITY);
+    expect(captured.find?.unitId).toBe('u1');
+  });
+
+  it('uses the curated pool when the teacher has moved questions into it', async () => {
+    const captured: Captured = { counts: [] };
+    const service = serviceCapturingPool(captured, { curated: 12, activity: 30, drawn: 12 });
+
+    await service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT);
+
+    expect(captured.find?.purpose).toBe(QuestionPurpose.ASSESSMENT);
+  });
+
+  it('never draws a question that is still waiting on a teacher', async () => {
+    const captured: Captured = { counts: [] };
+    const service = serviceCapturingPool(captured, { curated: 0, activity: 30, drawn: 30 });
+
+    await service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT);
+
+    expect(captured.find?.needsReview).toBe(false);
+  });
+
+  it('never draws an unpublished question', async () => {
+    const captured: Captured = { counts: [] };
+    const service = serviceCapturingPool(captured, { curated: 0, activity: 30, drawn: 30 });
+
+    await service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT);
+
+    expect(captured.find?.status).toBe(ContentStatus.PUBLISHED);
+  });
+
+  it('asks the configured number, not the whole pool', async () => {
+    const captured: Captured = { counts: [] };
+    const service = serviceCapturingPool(captured, { curated: 0, activity: 30, drawn: 30 });
+
+    const attempt = await service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT);
+
+    expect(attempt.questions).toHaveLength(10);
+  });
+
+  it('asks no question twice in one attempt', async () => {
+    const captured: Captured = { counts: [] };
+    const service = serviceCapturingPool(captured, { curated: 0, activity: 30, drawn: 30 });
+
+    // The student-facing attempt deliberately hides the question id — she is
+    // shown the frozen copy — so the wording is what identifies each one here.
+    const attempt = await service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT);
+    const asked = attempt.questions.map((q) => q.prompt);
+
+    expect(asked).toHaveLength(10);
+    expect(new Set(asked).size).toBe(asked.length);
+  });
+
+  it('asks everything it has when the unit holds fewer than the configured number', async () => {
+    const captured: Captured = { counts: [] };
+    const service = serviceCapturingPool(captured, { curated: 0, activity: 6, drawn: 6 });
+
+    const attempt = await service.startActivity(student, 'u1', QuestionPurpose.ASSESSMENT);
+
+    expect(attempt.questions).toHaveLength(6);
+  });
+
+  it('reports how many an attempt will ask, not how many the pool holds', async () => {
+    const service = serviceOver({ questions: 30 });
+
+    const progress = await service.unitProgress(student, 'u1');
+
+    expect(progress.assessmentState.questionCount).toBe(10);
   });
 });

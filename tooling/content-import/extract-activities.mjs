@@ -357,6 +357,45 @@ for (const t of tables) {
 }
 
 // -----------------------------------------------------------------------
+// 3b. Circle a tick or a cross against a picture.
+//
+//     The source states no answer for any of these — there is nothing in the
+//     file marking which are true — so they are read out complete but with an
+//     empty answer key and flagged. A teacher supplies the answers; nothing
+//     here guesses one.
+// -----------------------------------------------------------------------
+for (const t of tables) {
+  const heading = t.rows[0].map((c) => c.text).join(' ');
+  if (!/circle or/i.test(heading)) continue;
+
+  const unit = unitAt(t.paragraphIndex);
+
+  t.rows.slice(1).forEach((row, n) => {
+    // The sentence is the cell with words in it: the others hold the tick and
+    // cross to circle, the picture, and the item number.
+    const sentence = row
+      .map((c) => c.text.trim())
+      .find((text) => /[a-z]{3}/i.test(text) && !/^[-–—×✓\d\s.]*$/.test(text));
+
+    const images = row.flatMap((c) => c.images).filter((i) => !/\.wdp$/i.test(i));
+    if (!sentence) return;
+
+    questions.push({
+      type: 'true_false',
+      unit,
+      prompt: sentence,
+      payload: {},
+      answerKey: {},
+      sourceRef: `p${t.paragraphIndex}-circle-${n + 1}`,
+      needsReview: true,
+      reviewNotes:
+        'The source does not mark whether this is true or false. Please choose the answer.',
+      images,
+    });
+  });
+}
+
+// -----------------------------------------------------------------------
 // 4. Missing letter.
 //
 //    The source gives the choices but never marks the answer. A choice is

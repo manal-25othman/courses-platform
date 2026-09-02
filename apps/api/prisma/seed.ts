@@ -77,6 +77,11 @@ const GLOBAL_SETTINGS: Array<{ key: string; value: unknown; source: string }> = 
 
   // Whether grammar waits for vocabulary, and the assessment for both.
   { key: 'learning.sequential_unlock', value: true, source: 'Client, 2026-08-31' },
+
+  // How many questions one assessment attempt asks. Ten makes the 80% pass
+  // mark exactly eight right out of ten, which is a figure a student and a
+  // teacher can both read off without arithmetic.
+  { key: 'assessment.question_count', value: 10, source: 'Client, 2026-09-02' },
 ];
 
 async function main(): Promise<void> {

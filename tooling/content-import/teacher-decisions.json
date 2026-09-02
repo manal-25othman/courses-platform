@@ -1,0 +1,84 @@
+{
+  "note": "The teacher's curriculum decisions, recorded verbatim. Answers here are hers, not ours. apply-teacher-decisions.mjs checks each record against the state this file assumes before it changes anything, and refuses rather than forcing a change that no longer matches.",
+  "approvedOn": "2026-09-02",
+  "sourceChecksum": "176ad3f307072d4ca28fb9d77a617c67",
+
+  "grammarMappings": {
+    "note": "All eight pairings confirmed correct as proposed. Only the review flag is cleared; the scans, titles and unit assignments are untouched.",
+    "expected": [
+      { "unit": "Living Things", "title": "المبني للمجهول في المضارع البسيط" },
+      { "unit": "Living Things", "title": "Where Clauses" },
+      { "unit": "Lifestyles",    "title": "Conditional Sentences" },
+      { "unit": "Lifestyles",    "title": "Countable & Uncountable Nouns" },
+      { "unit": "Interests",     "title": "Present Perfect" },
+      { "unit": "Interests",     "title": "Present Perfect Keywords" },
+      { "unit": "Professions",   "title": "Simple Past & Past Progressive" },
+      { "unit": "Professions",   "title": "Restrictive Relative Clauses" }
+    ]
+  },
+
+  "trueFalse": {
+    "note": "The 'Circle ✓ or ×' exercises. The source states no answer for any of them, so these are the teacher's. Question text and pictures are read from the source file at import time and checked against 'text' below; the unit each belongs to comes from the source, not from this list.",
+    "answers": [
+      { "ref": "p293-circle-1",  "text": "They sleep in the nest.",             "correct": false },
+      { "ref": "p293-circle-2",  "text": "It has two wings.",                   "correct": true  },
+      { "ref": "p293-circle-3",  "text": "It is an extinct animal.",            "correct": true  },
+      { "ref": "p293-circle-4",  "text": "It lives in the desert.",             "correct": false },
+
+      { "ref": "p652-circle-1",  "text": "That is my finger.",                  "correct": true  },
+      { "ref": "p652-circle-2",  "text": "You should take some medicine.",      "correct": true  },
+      { "ref": "p652-circle-3",  "text": "My arm is broken.",                   "correct": false },
+      { "ref": "p652-circle-4",  "text": "We use it to cut things.",            "correct": false },
+
+      { "ref": "p986-circle-1",  "text": "It is a concert.",                    "correct": true  },
+      { "ref": "p986-circle-2",  "text": "I like collecting coins.",            "correct": false },
+      { "ref": "p986-circle-3",  "text": "She won a prize.",                    "correct": true  },
+      { "ref": "p986-circle-4",  "text": "It is the midnight.",                 "correct": true  },
+      { "ref": "p986-circle-5",  "text": "He is playing the piano.",            "correct": false },
+
+      { "ref": "p1332-circle-1", "text": "I can see a robot.",                  "correct": false },
+      { "ref": "p1332-circle-2", "text": "They used Artificial Intelligence.",  "correct": true  },
+      { "ref": "p1332-circle-3", "text": "He is an astronaut.",                 "correct": false },
+      { "ref": "p1332-circle-4", "text": "This is a fire truck.",               "correct": true  },
+      { "ref": "p1332-circle-5", "text": "It is an ambulance.",                 "correct": false }
+    ]
+  },
+
+  "vocabulary": {
+    "note": "Both meanings stay exactly as the source writes them. Nothing is translated; only the review flag is cleared.",
+    "keepAsWritten": [
+      { "unit": "Welcome", "wordEn": "hundred",  "meaningAr": "100"  },
+      { "unit": "Welcome", "wordEn": "thousand", "meaningAr": "1000" }
+    ]
+  },
+
+  "answerKeys": {
+    "note": "Answers the source did not state, or stated only as a partial highlight. Each names the option's text rather than its letter, so the change cannot land on the wrong option if the order ever differs.",
+    "choices": [
+      { "ref": "p104",           "expectPrompt": "How",       "answerText": "long"   },
+      { "ref": "p783-letter-4",  "expectPrompt": "_lives",    "answerText": "o"      },
+      { "ref": "p1168",          "expectPrompt": "drums",     "answerText": "sounds" },
+      { "ref": "p1421-letter-4", "expectPrompt": "_fficer",   "answerText": "o"      }
+    ]
+  },
+
+  "sourceCorrections": {
+    "note": "Two places where the source file itself is faulty and the teacher supplied the correction. Both are recorded here because they are the only points where stored content differs from the source document.",
+    "oddOneOut": [
+      {
+        "ref": "p1140",
+        "why": "The source reads 'correction – education – reaction- invite'. The dash before 'invite' has no space, so it was read as three options instead of four.",
+        "options": ["correction", "education", "reaction", "invite"],
+        "answerText": "invite"
+      }
+    ],
+    "wordOrdering": [
+      {
+        "ref": "p643-0-order",
+        "why": "The source word list contains 'broken' twice and an extraneous 'watch'. The teacher approved removing the duplicate and the extra word so the words form the answer the source itself prints.",
+        "tokens": ["to", "rest", "broken", "your arm", "you", "If", "is", "will need"],
+        "sentence": "If your arm is broken, you will need to rest."
+      }
+    ]
+  }
+}

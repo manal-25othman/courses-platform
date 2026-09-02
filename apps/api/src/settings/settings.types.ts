@@ -33,6 +33,8 @@ export const SETTING_KEYS = {
   GRAMMAR_VIDEO_HOSTS: 'grammar.video_allowed_hosts',
   /** Whether grammar and the assessment unlock in order (SRS 21, 22). */
   LEARNING_SEQUENTIAL_UNLOCK: 'learning.sequential_unlock',
+  /** How many questions one assessment attempt asks. */
+  ASSESSMENT_QUESTION_COUNT: 'assessment.question_count',
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

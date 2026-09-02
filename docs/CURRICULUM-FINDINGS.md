@@ -970,3 +970,126 @@ Mutation testing was used on the rules where being wrong would be expensive:
 treating an empty component as incomplete (the dead end), removing the server's
 refusal to start a blocked assessment, and weakening the video host check to a
 suffix test. All three were caught.
+
+---
+
+# The teacher's decisions, 2026-09-02
+
+All thirty-four open questions came back answered. What follows is what was
+applied, what the answers changed, and the one thing worth flagging back.
+
+Everything remains DRAFT. Curriculum approval is not permission to publish: the
+source-rights hold on the compiled Word file is untouched.
+
+## A discrepancy in the decision list, resolved from the source
+
+The eighteen tick-or-cross answers arrived under three headings — LIVING
+THINGS covering items 1–8, then INTERESTS and PROFESSIONS — with no LIFESTYLES
+heading at all. The source disagrees: items 5–8 (*That is my finger*, *You
+should take some medicine*, *My arm is broken*, *We use it to cut things*) sit
+in the Lifestyles unit, and Living Things has only four.
+
+The numbering and the wording match the review pack item for item, so the
+headings are a transcription slip rather than a re-assignment — and the
+instructions were explicit that unit assignments are to be preserved. The
+answers were therefore matched by question text, which is unique, and each
+question filed under the unit the source puts it in. Nothing was moved.
+
+## What was applied
+
+| | Count |
+|---|---|
+| Grammar sheet pairings confirmed | 8 |
+| Tick-or-cross questions created with their answers | 18 |
+| Vocabulary entries confirmed as written | 2 |
+| Answers supplied where the source stated none | 4 |
+| Source corrections she approved | 2 |
+| **Total** | **34** |
+
+Running the script a second time applies nothing and reports all thirty-four as
+already done.
+
+### The pictures were left exactly as the source has them
+
+Two anomalies were reported before entry and both survive untouched. *I like
+collecting coins.* has **two** pictures in the source and still has two; *She
+won a prize.* has **none** and still has none. Neither was tidied up: inventing
+a picture and deleting a real one are the same kind of mistake.
+
+### The two source corrections
+
+These are the only places where what is stored differs from what the file says,
+and both carry her approval and the reason on the record itself.
+
+- **Interests, odd one out.** The file reads `correction – education –
+  reaction- invite`; the missing space made it read as three options. It is now
+  four, with *invite* as the answer.
+- **Lifestyles, word ordering.** The file's word list holds *broken* twice and
+  an extraneous *watch*. The duplicate and the extra word are removed, leaving
+  eight words that build the sentence the file itself prints.
+
+Nothing else in the curriculum was touched.
+
+## The assessment: an architecture conflict, and the smallest fix
+
+**The conflict was real.** `questions.purpose` is exclusive — a question is
+either an activity question or an assessment question, never both — and an
+attempt used the entire assessment pool with no sampling. Under that model the
+only way to give a unit a ten-question assessment was to move ten questions out
+of its activity, forty across the four units, and a student would then never
+meet those ten in practice.
+
+Rather than make `purpose` non-exclusive — which would change what "activity"
+means for progress, for the CMS and for every attempt already recorded — only
+*where the assessment looks* changed:
+
+> A teacher may curate a pool by moving questions into the assessment. Where
+> she has, that pool is the assessment and nothing else is used. Where she has
+> not, the assessment draws from the unit's own approved activity questions.
+
+An attempt then asks `assessment.question_count` questions, taken off the front
+of the engine's seeded shuffle. Curation still works exactly as before, no
+question was moved, no snapshot changed, and no unit needed a selection stage.
+
+What the pool refuses is as important as what it offers: a question from
+another unit, one that is unpublished, and one still waiting on a teacher's
+answer are all excluded by the query itself.
+
+| Unit | Approved questions | Attempt asks | Ten possible |
+|---|---|---|---|
+| Living Things | 41 | 10 | yes |
+| Lifestyles | 29 | 10 | yes |
+| Interests | 41 | 10 | yes |
+| Professions | 40 | 10 | yes |
+
+One existing test had to change. It asserted that a unit with activity
+questions but no curated assessment reports its assessment component as
+*empty*. That is no longer true, and it is no longer supposed to be: such a
+unit now has an assessment. The test was updated to the new rule and a second
+one added for the case it used to cover — a unit with no questions at all,
+where the assessment genuinely is missing and is named as such. The weighting
+is unaffected either way: an empty component and an unpassed one both score
+zero, so 25/25/25/25 and every overall figure are unchanged.
+
+## How it was verified
+
+Thirty-three checks over the real HTTP API, against an isolated fixture in its
+own school with two units — twelve settled questions each plus one deliberately
+left unanswered:
+
+- the sequence still holds, and the assessment is refused over HTTP before it;
+- an attempt asks exactly ten, none twice, none from the other unit, and never
+  the unanswered one;
+- seven right out of ten scores 70 and does not pass; ten out of ten scores 100
+  and does;
+- the second attempt is allowed, the third refused, and the highest score is
+  the one kept;
+- the activity stays its own quarter throughout — untouched by the assessment,
+  still zero, and the unit is not complete without it.
+
+Three mutations were used to check the tests bite: dropping the `needsReview`
+filter from the pool, ignoring a curated pool, and removing the ten-question
+slice. All three were caught.
+
+The fixture was removed afterwards, leaving no attempts, no progress and no
+extra school.

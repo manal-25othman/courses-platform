@@ -343,6 +343,37 @@ export class LearningService {
     };
   }
 
+  /**
+   * Which questions a unit's assessment draws from.
+   *
+   * A teacher may curate a pool by moving questions to the assessment; where
+   * she has, that pool *is* the assessment and nothing else is used. Where she
+   * has not, the assessment draws from the unit's own approved activity
+   * questions — so a unit has an assessment as soon as its questions are
+   * approved, and nobody has to move forty questions by hand to get one.
+   *
+   * The alternative was to make `purpose` non-exclusive, which would have
+   * changed what "activity" means for progress, for the CMS and for every
+   * attempt already recorded. This changes only where the assessment looks.
+   *
+   * Either way the questions are from this unit alone, published, and settled:
+   * one still waiting on a teacher's answer is never asked.
+   */
+  private async assessmentPool(
+    tx: TenantClient,
+    unitId: string,
+  ): Promise<{ where: Record<string, unknown>; curated: boolean }> {
+    const settled = { status: ContentStatus.PUBLISHED, needsReview: false };
+
+    const curated = await tx.question.count({
+      where: { unitId, purpose: QuestionPurpose.ASSESSMENT, ...settled },
+    });
+
+    return curated > 0
+      ? { where: { unitId, purpose: QuestionPurpose.ASSESSMENT, ...settled }, curated: true }
+      : { where: { unitId, purpose: QuestionPurpose.ACTIVITY, ...settled }, curated: false };
+  }
+
   private async assessmentState(
     tx: TenantClient,
     studentId: string,
@@ -361,10 +392,10 @@ export class LearningService {
 
     const passMarkPercent = passMark ?? 100;
 
-    const [questionCount, attempts] = await Promise.all([
-      tx.question.count({
-        where: { unitId, status: ContentStatus.PUBLISHED, purpose: QuestionPurpose.ASSESSMENT },
-      }),
+    const pool = await this.assessmentPool(tx, unitId);
+
+    const [available, attempts] = await Promise.all([
+      tx.question.count({ where: pool.where }),
       tx.activityAttempt.findMany({
         where: {
           studentId,
@@ -376,6 +407,15 @@ export class LearningService {
         select: { scorePercent: true, passed: true },
       }),
     ]);
+
+    // What an attempt will actually ask: the configured number, or the whole
+    // pool where it holds fewer. Reporting the pool size instead would promise
+    // a student more questions than she is going to see.
+    const asked = await this.settings.resolve<number>(
+      SETTING_KEYS.ASSESSMENT_QUESTION_COUNT,
+      this.scopes(unitId),
+    );
+    const questionCount = Math.min(available, asked ?? available);
 
     const scores = attempts
       .map((a) => a.scorePercent)
@@ -758,8 +798,14 @@ export class LearningService {
         }
       }
 
+      // An assessment draws from its unit's pool (see `assessmentPool`); an
+      // activity asks everything it has.
+      const pool = isAssessment
+        ? (await this.assessmentPool(tx, unitId)).where
+        : { unitId, purpose, status: ContentStatus.PUBLISHED };
+
       const questions = await tx.question.findMany({
-        where: { unitId, purpose, status: ContentStatus.PUBLISHED },
+        where: pool,
         orderBy: { orderIndex: 'asc' },
         include: {
           media: {
@@ -789,11 +835,22 @@ export class LearningService {
       // The engine decides the order and what the student may see. Presenting
       // first and snapshotting from that keeps the frozen copy and the shown
       // copy in step.
-      const presented = this.engine.present(stored, {
+      const shown = this.engine.present(stored, {
         seed,
         shuffleQuestions: shuffleQuestions ?? true,
         shuffleOptions: shuffleOptions ?? true,
       });
+
+      // An assessment asks a set number of questions, taken off the front of
+      // the shuffled pool — so each attempt is a fresh draw, and no question
+      // can appear twice in the same one. An activity asks all of its own.
+      const asked = isAssessment
+        ? await this.settings.resolve<number>(
+            SETTING_KEYS.ASSESSMENT_QUESTION_COUNT,
+            this.scopes(unitId),
+          )
+        : null;
+      const presented = typeof asked === 'number' ? shown.slice(0, asked) : shown;
 
       const byId = new Map(stored.map((q) => [q.id, q]));
       const mediaById = new Map(questions.map((q) => [q.id, q.media]));
