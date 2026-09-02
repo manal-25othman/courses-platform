@@ -1,15 +1,16 @@
 /**
- * Puts the source-rights hold back.
+ * Takes source-derived curriculum back to DRAFT.
  *
- * The confirmed decision (2026-08-31, §51) is that nothing from the supplied
- * source file reaches students until the client confirms she holds the right
- * to use and distribute it. Every unit and every imported question was DRAFT
- * before Phase 6 began; Living Things and Lifestyles were published purely so
- * the browser suites had something to run against, which also published 21
- * imported questions.
+ * Written for the source-rights hold, which is now lifted: the client
+ * confirmed on 2026-09-02 that she holds the rights to use and publish this
+ * content (§51), so this is no longer something anyone has to run.
  *
- * This reverses exactly that, and nothing else: only records that came from
- * the source file, and only from PUBLISHED back to DRAFT. Nothing is promoted.
+ * It is kept because what it does is still worth having — an unpublish that
+ * cannot go wrong. It touches only records that came from the source file,
+ * and only ever moves them from PUBLISHED back to DRAFT. Nothing is promoted,
+ * so running it can hide content but never expose it. That makes it the right
+ * tool for pulling material back out of students' hands in a hurry, whatever
+ * the reason.
  */
 import { PrismaClient } from '../prisma-client.mjs';
 const db = new PrismaClient({ datasourceUrl: process.env.DIRECT_URL ?? process.env.DATABASE_URL });

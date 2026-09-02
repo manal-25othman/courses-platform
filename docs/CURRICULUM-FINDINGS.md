@@ -754,7 +754,7 @@ In order, because each step depends on the one before it:
    become the assessment is the teacher's decision, not the document's.
 7. Only then, the sequential unlock flow and the bonus game framework.
 
-Nothing in steps 1–6 may be published while the source-rights hold stands.
+Nothing in steps 1–6 may be published while the source-rights hold stands. *(The hold was lifted on 2026-09-02 — see the closing section.)*
 
 ---
 
@@ -763,7 +763,7 @@ Nothing in steps 1–6 may be published while the source-rights hold stands.
 The inventory was approved and the content it described has been entered. What
 follows is what actually went in, what did not, and why.
 
-Everything below is DRAFT. The source-rights hold stands: no unit, question,
+Everything below is DRAFT. At the time of writing the source-rights hold stood, so no unit, question,
 word or grammar section is published, and nothing here is visible to a student.
 
 ## The seven mis-filed questions are back where they belong
@@ -1093,3 +1093,38 @@ slice. All three were caught.
 
 The fixture was removed afterwards, leaving no attempts, no progress and no
 extra school.
+
+---
+
+# Source rights resolved, 2026-09-02
+
+The client has confirmed she holds the rights and authorisation to use and
+publish the curriculum content entered into the platform. The hold recorded on
+2026-08-31 is lifted, and rights are no longer a blocker to publication or to
+deployment.
+
+Three things this does not do, each worth stating because each is easy to
+assume:
+
+- **It changes no curriculum content.** Not a word, an answer, a picture or a
+  unit assignment moved on account of it. What the teacher approved is what is
+  stored.
+- **It publishes nothing.** Every unit, word, question and grammar section is
+  still DRAFT. Publication is a separate, explicit instruction; this
+  confirmation removes the reason it could not be given, not the step itself.
+- **It does not retire the provenance.** Every imported record keeps its
+  `source_ref` back into the document, the grammar scans keep the manifest that
+  records why each was paired with its unit, and `teacher-decisions.json` keeps
+  her answers and her two approved source corrections. Those exist for
+  maintenance and auditing — to answer "where did this come from?" and "who
+  decided this?" years from now — and that need does not expire with the hold.
+
+The earlier entries above are left as they were written rather than rewritten,
+because they explain why every curriculum record was created DRAFT in the first
+place and why the provenance on each one exists. The decision log in
+`ARCHITECTURE.md` marks the superseded entry rather than removing it.
+
+`restore-rights-hold.mjs` is kept for the same reason it was written: it only
+ever moves source-derived content from PUBLISHED back to DRAFT, never the other
+way, which makes it a safe way to pull material back out of students' hands
+quickly — whatever the reason turns out to be.

@@ -15,6 +15,8 @@ DRY=1 DIRECT_URL=… node ../../tooling/db-cleanup/remove-test-data.mjs
 DIRECT_URL=… node ../../tooling/db-cleanup/remove-test-data.mjs
 
 # 3. Put every unit and every imported question back to DRAFT.
+#    (The rights hold this was written for was lifted on 2026-09-02; it is
+#     kept as an unpublish that can only ever hide content, never expose it.)
 DIRECT_URL=… node ../../tooling/db-cleanup/restore-rights-hold.mjs
 
 # 4. Retire a development password that has appeared in a transcript.
