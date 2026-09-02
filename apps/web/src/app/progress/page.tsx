@@ -116,14 +116,14 @@ export default function ClassProgressPage() {
                       <span className="muted" data-testid="overall-percent">
                         {student.overallPercent}%
                       </span>
-                      <div className="muted" style={{ fontSize: '.75rem' }}>
+                      <div className="muted" style={{ fontSize: 'var(--fs-caption)' }}>
                         {student.unitsComplete}/{student.unitsCounted} units finished
                       </div>
                     </td>
                     {student.units.map((unit) => (
                       <td key={unit.unitId} className="hide-sm" data-label={unit.title}>
                         <span>{unit.overallPercent}%</span>
-                        <div className="muted" style={{ fontSize: '.75rem' }}>
+                        <div className="muted" style={{ fontSize: 'var(--fs-caption)' }}>
                           W {unit.vocabulary.empty ? '—' : `${unit.vocabulary.done}/${unit.vocabulary.total}`} · G{' '}
                           {unit.grammar.empty ? '—' : `${unit.grammar.done}/${unit.grammar.total}`} · A{' '}
                           {unit.activity.empty
@@ -141,7 +141,7 @@ export default function ClassProgressPage() {
                         {unit.missingContent.length > 0 && (
                           <div
                             className="muted"
-                            style={{ fontSize: '.72rem' }}
+                            style={{ fontSize: 'var(--fs-micro)' }}
                             data-testid="unit-not-ready"
                           >
                             needs {unit.missingContent.join(', ')}

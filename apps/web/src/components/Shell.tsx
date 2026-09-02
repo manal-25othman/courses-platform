@@ -32,26 +32,52 @@ export function Brandmark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** The bar a student's thumb reaches, on a phone only. */
+/**
+ * Where a student can go. Three real routes and no invented ones.
+ *
+ * The same list is drawn twice, because a phone and a laptop want different
+ * shapes: a thumb bar at the bottom of a small screen, and a row in the
+ * header on a large one. Stretching the thumb bar across a desktop would put
+ * the primary navigation as far from the cursor as it is possible to get —
+ * and leaving it out, as this did before, hid Games on desktop entirely.
+ */
 const STUDENT_NAV: { href: string; label: string; icon: IconName }[] = [
   { href: '/home', label: 'Home', icon: 'home' },
   { href: '/games', label: 'Games', icon: 'games' },
   { href: '/messages', label: 'Teacher', icon: 'message' },
 ];
 
-export function StudentNav() {
+function useHere() {
   const path = usePathname();
+  return (href: string) => path === href || path.startsWith(`${href}/`);
+}
+
+/** The bar a student's thumb reaches, on a phone only. */
+export function StudentNav() {
+  const here = useHere();
   return (
     <nav className="navbar" aria-label="Sections" style={{ gridTemplateColumns: `repeat(${STUDENT_NAV.length}, 1fr)` }}>
-      {STUDENT_NAV.map((item) => {
-        const here = path === item.href || path.startsWith(`${item.href}/`);
-        return (
-          <Link key={item.href} href={item.href} aria-current={here ? 'page' : undefined}>
-            <Icon name={item.icon} />
-            {item.label}
-          </Link>
-        );
-      })}
+      {STUDENT_NAV.map((item) => (
+        <Link key={item.href} href={item.href} aria-current={here(item.href) ? 'page' : undefined}>
+          <Icon name={item.icon} />
+          {item.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/** The same three, in the header, from tablet width up. */
+export function StudentTopNav() {
+  const here = useHere();
+  return (
+    <nav className="topnav" aria-label="Sections">
+      {STUDENT_NAV.map((item) => (
+        <Link key={item.href} href={item.href} aria-current={here(item.href) ? 'page' : undefined}>
+          <Icon name={item.icon} size={17} />
+          {item.label}
+        </Link>
+      ))}
     </nav>
   );
 }
@@ -72,11 +98,12 @@ export function Avatar({ name }: { name: string }) {
   );
 }
 
-export function TopBar({ right }: { right?: ReactNode }) {
+export function TopBar({ right, nav = false }: { right?: ReactNode; nav?: boolean }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
         <Brandmark />
+        {nav && <StudentTopNav />}
         <span style={{ flex: 1 }} />
         {right}
       </div>

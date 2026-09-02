@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, BonusGame, BonusGameRound } from '@/lib/api';
+import { Icon } from './Icon';
 
 /**
  * Bonus review games.
@@ -39,15 +40,24 @@ export function BonusGames({ unitId }: { unitId: string }) {
     }
   }
 
-  if (!games) return <p className="muted">Loading games…</p>;
+  if (!games) {
+    return (
+      <div className="game-shelf">
+        <div className="skeleton" style={{ height: '11rem' }} />
+        <div className="skeleton" style={{ height: '11rem' }} />
+      </div>
+    );
+  }
 
   if (playing) {
+    const name = playing.gameKey === 'memory_match' ? 'Memory Match' : 'Quick Match';
     return (
-      <div>
-        <div className="between" style={{ marginBottom: '.75rem' }}>
-          <strong>{playing.gameKey === 'memory_match' ? 'Memory Match' : 'Quick Match'}</strong>
-          <button className="small" onClick={() => setPlaying(null)} data-testid="game-exit">
-            Back to games
+      <div className="stack" data-kind="games">
+        <div className="between">
+          <h2 className="marked-title" style={{ margin: 0 }}>{name}</h2>
+          <button className="ghost small" onClick={() => setPlaying(null)} data-testid="game-exit">
+            <Icon name="back" />
+            All games
           </button>
         </div>
         {playing.gameKey === 'memory_match' ? (
@@ -60,37 +70,51 @@ export function BonusGames({ unitId }: { unitId: string }) {
   }
 
   return (
-    <div>
-      <p className="alert ok" data-testid="games-note">
-        These are just for fun and practice. Nothing here is marked, and it does not change
-        your progress or your score.
-      </p>
-
+    <div className="stack" data-kind="games">
       {error && (
         <p className="alert error" role="alert">
           {error}
         </p>
       )}
 
-      <div className="cards">
+      <div className="game-shelf">
         {games.map((game) => (
-          <div key={game.key} className="card" data-testid={`game-${game.key}`}>
-            <strong>{game.displayName}</strong>
-            <p className="muted" style={{ margin: '.35rem 0' }}>
-              {game.description}
-            </p>
+          <button
+            key={game.key}
+            className="game-card"
+            data-kind={game.key === 'memory_match' ? 'games' : 'activity'}
+            disabled={!game.available}
+            onClick={() => start(game.key)}
+            data-testid={`game-${game.key}`}
+          >
+            <span className="game-icon" aria-hidden="true">
+              <Icon name={game.key === 'memory_match' ? 'games' : 'star'} size={22} />
+            </span>
+            <span className="game-name">{game.displayName}</span>
+            <span className="game-why">{game.description}</span>
             {game.available ? (
-              <button className="primary" onClick={() => start(game.key)}>
-                Play
-              </button>
+              <span className="row" style={{ color: 'var(--kind-ink)', fontWeight: 700, fontSize: 'var(--fs-small)' }}>
+                <Icon name="play" size={14} />
+                Play with {game.itemCount} words
+              </span>
             ) : (
-              <p className="muted" style={{ margin: 0 }}>
-                Needs {game.minimumItems} words in this unit. It has {game.itemCount} so far.
-              </p>
+              /* Why it is closed, in the terms she can act on: more words. */
+              <span className="game-why">
+                Opens at {game.minimumItems} words. This unit has {game.itemCount}.
+              </span>
             )}
-          </div>
+          </button>
         ))}
       </div>
+
+      {/*
+        Said once, at the bottom, where it reassures rather than warns. It is
+        true all the way down: this component posts nothing and the API has no
+        write path for a game.
+      */}
+      <p className="round-note" data-testid="games-note" style={{ maxWidth: 'none' }}>
+        Nothing here is marked. Playing does not change your progress or your score.
+      </p>
     </div>
   );
 }
@@ -138,38 +162,65 @@ function MemoryMatch({ round, onAgain }: { round: BonusGameRound; onAgain: () =>
 
   const done = found.length === round.pairs.length;
 
-  return (
-    <div>
-      <p className="muted">Tries: {tries}</p>
+  if (done) {
+    return (
+      <div className="round-end" data-testid="game-done">
+        <span className="mark tick" style={{ width: '3.5rem', height: '3.5rem' }}>
+          <Icon name="tick" size={26} />
+        </span>
+        <span className="round-score">{tries}</span>
+        <strong style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-title)' }}>
+          {tries === round.pairs.length ? 'Perfect — every pair first time.' : `All ${round.pairs.length} pairs found.`}
+        </strong>
+        <p className="round-note">
+          {tries === 1 ? '1 try.' : `${tries} tries.`} Nothing was recorded — this was just practice.
+        </p>
+        <button className="primary" onClick={onAgain}>
+          Play again
+        </button>
+      </div>
+    );
+  }
 
-      {done ? (
-        <div className="alert ok" data-testid="game-done">
-          <p style={{ margin: 0 }}>All matched in {tries} tries. Nothing was recorded — it was
-          just practice.</p>
-          <button className="primary" style={{ marginTop: '.5rem' }} onClick={onAgain}>
-            Play again
-          </button>
-        </div>
-      ) : (
-        <div className="memory-board">
-          {cards.map((card) => {
-            const open = turned.includes(card.key) || found.includes(card.pairId);
-            return (
-              <button
-                key={card.key}
-                className={`memory-card${open ? ' open' : ''}`}
-                onClick={() => turn(card)}
-                dir={card.rtl ? 'rtl' : 'ltr'}
-                lang={card.rtl ? 'ar' : 'en'}
-                aria-label={open ? card.face : 'Hidden card'}
-                data-testid="memory-card"
-              >
-                {open ? card.face : '?'}
-              </button>
-            );
-          })}
-        </div>
-      )}
+  return (
+    <div className="stack">
+      {/* Both numbers are real: pairs found is state, tries is counted here. */}
+      <div className="play-head">
+        <span className="play-stat">
+          <b>{found.length}<span style={{ color: 'var(--ink-4)' }}>/{round.pairs.length}</span></b>
+          <span>pairs found</span>
+        </span>
+        <span className="play-stat">
+          <b>{tries}</b>
+          <span>{tries === 1 ? 'try' : 'tries'}</span>
+        </span>
+        <span style={{ flex: 1 }} />
+        <span className="tally" aria-hidden="true">
+          {round.pairs.map((p) => (
+            <i key={p.id} data-on={found.includes(p.id)} />
+          ))}
+        </span>
+      </div>
+
+      <div className="memory-board">
+        {cards.map((card) => {
+          const matched = found.includes(card.pairId);
+          const open = turned.includes(card.key) || matched;
+          return (
+            <button
+              key={card.key}
+              className={`memory-card${open ? ' open' : ''}${matched ? ' done' : ''}`}
+              onClick={() => turn(card)}
+              dir={card.rtl ? 'rtl' : 'ltr'}
+              lang={card.rtl ? 'ar' : 'en'}
+              aria-label={open ? card.face : 'Hidden card'}
+              data-testid="memory-card"
+            >
+              {open ? card.face : ''}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -194,12 +245,20 @@ function QuickMatch({ round, onAgain }: { round: BonusGameRound; onAgain: () => 
   }
 
   if (finished) {
+    const perfect = right === round.questions.length;
     return (
-      <div className="alert ok" data-testid="game-done">
-        <p style={{ margin: 0 }}>
-          {right} out of {round.questions.length}. Nothing was recorded — it was just practice.
-        </p>
-        <button className="primary" style={{ marginTop: '.5rem' }} onClick={onAgain}>
+      <div className="round-end" data-testid="game-done">
+        <span className={`mark ${perfect ? 'tick' : 'cross'}`} style={{ width: '3.5rem', height: '3.5rem' }}>
+          <Icon name={perfect ? 'tick' : 'star'} size={26} />
+        </span>
+        <span className="round-score">
+          {right}<span style={{ color: 'var(--ink-4)' }}>/{round.questions.length}</span>
+        </span>
+        <strong style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-title)' }}>
+          {perfect ? 'Every one right.' : right === 0 ? 'Worth another go.' : 'Nicely done.'}
+        </strong>
+        <p className="round-note">Nothing was recorded — this was just practice.</p>
+        <button className="primary" onClick={onAgain}>
           Play again
         </button>
       </div>
@@ -207,13 +266,27 @@ function QuickMatch({ round, onAgain }: { round: BonusGameRound; onAgain: () => 
   }
 
   return (
-    <div>
-      <p className="muted">
-        Word {at + 1} of {round.questions.length}
-      </p>
-      <p style={{ fontSize: '1.6rem', fontWeight: 600, margin: '.5rem 0 1rem' }}>
-        {question.wordEn}
-      </p>
+    <div className="stack">
+      <div className="play-head">
+        <span className="play-stat">
+          <b>{at + 1}<span style={{ color: 'var(--ink-4)' }}>/{round.questions.length}</span></b>
+          <span>word</span>
+        </span>
+        <span className="play-stat">
+          <b>{right}</b>
+          <span>right so far</span>
+        </span>
+        <span style={{ flex: 1 }} />
+        <span className="tally" aria-hidden="true">
+          {round.questions.map((_, n) => (
+            <i key={n} data-on={n < at} />
+          ))}
+        </span>
+      </div>
+
+      {/* The word is the question, so it gets the screen. */}
+      <p className="quick-word">{question.wordEn}</p>
+
       <div className="choices">
         {question.options.map((option) => {
           const state =
@@ -229,6 +302,7 @@ function QuickMatch({ round, onAgain }: { round: BonusGameRound; onAgain: () => 
               key={option}
               className={`choice${state}`}
               onClick={() => choose(option)}
+              disabled={chosen !== null}
               dir="rtl"
               lang="ar"
               data-testid="quick-option"

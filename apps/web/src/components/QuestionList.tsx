@@ -95,7 +95,7 @@ export function QuestionList({
           {heading} ({questions.length})
         </h2>
         <div className="row">
-          <label className="row" style={{ gap: '.4rem', fontSize: '.9rem' }}>
+          <label className="row" style={{ gap: '.4rem', fontSize: 'var(--fs-body)' }}>
             <input
               type="checkbox"
               checked={onlyReview}
@@ -370,7 +370,7 @@ function NewQuestion({
       style={{ background: 'var(--bg)' }}
       data-testid="new-question-form"
     >
-      <h3 style={{ margin: 0, fontSize: '1rem' }}>A new question</h3>
+      <h3 style={{ margin: 0, fontSize: 'var(--fs-base)' }}>A new question</h3>
 
       {problem && (
         <p className="alert error" role="alert">
@@ -473,7 +473,7 @@ function NewQuestion({
         <button onClick={onDone}>Cancel</button>
       </div>
 
-      <p className="muted" style={{ margin: 0, fontSize: '.85rem' }}>
+      <p className="muted" style={{ margin: 0, fontSize: 'var(--fs-small)' }}>
         It is saved as a draft. Students see it once you publish it, and you can add a picture to
         it after saving.
       </p>
@@ -567,7 +567,7 @@ function PairFields({
         Add another pair
       </button>
 
-      <p className="muted" style={{ margin: '.5rem 0 0', fontSize: '.85rem' }}>
+      <p className="muted" style={{ margin: '.5rem 0 0', fontSize: 'var(--fs-small)' }}>
         The two columns are shuffled separately when a student sees them, so their positions never
         give the answer away.
       </p>
@@ -601,7 +601,7 @@ function SentenceField({
         placeholder="She likes reading books"
         data-testid="ordering-sentence"
       />
-      <span className="muted" style={{ fontSize: '.85rem' }} data-testid="ordering-preview">
+      <span className="muted" style={{ fontSize: 'var(--fs-small)' }} data-testid="ordering-preview">
         {words.length < 2
           ? 'Write at least two words.'
           : `${words.length} words. She will see them shuffled: ${words.join(' · ')}`}
@@ -700,7 +700,7 @@ function QuestionRow({
       <div className="between">
         <div style={{ minWidth: 0 }}>
           <strong data-testid="question-prompt">{question.prompt}</strong>
-          <div className="muted" style={{ fontSize: '.85rem', marginTop: '.2rem' }}>
+          <div className="muted" style={{ fontSize: 'var(--fs-small)', marginTop: '.2rem' }}>
             {question.type?.displayName ?? question.typeKey}
             {question.sourceRef ? ` · from the file (${question.sourceRef})` : ''}
             {` · ${question.points} mark${question.points === 1 ? '' : 's'}`}

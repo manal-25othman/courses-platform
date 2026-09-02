@@ -427,7 +427,7 @@ function SectionEditor({
         placeholder="https://www.youtube.com/watch?v=..."
         data-testid="section-video"
       />
-      <p className="muted" style={{ marginTop: '-.35rem', fontSize: '.85rem' }}>
+      <p className="muted" style={{ marginTop: '-.35rem', fontSize: 'var(--fs-small)' }}>
         Paste the link to a YouTube or Google Drive video. Leave empty for no video. The
         link is checked when you save, so you find out here rather than a student finding
         an empty player.

@@ -31,7 +31,12 @@ interface Step {
    * `locked` — the server refuses it until something earlier is finished.
    * `empty`  — her teacher has not built this part yet.
    */
-  state: 'done' | 'current' | 'todo' | 'locked' | 'empty';
+  /*
+    `spent` is used where she has no tries left and did not pass: the server
+    refuses it, but for a reason no amount of work will change, so it must
+    not be drawn as a padlock or offered as her next step.
+  */
+  state: 'done' | 'current' | 'todo' | 'locked' | 'spent' | 'empty';
 }
 
 /**
@@ -82,6 +87,7 @@ function stepsOf(unit: LearnUnitSummary): Step[] {
   // already passed, is not a lock — it is a finished state.
   const why = p.assessmentState.blockedBecause;
   const testLocked = why === 'vocabulary_incomplete' || why === 'grammar_incomplete';
+  const testSpent = why === 'no_attempts_left';
   const assessment: Step = {
     kind: 'assessment',
     label: 'Test',
@@ -98,7 +104,9 @@ function stepsOf(unit: LearnUnitSummary): Step[] {
         ? 'done'
         : testLocked
           ? 'locked'
-          : 'todo',
+          : testSpent
+            ? 'spent'
+            : 'todo',
   };
 
   const steps = [vocabulary, grammar, activity, assessment];
@@ -106,6 +114,11 @@ function stepsOf(unit: LearnUnitSummary): Step[] {
   const next = steps.find((step) => step.state === 'todo');
   if (next) next.state = 'current';
   return steps;
+}
+
+/** True when this unit has something she can actually get on with now. */
+function hasWork(unit: LearnUnitSummary) {
+  return stepsOf(unit).some((step) => step.state === 'current');
 }
 
 /** The single next action across the whole course, said in her words. */
@@ -166,7 +179,7 @@ export default function StudentHomePage() {
   if (!me) {
     return (
       <>
-        <TopBar />
+        <TopBar nav />
         <main className="page">
           <div className="skeleton" style={{ height: '2rem', width: '12rem' }} />
           <div className="skeleton" style={{ height: '6rem', marginTop: '1.5rem' }} />
@@ -180,13 +193,14 @@ export default function StudentHomePage() {
   const extra = (units ?? []).filter((u) => !u.progress.countsTowardCompletion);
   // Where she is up to: the first unit she has not finished.
   const currentId = core.find((u) => !u.progress.isComplete)?.id;
-  const current = core.find((u) => u.id === currentId);
+  const current = core.find(hasWork);
   const action = current ? nextAction(current, stepsOf(current)) : null;
   const finishedUnits = core.filter((u) => u.progress.isComplete).length;
 
   return (
     <>
       <TopBar
+        nav
         right={
           <span className="row" style={{ gap: '.5rem', flexWrap: 'nowrap' }}>
             <button className="ghost small" onClick={signOut}>
@@ -337,6 +351,8 @@ export default function StudentHomePage() {
                               <Icon name="tick" size={15} />
                             ) : step.state === 'locked' ? (
                               <Icon name="lock" size={14} />
+                            ) : step.state === 'spent' ? (
+                              <Icon name="cross" size={14} />
                             ) : (
                               <Icon name={step.kind === 'vocabulary' ? 'words' : step.kind} size={15} />
                             )}
@@ -350,7 +366,7 @@ export default function StudentHomePage() {
                     </ol>
 
                     {p.missingContent.length > 0 && (
-                      <p className="muted" style={{ margin: '.75rem 0 0', fontSize: '.8rem' }}>
+                      <p className="muted" style={{ margin: '.75rem 0 0', fontSize: 'var(--fs-small)' }}>
                         Your teacher is still adding part of this unit.
                       </p>
                     )}
@@ -375,10 +391,15 @@ export default function StudentHomePage() {
             <span className="aside-icon" aria-hidden="true">
               <Icon name="grammar" size={20} />
             </span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <strong className="aside-title">{unit.title}</strong>
-              <span className="muted" style={{ display: 'block' }}>
-                Extra revision. It does not change your course progress.
+            <span style={{ flex: 1, minWidth: 0, display: 'grid', gap: '.2rem' }}>
+              <span className="row" style={{ gap: '.5rem' }}>
+                <strong className="aside-title">{unit.title}</strong>
+                <span className="aside-tag">Extra</span>
+              </span>
+              {/* Said as what it is for, not as what it is missing. */}
+              <span className="muted">
+                Revision whenever you want it. It sits outside your four units, so nothing here
+                changes your course progress.
               </span>
             </span>
           </button>

@@ -57,7 +57,7 @@ export default function GamesPage() {
   if (!me || units === null) {
     return (
       <>
-        <TopBar />
+        <TopBar nav />
         <main className="page has-navbar">
           <div className="skeleton" style={{ height: '2rem', width: '9rem' }} />
           <div className="skeleton" style={{ height: '7rem', marginTop: '1.5rem' }} />
@@ -70,11 +70,11 @@ export default function GamesPage() {
     const unit = units.find((u) => u.id === openUnit);
     return (
       <>
-        <TopBar />
+        <TopBar nav />
         <main className="page has-navbar stack" data-kind="games">
-          <button className="ghost small" onClick={() => setOpenUnit(null)}>
+          <button className="ghost small" onClick={() => setOpenUnit(null)} data-testid="all-units">
             <Icon name="back" />
-            All games
+            All units
           </button>
           <h1>{unit?.title}</h1>
           <BonusGames unitId={openUnit} />
@@ -85,45 +85,79 @@ export default function GamesPage() {
   }
 
   const playable = units.filter((u) => (counts[u.id] ?? []).some((g) => g.available));
+  /*
+    Which units she could still open games in. Two things disqualify a unit:
+    having no words at all (there is nothing to learn towards yet — Grammar
+    Review is the case here), and not being part of the course. Naming those
+    would promise something that will never happen.
+  */
+  const notYet = units.filter(
+    (u) =>
+      u.progress.countsTowardCompletion &&
+      !(counts[u.id] ?? []).some((g) => g.available) &&
+      (counts[u.id] ?? []).some((g) => g.itemCount > 0),
+  );
 
   return (
     <>
-      <TopBar />
+      <TopBar nav />
       <main className="page has-navbar stack" data-kind="games">
-        <h1>Games</h1>
-        <p className="muted" style={{ maxWidth: 'var(--read-max)' }}>
-          Practice with the words you have already met. Nothing here is marked and none of it
-          changes your progress — it is just for getting quicker.
-        </p>
+        <header className="greeting">
+          <h1>Games</h1>
+          <p className="greeting-line">
+            Practice with words you have already met. Nothing here is marked, and none of it
+            changes your progress.
+          </p>
+        </header>
 
         {playable.length === 0 ? (
-          <div className="card">
-            <h2>No games yet</h2>
-            <p className="muted" style={{ marginTop: '.5rem' }}>
-              Games open up once a unit has enough words in it. Learn a few more and come back.
-            </p>
+          <div className="locked-note">
+            <Icon name="games" />
+            <div>
+              <strong>Games open once a unit has enough words</strong>
+              <p className="muted" style={{ margin: '.25rem 0 0' }}>
+                Memory Match needs six words with meanings, Quick Match needs four. Learn a few
+                more and come back.
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="cards">
-            {playable.map((unit) => (
-              <button
-                key={unit.id}
-                className="card"
-                style={{ textAlign: 'left', borderTop: '3px solid var(--games)' }}
-                onClick={() => setOpenUnit(unit.id)}
-              >
-                <span className="mark" style={{ background: 'var(--games-soft)', color: 'var(--games)' }}>
-                  <Icon name="games" />
-                </span>
-                <strong style={{ display: 'block', marginTop: '.6rem', fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>
-                  {unit.title}
-                </strong>
-                <span className="muted">
-                  {(counts[unit.id] ?? []).filter((g) => g.available).length} games ready
-                </span>
-              </button>
-            ))}
+          <div className="game-shelf">
+            {playable.map((unit) => {
+              const ready = (counts[unit.id] ?? []).filter((g) => g.available);
+              return (
+                <button
+                  key={unit.id}
+                  className="game-card"
+                  data-kind="games"
+                  onClick={() => setOpenUnit(unit.id)}
+                  data-testid="games-unit"
+                >
+                  <span className="game-icon" aria-hidden="true">
+                    <Icon name="games" size={22} />
+                  </span>
+                  <span className="game-name">{unit.title}</span>
+                  {/* Named, not counted: "2 games ready" says less than
+                      "Memory Match, Quick Match" and takes the same room. */}
+                  <span className="game-why">
+                    {ready.map((g) => g.displayName).join(' and ')}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+        )}
+
+        {/*
+          Units that have words but not enough of them. Saying so is the only
+          way she can tell the difference between "not built yet" and "keep
+          going" — and the second one she can do something about.
+        */}
+        {playable.length > 0 && notYet.length > 0 && (
+          <p className="round-note" style={{ maxWidth: 'none', textAlign: 'left' }}>
+            More games open as you learn the words in{' '}
+            {notYet.map((u) => u.title).join(', ')}.
+          </p>
         )}
       </main>
       <StudentNav />

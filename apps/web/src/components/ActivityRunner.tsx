@@ -63,6 +63,18 @@ export function ActivityRunner({
   const [past, setPast] = useState<AttemptSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Which question is showing while she answers.
+   *
+   * Answering happens one question at a time — a phone cannot hold twenty-one
+   * of them and asking her to scroll past the ones she has done is not a
+   * quiz, it is a form. Reviewing a finished attempt still shows the whole
+   * paper, because that is when seeing every mark at once is the point.
+   *
+   * Nothing about submission changes: every answer is still sent together in
+   * one call at the end, exactly as before.
+   */
+  const [cursor, setCursor] = useState(0);
 
   const loadPast = useCallback(async () => {
     const list = await api
@@ -109,6 +121,7 @@ export function ActivityRunner({
       setAttemptsAtStart(assessment?.attemptsUsed ?? 0);
       const started = await api.post<Attempt>(startPath);
       setAttempt(started);
+      setCursor(0);
       // An attempt resumed after closing the page brings her answers back.
       const existing: Record<string, unknown> = {};
       for (const question of started.questions) {
@@ -225,8 +238,8 @@ export function ActivityRunner({
                 ? 'Starting…'
                 : isAssessment
                   ? assessment && assessment.attemptsUsed > 0
-                    ? 'Try the assessment again'
-                    : 'Start the assessment'
+                    ? 'Try the test again'
+                    : 'Start the test'
                   : 'Start the activity'}
             </button>
           </div>
@@ -239,10 +252,18 @@ export function ActivityRunner({
 
   const finished = attempt.status === 'SUBMITTED';
   const answered = Object.keys(responses).length;
+  const total = attempt.questions.length;
+  const at = Math.min(cursor, total - 1);
+  const question = attempt.questions[at];
+  const done = responses[question?.answerId] !== undefined;
+  const allAnswered = answered === total;
 
-  return (
-    <div className="stack">
-      {finished ? (
+  /* ----------------------------------------------------------------- review
+     A finished paper is shown whole: every question, every mark, in order.
+     ------------------------------------------------------------------ */
+  if (finished) {
+    return (
+      <div className="stack">
         <div className="card stack result-panel" data-testid="activity-result">
           {/*
             One orchestrated moment, and only for a real milestone: passing the
@@ -258,7 +279,7 @@ export function ActivityRunner({
               ? 'You passed.'
               : attempt.passed === false
                 ? 'Not passed this time.'
-                : `${attempt.correctCount ?? 0} of ${(attempt.correctCount ?? 0) + (attempt.incorrectCount ?? 0)} right.`}
+                : `${attempt.correctCount ?? 0} of ${total} right.`}
           </p>
 
           {attempt.passed !== null && attempt.passed !== undefined && (
@@ -267,7 +288,6 @@ export function ActivityRunner({
             </span>
           )}
 
-          {/* The marks she got, said once, plainly. */}
           <p className="muted" style={{ margin: 0 }}>
             {attempt.correctCount} right and {attempt.incorrectCount} wrong,{' '}
             {attempt.pointsAwarded} of {attempt.pointsAvailable} marks
@@ -276,7 +296,7 @@ export function ActivityRunner({
               : '.'}
           </p>
 
-          <div className="row">
+          <div className="row" style={{ justifyContent: 'center' }}>
             {/*
               Whether another try is allowed is the API's decision, not this
               screen's: an assessment has a limited number and a pass ends it.
@@ -307,40 +327,61 @@ export function ActivityRunner({
               }}
               data-testid="back-to-activity"
             >
-              Back to the {isAssessment ? 'assessment' : 'activity'}
+              Back to the {isAssessment ? 'test' : 'activity'}
             </button>
           </div>
 
           <PastTries past={past} onOpen={openPast} isAssessment={isAssessment} />
         </div>
-      ) : (
-        /*
-          Follows her down the page, because on a phone the questions are far
-          longer than the screen and "how many left?" is the question she asks
-          at every one. The tally is the same device the unit card uses, so it
-          means the same thing in both places: one mark, one item done.
-        */
-        <div className="running">
-          <div className="running-in">
-            <div className="tally" aria-hidden="true">
-              {attempt.questions.map((q) => (
-                <i key={q.answerId} data-on={responses[q.answerId] !== undefined} />
-              ))}
-            </div>
-            <p className="muted" style={{ margin: 0 }} data-testid="answered-count">
-              {answered} of {attempt.questions.length} answered
-            </p>
-            <button
-              className="primary"
-              onClick={submit}
-              disabled={busy}
-              data-testid="submit-activity"
-            >
-              {busy ? 'Sending…' : 'Finish'}
-            </button>
+
+        {error && (
+          <p className="alert error" role="alert">
+            {error}
+          </p>
+        )}
+
+        {attempt.questions.map((q, index) => (
+          <QuestionCard
+            key={q.answerId}
+            question={q}
+            number={index + 1}
+            total={total}
+            finished
+            response={responses[q.answerId]}
+            onAnswer={() => undefined}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------------- answering
+     One question, filling the screen, with the run of them above it.
+     ------------------------------------------------------------------ */
+  return (
+    <div className="stack">
+      <div className="running">
+        <div className="running-in">
+          {/* Every question, its state, and a way back to any of them. */}
+          <div className="q-pips" role="tablist" aria-label="Questions">
+            {attempt.questions.map((q, n) => (
+              <button
+                key={q.answerId}
+                className="q-pip"
+                role="tab"
+                aria-selected={n === at}
+                aria-current={n === at}
+                aria-label={`Question ${n + 1}${responses[q.answerId] !== undefined ? ', answered' : ''}`}
+                data-answered={responses[q.answerId] !== undefined}
+                onClick={() => setCursor(n)}
+              />
+            ))}
           </div>
+          <p className="muted" style={{ margin: 0 }} data-testid="answered-count">
+            {answered} of {total} answered
+          </p>
         </div>
-      )}
+      </div>
 
       {error && (
         <p className="alert error" role="alert">
@@ -348,31 +389,61 @@ export function ActivityRunner({
         </p>
       )}
 
-      {attempt.questions.map((question, index) => (
-        <QuestionCard
-          key={question.answerId}
-          question={question}
-          number={index + 1}
-          total={attempt.questions.length}
-          finished={finished}
-          response={responses[question.answerId]}
-          onAnswer={(value) =>
-            setResponses((current) => ({ ...current, [question.answerId]: value }))
-          }
-        />
-      ))}
+      <QuestionCard
+        key={question.answerId}
+        question={question}
+        number={at + 1}
+        total={total}
+        finished={false}
+        response={responses[question.answerId]}
+        onAnswer={(value) =>
+          setResponses((current) => ({ ...current, [question.answerId]: value }))
+        }
+      />
 
-      {!finished && (
-        <div className="row">
+      <div className="q-move">
+        <button className="ghost" onClick={() => setCursor(at - 1)} disabled={at === 0}>
+          <Icon name="back" />
+          Back
+        </button>
+
+        {at < total - 1 ? (
+          <button
+            className={done ? 'primary' : 'ghost'}
+            onClick={() => setCursor(at + 1)}
+            data-testid="next-question"
+          >
+            {done ? 'Next' : 'Skip'}
+            <Icon name="back" className="ico flip" />
+          </button>
+        ) : (
           <button
             className="primary"
             onClick={submit}
             disabled={busy}
-            data-testid="submit-activity-bottom"
+            data-testid="submit-activity"
           >
             {busy ? 'Sending…' : 'Finish and see my score'}
           </button>
-        </div>
+        )}
+      </div>
+
+      {/*
+        On the last question the Finish button is already there. Everywhere
+        else it appears only once nothing is outstanding, so she is never
+        invited to hand in a half-finished paper by accident — but is never
+        forced to walk to the end either.
+      */}
+      {allAnswered && at < total - 1 && (
+        <button
+          className="signal"
+          onClick={submit}
+          disabled={busy}
+          data-testid="submit-activity-bottom"
+          style={{ width: '100%' }}
+        >
+          {busy ? 'Sending…' : 'Finish and see my score'}
+        </button>
       )}
     </div>
   );
@@ -398,7 +469,7 @@ function PastTries({
 
   return (
     <div className="stack" style={{ marginTop: '.5rem' }}>
-      <h3 className="marked-title" style={{ margin: 0, fontSize: '1rem' }}>
+      <h3 className="marked-title" style={{ margin: 0, fontSize: 'var(--fs-base)' }}>
         {isAssessment ? 'Your tries at the test' : 'Your past tries'}
       </h3>
       {/*
@@ -417,7 +488,7 @@ function PastTries({
               <span className="muted">
                 {tryOut.correctCount} right
                 {tryOut.submittedAt
-                  ? `, ${new Date(tryOut.submittedAt).toLocaleDateString('en-GB')}`
+                  ? `, ${new Date(tryOut.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
                   : ''}
               </span>
             </span>
@@ -452,7 +523,7 @@ function PastTries({
 function ScoreRing({ percent, passed }: { percent: number; passed?: boolean | null }) {
   const r = 62;
   const circumference = 2 * Math.PI * r;
-  const kind = passed === true ? 'assessment' : passed === false ? 'wrong' : 'activity';
+  const kind = passed === true ? 'done' : passed === false ? 'wrong' : 'vocabulary';
   return (
     <div className="score-ring" data-kind={kind === 'wrong' ? undefined : kind}>
       <svg viewBox="0 0 144 144" aria-hidden="true">
@@ -464,13 +535,16 @@ function ScoreRing({ percent, passed }: { percent: number; passed?: boolean | nu
           r={r}
           fill="none"
           strokeWidth="12"
-          stroke={passed === false ? 'var(--bad)' : undefined}
+          style={passed === false ? { stroke: 'var(--bad)' } : undefined}
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - Math.max(0, Math.min(100, percent)) / 100)}
         />
       </svg>
       <span className="value">
-        <span data-testid="score-percent">{percent}</span>%
+        <span className="v">
+          <span data-testid="score-percent">{percent}</span>
+          <span className="pc">%</span>
+        </span>
       </span>
     </div>
   );
@@ -514,12 +588,12 @@ function Confetti() {
  */
 function AssessmentStanding({ assessment }: { assessment: AssessmentState }) {
   const blocked = {
-    already_passed: 'You have passed this assessment. Well done.',
-    no_attempts_left: 'You have used all your tries for this assessment.',
-    no_questions: 'Your teacher has not set an assessment for this unit yet.',
+    already_passed: 'You have passed this test. Well done.',
+    no_attempts_left: 'You have used all your tries for this test.',
+    no_questions: 'Your teacher has not set a test for this unit yet.',
     // The two the sequence adds. Both name the thing she can go and do.
-    vocabulary_incomplete: 'Learn all the words in this unit first, then the assessment opens.',
-    grammar_incomplete: 'Read the grammar for this unit first, then the assessment opens.',
+    vocabulary_incomplete: 'Learn all the words in this unit first, then the test opens.',
+    grammar_incomplete: 'Read the grammar for this unit first, then the test opens.',
   } as const;
 
   return (

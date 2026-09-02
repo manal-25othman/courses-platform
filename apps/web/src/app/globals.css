@@ -52,14 +52,18 @@
   --grammar:      #17BFC0;  --grammar-soft:  #E2F8F8;  --grammar-ink:  #0A7B7C;
   --activity:     #FF5FA2;  --activity-soft: #FFEBF3;  --activity-ink: #C42561;
   --assess:       #3D2E8F;  --assess-soft:   #E9E5FA;  --assess-ink:   #3D2E8F;
-  --games:        #3BA0FF;  --games-soft:    #E6F2FF;  --games-ink:    #1567C4;
+  --games:        #A855F7;  --games-soft:    #F5EAFE;  --games-ink:    #9333EA;
 
   /* --- state -------------------------------------------------------------
      Mint is reserved: it means finished, and it is used for nothing else. */
   --ok:           #0FB98E;  --ok-soft:     #E0F8F1;  --ok-ink:      #067A5E;
-  --warn:         #C77800;  --warn-soft:   #FFF3DF;
-  --bad:          #E23D6D;  --bad-soft:    #FFE9EF;
+  --warn:         #C77800;  --warn-soft:   #FFF3DF;  --warn-ink:    var(--warn-ink);
+  --bad:          #E23D6D;  --bad-soft:    #FFE9EF;  --bad-ink:     #A3183F;
   --locked:       #A9A2C7;  --locked-soft: #F2EFFB;
+  /* Edges of a marked answer: the tint one step darker than its soft fill. */
+  --ok-edge:      #A7E5D2;  --bad-edge:    #F6C2D2;
+  --on-brand:     #FFFFFF;  /* type and glyphs sitting on a brand-coloured fill */
+  --shade:        #1B1739;  /* the one dark ground, e.g. behind a video */
 
   /* --- type --------------------------------------------------------------
      Fraunces is set soft and slightly wonky: a serif with warmth rather than
@@ -69,6 +73,19 @@
   --font-ui:      'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-ar:      'IBM Plex Sans Arabic', 'Plus Jakarta Sans', system-ui, sans-serif;
   --wonk: 'SOFT' 60, 'WONK' 1;
+
+  /* --- type scale --------------------------------------------------------
+     Named by role, so a component asks for "the size a caption is" rather
+     than for a number, and a re-theme can move the whole scale at once. */
+  --fs-micro:   .6875rem;
+  --fs-caption: .75rem;
+  --fs-small:   .8125rem;
+  --fs-body:    .875rem;
+  --fs-base:    1rem;
+  --fs-lead:    1.125rem;
+  --fs-title:   1.35rem;
+  --fs-display: clamp(1.65rem, 5.5vw, 2.25rem);
+  --fs-hero:    clamp(2.25rem, 11vw, 3.5rem);
 
   /* --- spacing: a 4px rhythm, named by use not by number ----------------- */
   --s1: .25rem; --s2: .5rem;  --s3: .75rem; --s4: 1rem;
@@ -209,15 +226,15 @@ button:active:not(:disabled) { transform: translateY(1px) scale(.985); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 
 button.primary {
-  background: var(--brand); border-color: var(--brand); color: #fff;
+  background: var(--brand); border-color: var(--brand); color: var(--on-brand);
   box-shadow: 0 2px 0 var(--brand-ink);
 }
 button.primary:hover:not(:disabled) { background: var(--brand-ink); border-color: var(--brand-ink); }
 button.primary:active:not(:disabled) { box-shadow: none; transform: translateY(2px) scale(.99); }
 
 button.signal {
-  background: var(--signal); border-color: var(--signal); color: #fff;
-  box-shadow: 0 2px 0 #D8431F;
+  background: var(--signal); border-color: var(--signal); color: var(--on-brand);
+  box-shadow: 0 2px 0 var(--bad);
 }
 button.signal:hover:not(:disabled) { filter: brightness(1.05); }
 button.signal:active:not(:disabled) { box-shadow: none; transform: translateY(2px) scale(.99); }
@@ -225,7 +242,7 @@ button.signal:active:not(:disabled) { box-shadow: none; transform: translateY(2p
 button.ghost { background: transparent; border-color: transparent; }
 button.ghost:hover:not(:disabled) { background: var(--ground-2); }
 
-button.danger { color: var(--bad); border-color: #F0C6C2; background: var(--surface); }
+button.danger { color: var(--bad); border-color: var(--bad-edge); background: var(--surface); }
 button.danger:hover:not(:disabled) { background: var(--bad-soft); }
 
 button.small { min-height: 2.25rem; padding: var(--s1) var(--s3); font-size: .8125rem; }
@@ -280,9 +297,9 @@ input:focus, textarea:focus, select:focus {
   border: 1px solid transparent;
   border-left-width: 4px;
 }
-.alert.error { background: var(--bad-soft);  color: #8E241E; border-left-color: var(--bad); }
-.alert.ok    { background: var(--ok-soft);   color: #0B6B31; border-left-color: var(--ok); }
-.alert.warn  { background: var(--warn-soft); color: #8A5106; border-left-color: var(--warn); }
+.alert.error { background: var(--bad-soft);  color: var(--bad-ink); border-left-color: var(--bad); }
+.alert.ok    { background: var(--ok-soft);   color: var(--ok-ink); border-left-color: var(--ok); }
+.alert.warn  { background: var(--warn-soft); color: var(--warn-ink); border-left-color: var(--warn); }
 
 /* ==========================================================================
    Meter — one progress language for the whole product
@@ -328,7 +345,7 @@ input:focus, textarea:focus, select:focus {
 /* Skeletons, so a loading screen is never blank. */
 .skeleton {
   border-radius: var(--r-sm);
-  background: linear-gradient(90deg, var(--ground-2) 25%, #F2F5FC 37%, var(--ground-2) 63%);
+  background: linear-gradient(90deg, var(--ground-2) 25%, var(--ground-2) 37%, var(--ground-2) 63%);
   background-size: 200% 100%;
   animation: sheen 1.3s linear infinite;
 }
@@ -361,7 +378,7 @@ input:focus, textarea:focus, select:focus {
 .brandmark { display: flex; align-items: center; gap: var(--s2); font-family: var(--font-ui); font-weight: 800; letter-spacing: -.02em; }
 .brandmark .mark {
   width: 1.75rem; height: 1.75rem; border-radius: 9px;
-  background: var(--brand); color: #fff;
+  background: var(--brand); color: var(--on-brand);
   display: grid; place-items: center; flex: none;
 }
 .brandmark .name { font-size: 1rem; line-height: 1; }
@@ -371,8 +388,23 @@ input:focus, textarea:focus, select:focus {
 .avatar {
   width: 2rem; height: 2rem; border-radius: 50%; flex: none;
   display: grid; place-items: center;
-  background: var(--brand); color: #fff;
+  background: var(--brand); color: var(--on-brand);
   font-weight: 700; font-size: .875rem;
+}
+
+/* The desktop shape of the same three destinations. */
+.topnav { display: none; }
+@media (min-width: 48rem) {
+  .topnav { display: flex; gap: var(--s1); margin-left: var(--s5); }
+  .topnav a {
+    display: inline-flex; align-items: center; gap: var(--s2);
+    padding: var(--s2) var(--s3); border-radius: var(--r-chip);
+    font-size: var(--fs-body); font-weight: 600; color: var(--ink-2);
+    text-decoration: none;
+    transition: background var(--t-state) var(--ease), color var(--t-state) var(--ease);
+  }
+  .topnav a:hover { background: var(--ground-2); color: var(--ink); }
+  .topnav a[aria-current='page'] { background: var(--brand-soft); color: var(--brand-ink); }
 }
 
 .navbar {
@@ -397,14 +429,31 @@ input:focus, textarea:focus, select:focus {
 @media (min-width: 48rem) { .avatar {
   width: 2rem; height: 2rem; border-radius: 50%; flex: none;
   display: grid; place-items: center;
-  background: var(--brand); color: #fff;
+  background: var(--brand); color: var(--on-brand);
   font-weight: 700; font-size: .875rem;
+}
+
+/* The desktop shape of the same three destinations. */
+.topnav { display: none; }
+@media (min-width: 48rem) {
+  .topnav { display: flex; gap: var(--s1); margin-left: var(--s5); }
+  .topnav a {
+    display: inline-flex; align-items: center; gap: var(--s2);
+    padding: var(--s2) var(--s3); border-radius: var(--r-chip);
+    font-size: var(--fs-body); font-weight: 600; color: var(--ink-2);
+    text-decoration: none;
+    transition: background var(--t-state) var(--ease), color var(--t-state) var(--ease);
+  }
+  .topnav a:hover { background: var(--ground-2); color: var(--ink); }
+  .topnav a[aria-current='page'] { background: var(--brand-soft); color: var(--brand-ink); }
 }
 
 .navbar { display: none; } .has-navbar { padding-bottom: var(--s8); } }
 
 .ico { width: 1.25rem; height: 1.25rem; flex: none; }
-.ico-lg { width: 1.5rem; height: 1.5rem; }
+.ico-lg { width: 1.75rem; height: 1.75rem; }
+/* "Back" drawn the other way round, for a forward move. */
+.ico.flip { transform: scaleX(-1); }
 
 /* ==========================================================================
    THE JOURNEY — student home
@@ -495,16 +544,23 @@ input:focus, textarea:focus, select:focus {
               border-color var(--t-state) var(--ease), color var(--t-state) var(--ease);
 }
 .track-step[data-state='done'] .track-node {
-  background: var(--ok); border-color: var(--ok); color: #fff;
+  background: var(--ok); border-color: var(--ok); color: var(--on-brand);
 }
 .track-step[data-state='current'] .track-node {
-  background: var(--kind); border-color: var(--kind); color: #fff;
+  background: var(--kind); border-color: var(--kind); color: var(--on-brand);
   box-shadow: 0 0 0 5px var(--kind-soft);
 }
 .track-step[data-state='todo'] .track-node { color: var(--ink-3); }
 .track-step[data-state='locked'] .track-node {
   border-style: dashed; border-color: var(--line-2); color: var(--locked);
 }
+/* Every try used and not passed. Marked as what happened rather than as a
+   padlock: there is nothing she can do to open it again. */
+.track-step[data-state='spent'] .track-node {
+  border-color: var(--bad); background: var(--bad-soft); color: var(--bad);
+}
+.track-step[data-state='spent'] .track-value { color: var(--bad-ink); font-weight: 700; }
+
 /* Nothing built here yet: an outline with no promise in it. */
 .track-step[data-state='empty'] .track-node { border-color: var(--line); color: var(--ink-4); opacity: .55; }
 
@@ -527,7 +583,7 @@ input:focus, textarea:focus, select:focus {
   display: flex; align-items: center; gap: var(--s4); text-align: left;
   /* The only gradient in the product. It is here because this is the one
      card she is meant to press, and nothing else may compete with it. */
-  background: var(--hero-grad); color: #fff;
+  background: var(--hero-grad); color: var(--on-brand);
   border-radius: var(--r-xl); padding: var(--s5);
   box-shadow: var(--e3);
   transition: transform var(--t-tap) var(--ease), box-shadow var(--t-state) var(--ease);
@@ -540,15 +596,30 @@ input:focus, textarea:focus, select:focus {
 .next-up .why { font-size: .875rem; color: rgba(255, 255, 255, .93); }
 /* Her progress through the step she is on, on the card that names it. */
 .next-up .tally i { background: rgba(255, 255, 255, .3); }
-.next-up .tally i[data-on='true'] { background: #fff; }
+.next-up .tally i[data-on='true'] { background: var(--on-brand); }
 .next-up .go {
   width: 2.5rem; height: 2.5rem; border-radius: 50%; flex: none;
   display: grid; place-items: center;
-  background: rgba(255, 255, 255, .18); color: #fff;
+  background: rgba(255, 255, 255, .18); color: var(--on-brand);
 }
 .next-up .badge-icon {
   width: 3rem; height: 3rem; border-radius: 50%; flex: none;
-  display: grid; place-items: center; background: #fff; color: var(--kind, var(--brand));
+  display: grid; place-items: center; background: var(--on-brand); color: var(--kind, var(--brand));
+}
+
+/* --- Learning surfaces on a wide screen --------------------------------
+   A word, a lesson or a single question does not get better for being
+   1000px wide — it just becomes a stretched card with the content marooned
+   in the middle. These cap at a comfortable measure and centre, so the page
+   stays composed instead of scaled. The tab strip and the progress bar keep
+   the full width, because they are about the unit rather than its content. */
+@media (min-width: 64rem) {
+  .word-card, .lesson, .q-card, .round-end, .running, .q-move, .word-move,
+  .play-head, .exam-rules, .word-strip {
+    max-width: 46rem; margin-inline: auto; width: 100%;
+  }
+  /* The result panel is a summary, so it may be a little wider than a card. */
+  .result-panel { max-width: 46rem; margin-inline: auto; }
 }
 
 /* --- Home at desktop width ---------------------------------------------
@@ -586,14 +657,26 @@ input:focus, textarea:focus, select:focus {
   color: var(--ok-ink); font-size: .8125rem; font-weight: 700;
 }
 
-/* Revision sits beside the course, not in it: same family, lighter build,
-   and no progress language anywhere on it. */
+/* Revision sits beside the course, not in it.
+   The distinction is carried by structure, not by making it look faded: it is
+   a real card with a real colour, set off the journey rail and with no
+   percentage, no step track and no progress language anywhere on it. A dashed
+   edge alone read as "disabled", which is the wrong idea entirely. */
 .aside-card {
-  width: 100%; text-align: left; display: flex; align-items: center; gap: var(--s3);
-  background: transparent; border: 1.5px dashed var(--line-2);
-  border-radius: var(--r-lg); padding: var(--s4);
+  width: 100%; text-align: left; display: flex; align-items: center; gap: var(--s4);
+  background: var(--surface); border: 1px solid var(--line);
+  border-left: 4px solid var(--kind, var(--grammar));
+  border-radius: var(--r-lg); padding: var(--s4) var(--s5);
+  box-shadow: var(--e1);
+  transition: transform var(--t-state) var(--ease), box-shadow var(--t-state) var(--ease);
 }
-.aside-card:hover { background: var(--surface); border-color: var(--kind, var(--line-2)); }
+.aside-card:hover { transform: translateY(-2px); box-shadow: var(--e2); }
+.aside-card:active { transform: none; box-shadow: var(--e1); }
+.aside-tag {
+  font-size: var(--fs-micro); font-weight: 700; color: var(--kind-ink, var(--grammar-ink));
+  background: var(--kind-soft, var(--grammar-soft));
+  padding: .15rem .5rem; border-radius: var(--r-chip);
+}
 .aside-icon {
   width: 2.5rem; height: 2.5rem; border-radius: var(--r-sm); flex: none;
   display: grid; place-items: center;
@@ -644,35 +727,93 @@ input:focus, textarea:focus, select:focus {
 .locked-note strong { display: block; font-family: var(--font-display); font-size: 1.0625rem; }
 
 /* ==========================================================================
-   VOCABULARY — the word is the hero
+   VOCABULARY — one word at a time, and the word is the hero
+   A grid of cards makes a word list a table to read. A deck makes it a thing
+   to work through: one word fills the screen, the three steps that finish it
+   are visible on it, and the strip above says how far along she is.
    ========================================================================== */
+
+/* The strip: every word in the unit, as a row of marks she can jump between. */
+.word-strip { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.word-pip {
+  width: 2.25rem; height: 2.25rem; min-height: 0; padding: 0; flex: none;
+  border-radius: var(--r-sm); border: 1.5px solid var(--line-2);
+  background: var(--surface); color: var(--ink-3);
+  font-size: var(--fs-caption); font-weight: 700; font-variant-numeric: tabular-nums;
+  transition: transform var(--t-tap) var(--pop), background var(--t-state) var(--ease),
+              border-color var(--t-state) var(--ease), color var(--t-state) var(--ease);
+}
+.word-pip[data-learned='true'] { background: var(--ok-soft); border-color: var(--ok); color: var(--ok-ink); }
+.word-pip[aria-current='true'] {
+  background: var(--vocab); border-color: var(--vocab); color: var(--on-brand);
+  transform: scale(1.12);
+}
+
 .word-card {
   background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r-xl); padding: var(--s5);
+  border-radius: var(--r-xl); padding: var(--s6) var(--s5);
   box-shadow: var(--e2); text-align: center;
-  display: flex; flex-direction: column; gap: var(--s3); align-items: center;
+  display: grid; gap: var(--s4); justify-items: center;
 }
-.word-en { font-family: var(--font-display); font-size: clamp(2rem, 9vw, 3rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
-.word-ar { font-family: var(--font-ar); font-size: clamp(1.25rem, 5vw, 1.75rem); color: var(--ink-2); direction: rtl; }
-.word-picture { max-width: 100%; max-height: 12rem; border-radius: var(--r-lg); object-fit: contain; }
+.word-card[data-learned='true'] { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft), var(--e2); }
 
-/* Seen / heard / checked, as three lamps rather than a checklist form. */
-.lamps { display: flex; gap: var(--s2); }
-.lamp {
-  display: flex; align-items: center; gap: var(--s1);
-  font-size: .75rem; font-weight: 600; color: var(--ink-3); padding: .25rem .6rem; border-radius: var(--r-chip);
-  background: var(--ground-2); transition: all var(--t-state) var(--ease);
+/* The word, at the size that makes it the only thing on the card. */
+.word-en {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-hero); font-weight: 800; letter-spacing: -.025em; line-height: 1.02;
+  color: var(--ink); overflow-wrap: anywhere;
 }
-.lamp[data-on='true'] { background: var(--vocab-soft); color: var(--vocab); }
-.lamp[data-on='true'] .dot { background: var(--vocab); }
-.dot { width: .4rem; height: .4rem; border-radius: 50%; background: var(--ink-4); flex: none; }
+/* Part of speech belongs to the word, so it sits with it rather than below
+   in the same grey as everything else. */
+.word-pos {
+  font-size: var(--fs-caption); font-weight: 700; color: var(--vocab-ink);
+  background: var(--vocab-soft); padding: .15rem .6rem; border-radius: var(--r-chip);
+}
+.word-ar {
+  font-family: var(--font-ar);
+  font-size: clamp(1.35rem, 6vw, 1.9rem); font-weight: 500;
+  color: var(--ink-2); direction: rtl; line-height: 1.6;
+}
+.word-example {
+  font-size: var(--fs-body); color: var(--ink-3); font-weight: 500;
+  max-width: 34ch; line-height: 1.6; font-style: italic;
+}
+.word-picture { max-width: 100%; max-height: 11rem; border-radius: var(--r-lg); object-fit: contain; }
 
+/* Hearing the word is one of the three steps, so its control is the biggest
+   thing she can press on the card. The audio behind it is unchanged. */
 .speak-btn {
-  width: 4rem; height: 4rem; border-radius: 50%; padding: 0;
-  background: var(--vocab); border-color: var(--vocab); color: #fff; box-shadow: var(--e2);
+  width: 4.5rem; height: 4.5rem; border-radius: 50%; padding: 0;
+  background: var(--vocab); border: 0; color: var(--on-brand);
+  box-shadow: 0 6px 16px rgba(108, 76, 224, .35);
+  transition: transform var(--t-tap) var(--pop), box-shadow var(--t-state) var(--ease);
 }
-.speak-btn:hover:not(:disabled) { background: var(--vocab); filter: brightness(1.06); }
+.speak-btn:hover:not(:disabled) { transform: scale(1.05); }
+.speak-btn:active:not(:disabled) { transform: scale(.96); box-shadow: var(--e1); }
 .speak-btn[data-playing='true'] { animation: pulse 1s var(--ease) infinite; }
+.speak-label { font-size: var(--fs-micro); font-weight: 700; color: var(--ink-3); }
+
+/* Read, heard, checked. Three steps, shown as steps rather than as a form —
+   and never by colour alone: each carries its own tick when it is done. */
+.lamps { display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: center; }
+.lamp {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  font-size: var(--fs-caption); font-weight: 600; color: var(--ink-3);
+  padding: .3rem .7rem; border-radius: var(--r-chip);
+  background: var(--ground-2); border: 1.5px solid transparent;
+  transition: background var(--t-state) var(--ease), color var(--t-state) var(--ease),
+              border-color var(--t-state) var(--ease);
+}
+.lamp[data-on='true'] {
+  background: var(--ok-soft); color: var(--ok-ink); border-color: var(--ok);
+}
+.lamp .ico { width: .8rem; height: .8rem; }
+.dot { width: .45rem; height: .45rem; border-radius: 50%; background: var(--ink-4); flex: none; }
+.lamp[data-on='true'] .dot { display: none; }
+
+/* Moving between words. */
+.word-move { display: flex; align-items: center; gap: var(--s3); justify-content: space-between; }
+.word-move .num { font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
 
 /* ==========================================================================
    QUESTIONS — answering should feel like playing, not filling a form
@@ -691,8 +832,8 @@ button.choice:hover:not(:disabled) { border-color: var(--ink-4); background: var
 button.choice[aria-pressed='true'] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
 /* Specificity note: written as button.choice.x so the generic :hover cannot
    repaint a marked answer — that bug has bitten this file before. */
-button.choice.right { border-color: var(--ok); background: var(--ok-soft); color: #0B6B31; box-shadow: 0 2px 0 #B9E6C9; }
-button.choice.wrong { border-color: var(--bad); background: var(--bad-soft); color: #8E241E; box-shadow: 0 2px 0 #F3C9C5; }
+button.choice.right { border-color: var(--ok); background: var(--ok-soft); color: var(--ok-ink); box-shadow: 0 2px 0 var(--ok-edge); }
+button.choice.wrong { border-color: var(--bad); background: var(--bad-soft); color: var(--bad-ink); box-shadow: 0 2px 0 var(--bad-edge); }
 button.choice:active:not(:disabled) { box-shadow: none; transform: translateY(2px); }
 
 /* True / false: two deliberate, opposing choices. */
@@ -724,8 +865,8 @@ button.word-tile {
   background: var(--surface); box-shadow: 0 3px 0 var(--line);
 }
 button.word-tile.placed { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
-button.word-tile.right { border-color: var(--ok); background: var(--ok-soft); color: #0B6B31; }
-button.word-tile.wrong { border-color: var(--bad); background: var(--bad-soft); color: #8E241E; }
+button.word-tile.right { border-color: var(--ok); background: var(--ok-soft); color: var(--ok-ink); }
+button.word-tile.wrong { border-color: var(--bad); background: var(--bad-soft); color: var(--bad-ink); }
 button.word-tile:active:not(:disabled) { box-shadow: none; transform: translateY(3px); }
 
 /* Letter tiles. Width is capped so they read as tiles, not as bars. */
@@ -765,44 +906,86 @@ button.match-left.wrong, button.match-right.wrong { border-color: var(--bad); ba
 .question-pictures { display: flex; gap: var(--s3); flex-wrap: wrap; justify-content: center; }
 .question-pictures img {
   max-width: 100%; max-height: 14rem; width: auto; object-fit: contain;
-  border-radius: var(--r-md); background: #fff; border: 1px solid var(--line);
+  border-radius: var(--r-md); background: var(--on-brand); border: 1px solid var(--line);
 }
 
 .answer-box { display: grid; gap: var(--s2); }
+
+/* A question after it has been marked: what she wrote, then the answer. */
+.marked-answer { display: grid; gap: var(--s2); }
+.marked-answer .mine {
+  margin: 0; font-size: var(--fs-base); font-weight: 600; color: var(--ink);
+  padding: var(--s3) var(--s4); border-radius: var(--r-md);
+  background: var(--ground-2);
+}
+.marked-answer .mine.blank { font-weight: 500; color: var(--ink-3); font-style: italic; }
+/* The answer she should take away, set so it is the thing she reads. */
+.marked-answer .theirs {
+  margin: 0; font-size: var(--fs-body); color: var(--ink-2);
+  padding: var(--s3) var(--s4); border-radius: var(--r-md);
+  background: var(--ok-soft); border-left: 3px solid var(--ok);
+}
+.marked-answer .theirs .lead { color: var(--ok-ink); font-weight: 600; }
+.marked-answer .theirs strong { color: var(--ink); }
 .hint { font-size: .8125rem; color: var(--ink-3); }
 .result-verdict { font-family: var(--font-display); font-weight: 700; }
 
 /* ==========================================================================
-   GRAMMAR — a lesson, set to be read
-   The examples are the lesson. Most of them are transformations the teacher
-   writes out in full ("Ali cleans the car." becomes "The car is cleaned."),
-   so the pair is set as a pair and the result carries the pen mark.
+   GRAMMAR — a lesson, not a document
+   The aqua is spent in three places only: the rule the lesson is teaching,
+   the mark under the result of each worked example, and the step indicator.
+   Everything else stays in the neutral palette, so the accent still means
+   something by the time she reaches the bottom of the page.
    ========================================================================== */
-.lesson { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.lesson {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-xl); overflow: hidden; box-shadow: var(--e2);
+}
+/* A band of the lesson's own colour, so the topic reads as a heading of a
+   lesson rather than a heading of a card. */
 .lesson-head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3);
-  padding: var(--s5) var(--s5) 0;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  background: var(--grammar-soft); border-bottom: 1px solid var(--line);
+}
+.lesson-topic {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-title); font-weight: 700; letter-spacing: -.005em;
+  color: var(--grammar-ink); margin: 0;
 }
 .lesson-body {
-  padding: var(--s4) var(--s5) var(--s5);
-  max-width: 38em; font-size: .9375rem; line-height: 1.6; color: var(--ink-2);
+  padding: var(--s5);
+  max-width: 42em; font-size: var(--fs-base); line-height: 1.7; color: var(--ink-2);
   white-space: pre-wrap;
 }
-/* The examples sit on the ruled ground of a worksheet, not in a card of their own. */
-.examples-set { margin: 0; list-style: none; border-top: 1px solid var(--line); background: var(--ground); padding: var(--s4) var(--s5); }
-.example { display: grid; gap: 2px; padding: var(--s2) 0; }
-.example + .example { border-top: 1px dashed var(--line-2); }
-.example .from { font-size: .9375rem; color: var(--ink-3); }
-.example .to {
-  font-size: 1rem; font-weight: 600; color: var(--ink);
-  box-shadow: inset 0 -.4em 0 var(--grammar-soft); width: fit-content;
+
+/* The worked examples are the lesson. Most are transformations the teacher
+   wrote out in full, so the pair is set as a pair and the result carries the
+   pen mark — which is the one place the aqua appears in the body. */
+.examples-set { margin: 0; list-style: none; border-top: 1px solid var(--line); padding: var(--s3) var(--s5) var(--s5); }
+.examples-set > .set-label {
+  display: block; font-size: var(--fs-caption); font-weight: 700;
+  color: var(--ink-3); padding: var(--s2) 0;
 }
-/* A plain example — no transformation to show — reads as a single line. */
+.example { display: grid; gap: var(--s1); padding: var(--s3) 0; }
+.example + .example { border-top: 1px dashed var(--line); }
+.example .from { font-size: var(--fs-body); color: var(--ink-3); }
+.example .to {
+  font-size: var(--fs-base); font-weight: 600; color: var(--ink);
+  box-shadow: inset 0 -.45em 0 var(--grammar-soft); width: fit-content;
+}
 .example.plain .to { font-weight: 500; box-shadow: none; color: var(--ink-2); }
 
-/* Reading is the whole task here, so the control says exactly that, and the
-   finished state is the course's own tick rather than another coloured pill. */
-.read-state { display: flex; align-items: center; gap: var(--s2); font-size: .8125rem; font-weight: 600; color: var(--ok); }
+/* The foot of a lesson: what she has done, and the one thing to do next. */
+.lesson-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  flex-wrap: wrap; padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--line); background: var(--ground);
+}
+.read-state {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  font-size: var(--fs-small); font-weight: 700; color: var(--ok-ink);
+}
 
 /* --- Answering: where she is, and what is left ------------------------- */
 /* The bar follows her down a page that is many screens long on a phone. */
@@ -812,17 +995,41 @@ button.match-left.wrong, button.match-right.wrong { border-color: var(--bad); ba
   background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--r-lg); padding: var(--s3) var(--s4); box-shadow: var(--e2);
 }
-.running-in .tally { flex: 1; }
-.running-in p { flex: none; font-variant-numeric: tabular-nums; }
-@media (max-width: 30rem) { .running-in .tally { display: none; } }
+.running-in p { flex: none; font-variant-numeric: tabular-nums; font-size: var(--fs-caption); }
+
+/* One pip per question: answered, outstanding, or the one she is on. A pip is
+   a control as well as a readout — she can go back to any question. */
+.q-pips { display: flex; gap: 3px; flex: 1; min-width: 0; }
+.q-pip {
+  flex: 1 1 0; min-width: 3px; max-width: 1.1rem;
+  height: .55rem; min-height: 0; padding: 0;
+  border-radius: 3px; border: 0; background: var(--ground-2);
+  transition: background var(--t-state) var(--ease), transform var(--t-tap) var(--pop);
+}
+.q-pip[data-answered='true'] { background: var(--kind, var(--brand)); }
+.q-pip[aria-current='true'] { background: var(--ink); transform: scaleY(1.5); }
+.q-pip:hover { transform: scaleY(1.5); }
+
+/* Moving between questions. */
+.q-move { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.q-move .primary, .q-move .ghost { min-width: 6rem; justify-content: center; }
 
 .q-card { scroll-margin-top: 7rem; }
+/* While answering there is only one card, so it gets room to breathe. */
+.q-card:not([data-marked]) { padding: var(--s5); border-radius: var(--r-xl); box-shadow: var(--e2); }
 /* When a paper comes back marked, the mark is on the edge of the answer —
    the same place a pen would leave it. */
 .q-card[data-marked='right'] { border-left: 4px solid var(--ok); }
 .q-card[data-marked='wrong'] { border-left: 4px solid var(--bad); }
 .q-no { font-size: .75rem; font-weight: 600; color: var(--ink-3); }
-.q-prompt { margin: 0; font-size: 1.0625rem; font-weight: 600; line-height: 1.45; max-width: 40ch; }
+.q-prompt {
+  margin: 0; font-size: var(--fs-lead); font-weight: 600; line-height: 1.45; max-width: 40ch;
+  color: var(--ink);
+}
+/* A text answer is a place to write, so it looks like one. */
+.answer-box input[type='text'], .answer-box textarea, .answer-box input:not([type]) {
+  font-size: var(--fs-lead); padding: var(--s3) var(--s4); min-height: 3.25rem;
+}
 
 /* --- Past tries -------------------------------------------------------- */
 .tries { list-style: none; margin: 0; padding: 0; }
@@ -836,6 +1043,7 @@ button.match-left.wrong, button.match-right.wrong { border-color: var(--bad); ba
   min-width: 3.5rem; letter-spacing: -.02em;
 }
 .try-what { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.try-what .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .try-no { font-size: .875rem; font-weight: 600; }
 .try .mark { width: 1.5rem; height: 1.5rem; }
 .try .mark svg { width: .875rem; height: .875rem; }
@@ -843,49 +1051,149 @@ button.match-left.wrong, button.match-right.wrong { border-color: var(--bad); ba
 /* --- Result ------------------------------------------------------------ */
 .result-panel { text-align: center; align-items: center; }
 .result-panel > * { margin-inline: auto; }
-.result-panel .tries, .result-panel .marked-title { text-align: left; width: 100%; }
+.result-panel .tries { text-align: left; width: 100%; }
+.result-panel .marked-title { align-self: start; }
 .result-line {
   font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;
   letter-spacing: -.02em; margin: 0;
 }
 
 /* ==========================================================================
-   GAMES
+   GAMES — the same identity, let off the leash a little
+   These are the one part of the product that is not marked and does not
+   count, so they are allowed more colour and more movement than a lesson.
+   The restraint is that the extra energy is spent on the two things a player
+   actually looks at — the card she is turning, and the answer she just gave.
    ========================================================================== */
+
+/* A game is chosen from a shelf, so its card is portrait and has a face. */
+.game-shelf {
+  display: grid; gap: var(--s4);
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  /* Capped so four cards do not stretch from edge to edge on a laptop. */
+  max-width: 62rem;
+}
+.game-card {
+  position: relative; overflow: hidden; text-align: left; width: 100%;
+  display: grid; gap: var(--s2); align-content: start;
+  padding: var(--s5); border-radius: var(--r-xl);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--e2);
+  transition: transform var(--t-state) var(--pop), box-shadow var(--t-state) var(--ease);
+}
+/* One reaction, on the thing being offered — not on every card in the app. */
+.game-card:hover:not(:disabled) { transform: translateY(-3px); box-shadow: var(--e3); }
+.game-card:active:not(:disabled) { transform: translateY(0); box-shadow: var(--e1); }
+.game-card:disabled { box-shadow: none; background: var(--ground-2); border-style: dashed; }
+/* A wash of the game's own colour, bled off the top corner. */
+.game-card::before {
+  content: ''; position: absolute; top: -3.5rem; left: -3.5rem;
+  width: 11rem; height: 11rem; border-radius: 50%;
+  background: var(--kind-soft, var(--games-soft));
+}
+.game-card > * { position: relative; }
+.game-icon {
+  width: 3rem; height: 3rem; border-radius: var(--r-md);
+  display: grid; place-items: center;
+  background: var(--kind, var(--games)); color: var(--on-brand); box-shadow: var(--e2);
+}
+.game-name {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-title); font-weight: 700; letter-spacing: -.005em; color: var(--ink);
+}
+.game-why { font-size: var(--fs-body); color: var(--ink-3); font-weight: 500; }
+
+/* The bar above a round in play: where she is, and how she is doing. */
+.play-head {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  padding: var(--s3) var(--s4); border-radius: var(--r-lg);
+  background: var(--surface); border: 1px solid var(--line);
+}
+.play-stat { display: grid; gap: 1px; }
+.play-stat b {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-title); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.play-stat span { font-size: var(--fs-micro); color: var(--ink-3); font-weight: 600; }
+
+/* The word being asked in Quick Match. It is the whole question, so it is
+   the whole screen: nothing else is above 1rem while it is showing. */
+.quick-word {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-hero); font-weight: 800; letter-spacing: -.02em;
+  text-align: center; line-height: 1.05; margin: var(--s5) 0;
+  color: var(--ink);
+}
+
+/* The end of a round. It is a celebration, and it is also the place the
+   product has to keep its promise that none of this was recorded. */
+.round-end {
+  text-align: center; display: grid; gap: var(--s3); justify-items: center;
+  padding: var(--s6) var(--s5); border-radius: var(--r-xl);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--e2);
+}
+.round-score {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-hero); font-weight: 800; line-height: 1; color: var(--games-ink);
+  font-variant-numeric: tabular-nums;
+}
+.round-note {
+  font-size: var(--fs-small); color: var(--ink-3); font-weight: 500;
+  max-width: 30ch; margin: 0;
+}
 .memory-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr)); gap: var(--s2); }
 button.memory-card {
   aspect-ratio: 1; width: 100%; padding: var(--s1); min-height: 0;
-  font-size: .9375rem; font-weight: 700; word-break: break-word;
-  border: 2px solid var(--line-2); border-radius: var(--r-md);
-  background: var(--games); color: transparent;
+  font-size: var(--fs-body); font-weight: 700; word-break: break-word; line-height: 1.2;
+  border: 2px solid transparent; border-radius: var(--r-md);
+  background: linear-gradient(150deg, var(--brand) 0%, var(--signal) 100%);
+  color: transparent;
   box-shadow: var(--e1);
-  transition: transform var(--t-state) var(--pop), background var(--t-state) var(--ease);
+  /* A turn, not a fade: the card rotates so the movement says what happened. */
+  transition: transform var(--t-state) var(--pop), background var(--t-state) var(--ease),
+              border-color var(--t-state) var(--ease), opacity var(--t-state) var(--ease);
 }
-button.memory-card::after { content: '?'; color: #fff; font-family: var(--font-display); font-size: 1.5rem; }
+button.memory-card::after {
+  content: '?'; color: var(--on-brand); font-family: var(--font-display);
+  font-variation-settings: var(--wonk); font-size: 1.5rem; font-weight: 800;
+}
 button.memory-card.open {
-  background: var(--surface); color: var(--ink); border-color: var(--games);
+  background: var(--surface); color: var(--ink); border-color: var(--brand);
   transform: rotateY(180deg) scaleX(-1);
 }
 button.memory-card.open::after { content: none; }
-button.memory-card.done { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); transform: none; }
+/* A found pair stops being a card and becomes a result. */
+button.memory-card.done {
+  background: var(--ok-soft); border-color: var(--ok); color: var(--ok-ink);
+  transform: none; box-shadow: none;
+}
+button.memory-card.done::after { content: none; }
 
 /* ==========================================================================
    ASSESSMENT
    ========================================================================== */
-.exam-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: var(--s2); }
-.exam-rule { text-align: center; padding: var(--s3); border-radius: var(--r-md); background: var(--assess-soft); }
-.exam-rule b { display: block; font-family: var(--font-display); font-size: 1.5rem; color: var(--assess); }
-.exam-rule span { font-size: .75rem; color: var(--ink-3); }
+/* Three facts, always on one row: they are read together, and wrapping the
+   third onto its own line made it look like an afterthought. */
+.exam-rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+.exam-rule { text-align: center; padding: var(--s4) var(--s2); border-radius: var(--r-md); background: var(--assess-soft); }
+.exam-rule b {
+  display: block; font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 1.5rem; font-weight: 700; color: var(--assess-ink); line-height: 1.1;
+}
+.exam-rule span { font-size: var(--fs-caption); color: var(--ink-3); font-weight: 500; line-height: 1.25; display: block; margin-top: 2px; }
 
 .score-ring { position: relative; width: 9rem; height: 9rem; margin: 0 auto; }
 .score-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
 .score-ring .track { stroke: var(--ground-2); }
 .score-ring .fill { stroke: var(--kind, var(--assess)); stroke-linecap: round;
   transition: stroke-dashoffset var(--t-party) var(--ease); }
-.score-ring .value {
-  position: absolute; inset: 0; display: grid; place-items: center;
-  font-family: var(--font-display); font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums;
+.score-ring .value { position: absolute; inset: 0; display: grid; place-items: center; }
+.score-ring .value .v {
+  display: flex; align-items: baseline; gap: 1px;
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 2.5rem; font-weight: 800; font-variant-numeric: tabular-nums;
+  line-height: 1; color: var(--ink);
 }
+.score-ring .value .pc { font-size: 1.125rem; font-weight: 700; color: var(--ink-3); }
 
 /* Celebration. Short, and only for a real milestone. */
 .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
@@ -902,7 +1210,7 @@ button.memory-card.done { background: var(--ok-soft); border-color: var(--ok); c
    ========================================================================== */
 .thread { display: flex; flex-direction: column; gap: var(--s3); max-height: 22rem; overflow-y: auto; padding-right: var(--s1); }
 .msg { max-width: 85%; padding: var(--s3); border-radius: var(--r-md); background: var(--ground-2); }
-.msg.mine { margin-left: auto; background: var(--brand); color: #fff; }
+.msg.mine { margin-left: auto; background: var(--brand); color: var(--on-brand); }
 .msg .who { font-size: .75rem; font-weight: 600; opacity: .8; }
 .msg .when { font-size: .6875rem; opacity: .7; }
 
@@ -928,7 +1236,7 @@ tr.is-deleted { opacity: .55; }
 .examples li { margin-bottom: var(--s1); }
 .video-frame {
   position: relative; width: 100%; aspect-ratio: 16 / 9;
-  border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--line); background: #000;
+  border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--line); background: var(--shade);
 }
 .video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); padding: .1rem .35rem; border-radius: 4px; }

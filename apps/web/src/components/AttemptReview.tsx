@@ -71,7 +71,7 @@ export function AttemptReview({
           data-correct={question.isCorrect}
         >
           <div className="between">
-            <span className="muted" style={{ fontSize: '.8rem' }}>
+            <span className="muted" style={{ fontSize: 'var(--fs-small)' }}>
               Question {index + 1} of {attempt.questions.length}
             </span>
             <span className={`badge ${question.isCorrect ? 'active' : 'deleted'}`}>

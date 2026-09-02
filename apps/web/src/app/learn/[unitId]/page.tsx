@@ -98,7 +98,7 @@ export default function LearnUnitPage() {
   if (!unit) {
     return (
       <>
-        <TopBar />
+        <TopBar nav />
         <main className="page stack">
           <p className="alert error" role="alert">
             {error ?? 'That unit could not be opened.'}
@@ -147,6 +147,7 @@ export default function LearnUnitPage() {
   return (
     <>
       <TopBar
+        nav
         right={
           <button className="ghost small" onClick={() => router.push('/home')}>
             <Icon name="back" />

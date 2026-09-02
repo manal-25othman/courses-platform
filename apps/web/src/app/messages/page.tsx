@@ -41,7 +41,7 @@ export default function MessagesPage() {
   if (!me) {
     return (
       <>
-        <TopBar />
+        <TopBar nav />
         <main className="page has-navbar">
           <div className="skeleton" style={{ height: '2rem', width: '10rem' }} />
           <div className="skeleton" style={{ height: '12rem', marginTop: '1.5rem' }} />
@@ -52,7 +52,7 @@ export default function MessagesPage() {
 
   return (
     <>
-      <TopBar />
+      <TopBar nav />
       <main className="page has-navbar stack">
         <h1>Your teacher</h1>
 

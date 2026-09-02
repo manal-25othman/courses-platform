@@ -48,6 +48,7 @@ export function GrammarSections({
   sections: LearnSection[];
   onChanged: () => Promise<void> | void;
 }) {
+  const read = sections.filter((s) => s.viewed).length;
   if (sections.length === 0) {
     return (
       <div className="locked-note">
@@ -69,23 +70,28 @@ export function GrammarSections({
   }
 
   return (
-    <div className="stack">
+    <div className="stack" data-kind="grammar">
+      {/* Where she is in the grammar, when there is more than one lesson. */}
+      {sections.length > 1 && (
+        <p className="muted" style={{ margin: 0 }} data-testid="grammar-progress">
+          {read} of {sections.length} lessons read.
+        </p>
+      )}
+
       {sections.map((section) => (
         <article key={section.id} className="lesson" data-testid="section-card">
           <div className="lesson-head">
             {/* The tab already says Grammar; repeating the type here would tell
                 her nothing she cannot see. Only the lesson's own name is set. */}
-            <h2 className="marked-title" style={{ margin: 0 }}>
-              {section.title ?? section.type.displayName}
-            </h2>
-            {section.viewed ? (
+            <h2 className="lesson-topic">{section.title ?? section.type.displayName}</h2>
+            {section.viewed && (
               <span className="read-state" data-testid="section-read">
                 <span className="mark tick" aria-hidden="true">
                   <Icon name="tick" />
                 </span>
                 Read
               </span>
-            ) : null}
+            )}
           </div>
 
           {section.body ? (
@@ -128,19 +134,36 @@ export function GrammarSections({
 
           {section.examples.length > 0 && (
             <ul className="examples-set" data-testid="grammar-examples">
+              {/* Named because these are not more of the lesson — they are the
+                  worked cases, and she will come back to them. */}
+              <span className="set-label">Worked examples</span>
               {section.examples.map((example, i) => (
                 <Example key={i} text={example} />
               ))}
             </ul>
           )}
 
-          {!section.viewed && (
-            <div style={{ padding: 'var(--s4) var(--s5) var(--s5)' }}>
-              <button className="primary" onClick={() => markViewed(section)} data-testid="mark-read">
-                I have read this
-              </button>
-            </div>
-          )}
+          {/*
+            Reading is the whole task here, so the foot of the lesson carries
+            the one action — and, once it is done, says what that unlocked.
+            Grammar gating the test is the server's rule, not this screen's.
+          */}
+          <div className="lesson-foot">
+            {section.viewed ? (
+              <span className="muted" style={{ margin: 0 }}>
+                Finished. The test for this unit is open now.
+              </span>
+            ) : (
+              <>
+                <span className="muted" style={{ margin: 0 }}>
+                  Read the lesson, then mark it done.
+                </span>
+                <button className="primary" onClick={() => markViewed(section)} data-testid="mark-read">
+                  I have read this
+                </button>
+              </>
+            )}
+          </div>
         </article>
       ))}
     </div>

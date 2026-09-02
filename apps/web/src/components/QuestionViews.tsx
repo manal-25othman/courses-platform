@@ -437,29 +437,52 @@ export function TypedQuestion({
       ? (question.expected.accepted as string[])
       : null;
 
+  /*
+    A marked paper is not a form. Once it is submitted, a disabled input with
+    nothing in it says "Your answer" over an empty box — which is the least
+    useful way to tell her she skipped the question. So the finished state
+    prints what she wrote, or says plainly that she left it, and then gives
+    the answer as the thing to take away.
+  */
+  if (finished) {
+    return (
+      <div className="marked-answer">
+        {text.trim() ? (
+          <p className="mine" data-testid={`typed-${question.answerId}`}>
+            {text}
+          </p>
+        ) : (
+          <p className="mine blank">You left this one blank.</p>
+        )}
+
+        {accepted && (
+          <p className="theirs" data-testid="typed-expected">
+            <span className="lead">
+              {accepted.length === 1 ? 'The answer is' : 'Answers accepted:'}
+            </span>{' '}
+            <strong>{accepted.join(', ')}</strong>
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="stack" style={{ gap: '.4rem' }}>
+    <div className="answer-box stack" style={{ gap: '.4rem' }}>
       <label style={{ fontWeight: 400 }}>
         Your answer
+
         <input
           type="text"
           className="answer-box"
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          disabled={finished}
           value={text}
           onChange={(e) => onAnswer({ text: e.target.value })}
           data-testid={`typed-${question.answerId}`}
         />
       </label>
-
-      {finished && accepted && (
-        <p className="muted" style={{ margin: 0 }} data-testid="typed-expected">
-          {accepted.length === 1 ? 'The answer: ' : 'Accepted answers: '}
-          {accepted.join(', ')}
-        </p>
-      )}
     </div>
   );
 }

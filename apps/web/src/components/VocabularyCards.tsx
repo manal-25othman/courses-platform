@@ -30,6 +30,8 @@ export function VocabularyCards({
   const [verdict, setVerdict] = useState<CheckAnswerResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [asked, setAsked] = useState(false);
+  /** Which word of the deck is showing. */
+  const [at, setAt] = useState(0);
 
   useEffect(() => {
     let current = true;
@@ -43,8 +45,14 @@ export function VocabularyCards({
 
   if (words.length === 0) {
     return (
-      <div className="card">
-        <p className="muted">This unit has no word list yet.</p>
+      <div className="locked-note">
+        <Icon name="words" />
+        <div>
+          <strong>No words here yet</strong>
+          <p className="muted" style={{ margin: '.25rem 0 0' }}>
+            Your teacher is still adding the word list for this unit.
+          </p>
+        </div>
       </div>
     );
   }
@@ -220,18 +228,186 @@ export function VocabularyCards({
   /** Words she cannot hear here: no browser voice and no recording. */
   const silentWords = words.filter((w) => !w.audioPlayed && !w.teacherAudioUrl);
 
+  // The deck shows one word; the cursor is clamped in case the list shrinks
+  // under it (a teacher can unpublish a word while she is on this screen).
+  const index = Math.min(at, words.length - 1);
+  const word = words[index];
+
+  /** What this word still needs, named so she is never left guessing. */
+  const nextStep = word.learned
+    ? null
+    : !word.seen
+      ? 'Read the word, then tap “I have read this”.'
+      : !word.audioPlayed
+        ? 'Tap the round button to hear it.'
+        : 'Answer the check to finish this word.';
+
+  function go(to: number) {
+    setChecking(null);
+    setVerdict(null);
+    setProblem(null);
+    setAt(Math.max(0, Math.min(words.length - 1, to)));
+  }
+
   return (
-    <div className="stack">
-      <div data-kind="vocabulary">
+    <div className="stack" data-kind="vocabulary">
+      <div>
         <p className="muted" data-testid="vocab-summary" style={{ margin: '0 0 .5rem' }}>
           {learned} of {words.length} words learned. A word counts once you have read it, heard it
           and answered its check.
         </p>
-        <div className="tally" aria-hidden="true">
-          {words.map((w) => (
-            <i key={w.id} data-on={w.learned} />
+        {/*
+          The whole unit at a glance, and a way to jump. Each pip carries its
+          own number, so it is not colour alone that says which word is which.
+        */}
+        <div className="word-strip" role="tablist" aria-label="Words in this unit">
+          {words.map((w, n) => (
+            <button
+              key={w.id}
+              className="word-pip"
+              role="tab"
+              aria-current={n === index}
+              aria-selected={n === index}
+              aria-label={`Word ${n + 1}, ${w.wordEn}${w.learned ? ', learned' : ''}`}
+              data-learned={w.learned}
+              onClick={() => go(n)}
+              data-testid="word-pip"
+            >
+              {w.learned ? <Icon name="tick" size={11} /> : n + 1}
+            </button>
           ))}
         </div>
+      </div>
+
+      {problem && (
+        <p className="alert error" role="alert">
+          {problem}
+        </p>
+      )}
+
+      <div
+        className="word-card"
+        data-testid="word-card"
+        data-learned={word.learned}
+        key={word.id}
+      >
+        {/*
+          The word itself is the largest thing on the screen. Everything else
+          on this card — the picture, the meaning, the example, the three
+          steps — is support for it.
+        */}
+        <span className="word-en">{word.wordEn}</span>
+
+        {word.partOfSpeech && <span className="word-pos">{word.partOfSpeech}</span>}
+
+        {word.pictureUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={apiUrl(word.pictureUrl)}
+            alt={`A picture of ${word.wordEn}`}
+            className="word-picture"
+            data-testid="word-picture"
+          />
+        )}
+
+        {/* The interface is English; only the meaning is Arabic, so the
+            direction is set here and not on the page (SRS 39). */}
+        {word.meaningAr && (
+          <p className="word-ar" dir="rtl" lang="ar" style={{ margin: 0 }}>
+            {word.meaningAr}
+          </p>
+        )}
+
+        {word.exampleSentence && <p className="word-example">{word.exampleSentence}</p>}
+
+        {/*
+          Hearing the word is a step, so its control is the one that looks
+          like the main thing to press. What it plays is unchanged: the
+          browser's voice where there is one, the teacher's recording
+          otherwise. Nothing is marked heard unless something actually played.
+        */}
+        <div style={{ display: 'grid', gap: '.35rem', justifyItems: 'center' }}>
+          <button
+            className="speak-btn"
+            onClick={() => play(word)}
+            disabled={speaking === word.id}
+            data-playing={speaking === word.id}
+            data-testid={`play-${word.wordEn}`}
+            aria-label={`Hear the word ${word.wordEn}`}
+          >
+            <Icon name="sound" className="ico-lg" />
+          </button>
+          <span className="speak-label">{speaking === word.id ? 'Playing…' : 'Hear it'}</span>
+        </div>
+
+        <div className="lamps" data-testid="word-lamps">
+          {([
+            ['Read', word.seen],
+            ['Heard', word.audioPlayed],
+            ['Checked', word.checked],
+          ] as const).map(([label, on]) => (
+            <span className="lamp" key={label} data-on={on}>
+              {on ? <Icon name="tick" /> : <i className="dot" />}
+              {label}
+            </span>
+          ))}
+        </div>
+
+        {word.learned ? (
+          <span className="finished-mark" data-testid="word-learned">
+            <Icon name="tick" size={14} />
+            Learned
+          </span>
+        ) : (
+          /* What to do next on this word, in one sentence. */
+          <p className="muted" style={{ margin: 0 }} data-testid="word-next">
+            {nextStep}
+          </p>
+        )}
+
+        <div className="row" style={{ justifyContent: 'center' }}>
+          {word.teacherAudioUrl && (
+            <button
+              className="small"
+              onClick={() => playRecordingFor(word)}
+              disabled={speaking === word.id}
+              data-testid={`teacher-audio-${word.wordEn}`}
+              aria-label={`Hear your teacher say ${word.wordEn}`}
+            >
+              Your teacher&rsquo;s voice
+            </button>
+          )}
+          {!word.seen && (
+            <button className="small" onClick={() => markSeen(word)} data-testid="mark-seen">
+              I have read this
+            </button>
+          )}
+          {word.checkReady && (
+            <button
+              className="primary"
+              onClick={() => openCheck(word)}
+              disabled={busy}
+              data-testid={`check-${word.wordEn}`}
+            >
+              Check what I know
+            </button>
+          )}
+        </div>
+
+        {checking && checking.itemId === word.id && (
+          <VocabularyCheckPanel
+            check={checking}
+            busy={busy}
+            verdict={verdict}
+            asked={asked}
+            onAsk={() => askTeacherAboutCheck(word)}
+            onAnswer={(text) => answer(word.id, text)}
+            onClose={() => {
+              setChecking(null);
+              setVerdict(null);
+            }}
+          />
+        )}
       </div>
 
       {/*
@@ -276,139 +452,23 @@ export function VocabularyCards({
         </div>
       )}
 
-      {problem && (
-        <p className="alert error" role="alert">
-          {problem}
-        </p>
-      )}
-
-      <div className="grid" data-kind="vocabulary">
-        {words.map((word) => (
-          <div
-            key={word.id}
-            className="word-card"
-            data-testid="word-card"
-            data-learned={word.learned}
-            data-kind="vocabulary"
-          >
-            {/*
-              The word itself is the largest thing on the screen. Everything
-              else on this card — the picture, the meaning, the three lamps —
-              is support for it, which is why it gets the display face at full
-              size and nothing else competes.
-            */}
-            <span className="word-en">{word.wordEn}</span>
-
-            {word.pictureUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={apiUrl(word.pictureUrl)}
-                alt={`A picture of ${word.wordEn}`}
-                className="word-picture"
-                data-testid="word-picture"
-              />
-            )}
-
-            {/* The interface is English; only the meaning is Arabic, so the
-                direction is set here and not on the page (SRS 39). */}
-            {word.meaningAr && (
-              <p className="word-ar" dir="rtl" lang="ar" style={{ margin: 0 }}>
-                {word.meaningAr}
-              </p>
-            )}
-
-            {word.partOfSpeech && (
-              <p className="muted" style={{ margin: 0 }}>{word.partOfSpeech}</p>
-            )}
-            {word.exampleSentence && (
-              <p className="muted" style={{ margin: 0 }}>{word.exampleSentence}</p>
-            )}
-
-            {/* Hearing the word is a step, so the control for it is the one
-                that looks like the main thing to press. */}
-            <button
-              className="speak-btn"
-              onClick={() => play(word)}
-              disabled={speaking === word.id}
-              data-playing={speaking === word.id}
-              data-testid={`play-${word.wordEn}`}
-              aria-label={`Hear the word ${word.wordEn}`}
-            >
-              <Icon name="sound" className="ico-lg" />
-            </button>
-
-            {/*
-              Read, heard, checked — as three lamps rather than a checklist.
-              She can see at a glance what is still outstanding without the
-              card turning into a form.
-            */}
-            <div className="lamps" data-testid="word-lamps">
-              <span className="lamp" data-on={word.seen}>
-                <i className="dot" />
-                Read
-              </span>
-              <span className="lamp" data-on={word.audioPlayed}>
-                <i className="dot" />
-                Heard
-              </span>
-              <span className="lamp" data-on={word.checked}>
-                <i className="dot" />
-                Checked
-              </span>
-            </div>
-
-            {word.learned && (
-              <span className="badge active" data-testid="word-learned">
-                <Icon name="tick" size={12} />
-                Learned
-              </span>
-            )}
-
-            <div className="row" style={{ justifyContent: 'center' }}>
-              {word.teacherAudioUrl && (
-                <button
-                  className="small"
-                  onClick={() => playRecordingFor(word)}
-                  disabled={speaking === word.id}
-                  data-testid={`teacher-audio-${word.wordEn}`}
-                  aria-label={`Hear your teacher say ${word.wordEn}`}
-                >
-                  Your teacher&rsquo;s voice
-                </button>
-              )}
-              {!word.seen && (
-                <button className="small" onClick={() => markSeen(word)} data-testid="mark-seen">
-                  I have read this
-                </button>
-              )}
-              {word.checkReady && (
-                <button
-                  className="primary small"
-                  onClick={() => openCheck(word)}
-                  disabled={busy}
-                  data-testid={`check-${word.wordEn}`}
-                >
-                  Check what I know
-                </button>
-              )}
-            </div>
-
-            {checking && checking.itemId === word.id && (
-              <VocabularyCheckPanel
-                check={checking}
-                busy={busy}
-                verdict={verdict}
-                asked={asked}
-                onAsk={() => askTeacherAboutCheck(word)}
-                onAnswer={(text) => answer(word.id, text)}
-                onClose={() => {
-                  setChecking(null);
-                  setVerdict(null);
-                }}
-              />
-            )}
-          </div>
-        ))}
+      <div className="word-move">
+        <button className="ghost small" onClick={() => go(index - 1)} disabled={index === 0}>
+          <Icon name="back" />
+          Back
+        </button>
+        <span className="num">
+          {index + 1} of {words.length}
+        </span>
+        <button
+          className="ghost small"
+          onClick={() => go(index + 1)}
+          disabled={index === words.length - 1}
+          data-testid="next-word"
+        >
+          Next word
+          <Icon name="back" className="ico flip" />
+        </button>
       </div>
     </div>
   );
@@ -465,7 +525,7 @@ function VocabularyCheckPanel({
       style={{ borderTop: '1px solid var(--border)', paddingTop: '.75rem' }}
       data-testid="vocab-check"
     >
-      <strong style={{ fontSize: '.95rem' }}>What does “{check.wordEn}” mean?</strong>
+      <strong style={{ fontSize: 'var(--fs-body)' }}>What does “{check.wordEn}” mean?</strong>
 
       {verdict && !verdict.correct && (
         <p className="alert error" role="alert" data-testid="check-wrong">

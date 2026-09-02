@@ -189,7 +189,7 @@ export default function StudentProgressPage() {
 
           {unit.attempts.length > 0 && (
             <div>
-              <strong style={{ fontSize: '.9rem' }}>Papers she has finished</strong>
+              <strong style={{ fontSize: 'var(--fs-body)' }}>Papers she has finished</strong>
               <ul className="examples" data-testid="attempt-list">
                 {unit.attempts.map((attempt) => (
                   <li key={attempt.id} className="between" style={{ gap: '.5rem' }}>
