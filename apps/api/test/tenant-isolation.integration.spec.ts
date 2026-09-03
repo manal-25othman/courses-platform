@@ -1434,3 +1434,170 @@ describe('schools are managed through narrow functions', () => {
     ).rejects.toThrow();
   });
 });
+
+/**
+ * The school administrator's reach, at the level of the database.
+ *
+ * Managing teachers is an ordinary tenant write — no privileged function, no
+ * widened grant — so what confines it is the row-level policy on `users` and
+ * the one on `teacher_profiles` that follows it. These check that the policies
+ * really do confine it, rather than trusting that the service asked nicely.
+ */
+describe('a school administrator is confined to her own school', () => {
+  const TEACHER_A = 'aaaaaaaa-0000-4000-8000-000000000030';
+  const TEACHER_B = 'bbbbbbbb-0000-4000-8000-000000000030';
+  const PUPIL_A = 'aaaaaaaa-0000-4000-8000-000000000031';
+
+  beforeAll(async () => {
+    for (const [id, schoolId, username] of [
+      [TEACHER_A, SCHOOL_A, 'iso-teacher-a'],
+      [TEACHER_B, SCHOOL_B, 'iso-teacher-b'],
+    ] as const) {
+      await owner.user.upsert({
+        where: { id },
+        update: {},
+        create: {
+          id,
+          schoolId,
+          role: 'TEACHER',
+          username,
+          passwordHash: 'x',
+          teacherProfile: { create: { displayName: username } },
+        },
+      });
+    }
+
+    await owner.user.upsert({
+      where: { id: PUPIL_A },
+      update: {},
+      create: {
+        id: PUPIL_A,
+        schoolId: SCHOOL_A,
+        role: 'STUDENT',
+        username: 'iso-pupil-a',
+        passwordHash: 'x',
+        studentProfile: { create: { fullName: 'Iso Pupil A', assignedTeacherId: TEACHER_A } },
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await owner.studentProfile.deleteMany({ where: { userId: PUPIL_A } });
+    await owner.teacherProfile.deleteMany({ where: { userId: { in: [TEACHER_A, TEACHER_B] } } });
+    await owner.user.deleteMany({ where: { id: { in: [TEACHER_A, TEACHER_B, PUPIL_A] } } });
+  });
+
+  it('shows a school only its own teachers', async () => {
+    const seen = await forSchool(SCHOOL_A, (tx) =>
+      tx.user.findMany({ where: { role: 'TEACHER' }, select: { id: true } }),
+    );
+
+    expect(seen.map((row) => row.id)).toContain(TEACHER_A);
+    expect(seen.map((row) => row.id), 'another school’s teacher was visible').not.toContain(
+      TEACHER_B,
+    );
+  });
+
+  /**
+   * The profile carries the name, and its policy is written through `users`
+   * rather than on a school column of its own — so it is worth checking that
+   * the indirection actually holds.
+   */
+  it('hides another school’s teacher profile', async () => {
+    const seen = await forSchool(SCHOOL_A, (tx) =>
+      tx.teacherProfile.findMany({ select: { userId: true } }),
+    );
+
+    expect(seen.map((row) => row.userId)).toContain(TEACHER_A);
+    expect(seen.map((row) => row.userId)).not.toContain(TEACHER_B);
+  });
+
+  it('refuses to read another school’s teacher by id', async () => {
+    const found = await forSchool(SCHOOL_A, (tx) =>
+      tx.user.findFirst({ where: { id: TEACHER_B, role: 'TEACHER' } }),
+    );
+
+    expect(found, 'a teacher in another school was readable by id').toBeNull();
+  });
+
+  it('refuses to change another school’s teacher', async () => {
+    const changed = await forSchool(SCHOOL_A, (tx) =>
+      tx.user.updateMany({ where: { id: TEACHER_B }, data: { status: 'DISABLED' } }),
+    );
+
+    expect(changed.count).toBe(0);
+    expect((await owner.user.findUniqueOrThrow({ where: { id: TEACHER_B } })).status).toBe(
+      'ACTIVE',
+    );
+  });
+
+  /**
+   * The one write that could quietly cross a school if nothing checked it:
+   * pointing a student at a teacher who belongs to somebody else. The policy
+   * on `student_profiles` follows the student rather than the teacher, so the
+   * database alone does not stop this — which is exactly why the service
+   * looks the teacher up inside the school first, and why that is asserted
+   * in `school.service.spec.ts` as well as here.
+   */
+  it('cannot see the teacher a cross-school assignment would need', async () => {
+    const target = await forSchool(SCHOOL_A, (tx) =>
+      tx.user.findFirst({
+        where: { id: TEACHER_B, schoolId: SCHOOL_A, role: 'TEACHER', deletedAt: null },
+        select: { id: true },
+      }),
+    );
+
+    expect(target, 'the check the service makes would have found a teacher elsewhere').toBeNull();
+  });
+
+  /** And a teacher created under one school lands in that school and no other. */
+  it('creates a teacher inside the school that made her', async () => {
+    const made = await forSchool(SCHOOL_A, (tx) =>
+      tx.user.create({
+        data: {
+          schoolId: SCHOOL_A,
+          role: 'TEACHER',
+          username: 'iso-teacher-new',
+          passwordHash: 'x',
+          teacherProfile: { create: { displayName: 'Iso New' } },
+        },
+        select: { id: true, schoolId: true },
+      }),
+    );
+
+    expect(made.schoolId).toBe(SCHOOL_A);
+
+    const fromB = await forSchool(SCHOOL_B, (tx) =>
+      tx.user.findFirst({ where: { id: made.id } }),
+    );
+    expect(fromB, 'a new teacher was visible from another school').toBeNull();
+
+    await owner.teacherProfile.deleteMany({ where: { userId: made.id } });
+    await owner.user.delete({ where: { id: made.id } });
+  });
+
+  /**
+   * A username is unique within a school, not across the platform. Two schools
+   * may each have a "sara", and the administration screens must not invent a
+   * stricter rule than the database keeps.
+   */
+  it('allows the same username in two different schools', async () => {
+    const first = await owner.user.create({
+      data: { schoolId: SCHOOL_A, role: 'TEACHER', username: 'iso-shared', passwordHash: 'x' },
+    });
+    const second = await owner.user.create({
+      data: { schoolId: SCHOOL_B, role: 'TEACHER', username: 'iso-shared', passwordHash: 'x' },
+    });
+
+    expect(first.schoolId).not.toBe(second.schoolId);
+
+    await expect(
+      owner.user.create({
+        data: { schoolId: SCHOOL_A, role: 'STUDENT', username: 'iso-shared', passwordHash: 'x' },
+      }),
+      'the same username was allowed twice inside one school',
+    ).rejects.toThrow();
+
+    await owner.user.deleteMany({ where: { id: { in: [first.id, second.id] } } });
+  });
+});

@@ -264,7 +264,7 @@ export default function ClassProgressPage() {
     <TeacherShell
       me={me}
       teacherTitle={profile?.title}
-      title="Class progress"
+      title={me.role === 'ADMIN' ? 'Progress across the school' : 'Class progress'}
       lead={
         <p className="page-lead">
           {overview === null

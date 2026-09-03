@@ -196,7 +196,10 @@ export default function StudentsPage() {
       <TeacherHeader me={me} />
       <main className="page stack">
         <div className="pagehead">
-          <h1>My students</h1>
+          {/* An administrator has no class of her own: these are the
+              school's students, not hers. Same screen, same rules — only the
+              word that would be untrue for her. */}
+          <h1>{me.role === 'ADMIN' ? 'Students' : 'My students'}</h1>
           <p className="muted">
             {students
               ? `${counts.signin} of ${counts.all} can sign in`

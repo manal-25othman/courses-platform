@@ -26,6 +26,16 @@ export const AUDIT_ACTIONS = {
   STUDENT_DELETED: 'student.deleted',
   STUDENT_RESTORED: 'student.restored',
   STUDENT_PASSWORD_RESET: 'student.password_reset',
+  STUDENT_ASSIGNED: 'student.assigned',
+
+  // The school administrator's own actions, on the staff of her school.
+  TEACHER_CREATED: 'teacher.created',
+  TEACHER_UPDATED: 'teacher.updated',
+  TEACHER_DISABLED: 'teacher.disabled',
+  TEACHER_ENABLED: 'teacher.enabled',
+  TEACHER_DELETED: 'teacher.deleted',
+  TEACHER_RESTORED: 'teacher.restored',
+  TEACHER_PASSWORD_RESET: 'teacher.password_reset',
   CONTENT_CREATED: 'content.created',
   CONTENT_UPDATED: 'content.updated',
   CONTENT_DELETED: 'content.deleted',

@@ -12,6 +12,7 @@ import { EmailModule } from './email/email.module';
 import { SettingsModule } from './settings/settings.module';
 import { StudentsModule } from './students/students.module';
 import { AdminModule } from './admin/admin.module';
+import { SchoolModule } from './school/school.module';
 import { ContentModule } from './content/content.module';
 import { QuestionsModule } from './questions/questions.module';
 import { LearningModule } from './learning/learning.module';
@@ -32,6 +33,7 @@ import { MessagesModule } from './messages/messages.module';
     AuthModule,
     StudentsModule,
     AdminModule,
+    SchoolModule,
     ContentModule,
     QuestionsModule,
     LearningModule,

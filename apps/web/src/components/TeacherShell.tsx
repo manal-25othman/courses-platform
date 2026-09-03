@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { api, Me } from '@/lib/api';
 import { Avatar, Brandmark, TeacherNav } from './Shell';
+import { SchoolHeader } from './SchoolShell';
 import { Icon } from './Icon';
 
 /**
@@ -32,6 +33,15 @@ export function TeacherHeader({
   teacherTitle?: string | null;
 }) {
   const router = useRouter();
+
+  // A school administrator reaches several of these screens — the student
+  // roster, the curriculum — because they are school-wide for her. She is
+  // still an administrator while she is there, so she keeps her own bar: the
+  // teacher's would name a course above her head, offer a Dashboard that is
+  // not her home, and leave her no way back to her school office.
+  if (me.role === 'ADMIN') {
+    return <SchoolHeader me={me} />;
+  }
 
   async function signOut() {
     await api.post('/auth/logout').catch(() => undefined);

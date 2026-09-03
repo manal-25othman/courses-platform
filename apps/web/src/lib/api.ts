@@ -316,11 +316,61 @@ export interface AssessmentRules {
 }
 
 /** Where a signed-in user belongs, by role. */
+// --- The school office (Phase: School Admin) -------------------------------
+
+/**
+ * One teacher, as her school's administrator sees her.
+ *
+ * `students` is how many children are in her care — the fact an administrator
+ * acts on, and the one that decides whether she can be removed yet.
+ */
+export interface Teacher {
+  id: string;
+  displayName: string;
+  username: string;
+  email: string | null;
+  title: string | null;
+  status: 'ACTIVE' | 'DISABLED';
+  isDeleted: boolean;
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  students: number;
+}
+
+/** A teacher who has just been added, with the way in. Shown once. */
+export interface CreatedTeacher {
+  teacher: Teacher;
+  temporaryPassword: string;
+}
+
+/** A student, named only as far as an assignment decision needs. */
+export interface AssignableStudent {
+  id: string;
+  fullName: string;
+  username: string;
+  assignedTeacherId: string | null;
+}
+
+/** The school, for the person who runs it. Counts and the gaps she can close. */
+export interface SchoolSummary {
+  schoolName: string;
+  teachers: number;
+  teachersSignedIn: number;
+  students: number;
+  studentsUnassigned: number;
+  teachersWithoutStudents: number;
+}
+
 export function homeFor(user: Me): string {
   if (user.mustChangePassword) return '/change-password';
   // The platform operator has her own place and none of the teacher screens
   // would work for her: they resolve a school, and she has none.
   if (user.role === 'PLATFORM_ADMIN') return '/admin';
+  // The school administrator runs a school rather than teaching a class, so
+  // the teacher's dashboard — "this class", "worth a look today" — is the
+  // wrong first screen for her. Hers is the school office.
+  if (user.role === 'ADMIN') return '/school';
   // A teacher lands on her dashboard; the student list is one of the places
   // she goes from it, not the first thing she is shown.
   return user.role === 'STUDENT' ? '/home' : '/dashboard';
