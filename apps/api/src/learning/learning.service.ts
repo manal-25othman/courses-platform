@@ -149,7 +149,14 @@ export class LearningService {
 
     const units = await this.prisma.forSchool(schoolId, (tx) =>
       tx.unit.findMany({
-        where: { status: ContentStatus.PUBLISHED },
+        // Her own school's course, named rather than inferred. Row-level
+        // security admits a shared master course as well as this school's
+        // own, so asking only for "published units" once put another
+        // school's unit into her course list.
+        where: {
+          status: ContentStatus.PUBLISHED,
+          course: { ownerSchoolId: schoolId },
+        },
         orderBy: { orderIndex: 'asc' },
       }),
     );

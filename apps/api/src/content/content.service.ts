@@ -79,16 +79,28 @@ export class ContentService {
   // --- Courses -------------------------------------------------------------
 
   /**
-   * The course a teacher works in, created on first use.
+   * The course this school works in, created on first use.
    *
-   * One course exists today (TOP GOAL, Grade 6). It is created lazily rather
-   * than seeded, so no curriculum is invented before the teacher asks for one.
+   * One course exists per school today (TOP GOAL, Grade 6). It is created
+   * lazily rather than seeded, so no curriculum is invented before the teacher
+   * asks for one.
+   *
+   * The school is named in the query rather than left to row-level security.
+   * The policy on `courses` deliberately admits a shared master library as
+   * well as this school's own rows, so "the oldest course I can see" is not
+   * the same question as "my school's course" — it once resolved to another
+   * school's curriculum. A school works in the course it owns; adopting shared
+   * material is a separate, deliberate act, not something course resolution
+   * does on its own.
    */
   async currentCourse(actor: CurrentUser) {
     const schoolId = this.schoolOf(actor);
 
     return this.prisma.forSchool(schoolId, async (tx) => {
-      const existing = await tx.course.findFirst({ orderBy: { createdAt: 'asc' } });
+      const existing = await tx.course.findFirst({
+        where: { ownerSchoolId: schoolId },
+        orderBy: { createdAt: 'asc' },
+      });
       if (existing) return existing;
 
       if (actor.role === UserRole.STUDENT) {
@@ -96,7 +108,13 @@ export class ContentService {
       }
 
       return tx.course.create({
-        data: { title: 'TOP GOAL', ownerSchoolId: schoolId, status: ContentStatus.DRAFT },
+        data: {
+          title: 'TOP GOAL',
+          ownerSchoolId: schoolId,
+          // A school's own curriculum is private to it.
+          isSharedMaster: false,
+          status: ContentStatus.DRAFT,
+        },
       });
     });
   }
@@ -119,10 +137,15 @@ export class ContentService {
 
   async getUnit(actor: CurrentUser, unitId: string) {
     const statuses = this.visibleStatuses(actor);
+    const schoolId = this.schoolOf(actor);
 
-    return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+    return this.prisma.forSchool(schoolId, async (tx) => {
       const unit = await tx.unit.findFirst({
-        where: { id: unitId, status: { in: statuses } },
+        // Named against this school's own course, so reaching a unit by its
+        // identifier alone cannot cross a tenant even if the policy that
+        // governs the row is ever loosened. A unit belonging to someone else
+        // is "not found", which is also all a stranger should learn about it.
+        where: { id: unitId, status: { in: statuses }, course: { ownerSchoolId: schoolId } },
         include: {
           sections: {
             where: { status: { in: statuses } },

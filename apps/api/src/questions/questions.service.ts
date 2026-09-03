@@ -35,8 +35,19 @@ export class QuestionsService {
     unitId: string,
     options: { onlyNeedingReview?: boolean; purpose?: QuestionPurpose } = {},
   ) {
-    return this.prisma.forSchool(this.schoolOf(actor), (tx) =>
-      tx.question.findMany({
+    const schoolId = this.schoolOf(actor);
+
+    return this.prisma.forSchool(schoolId, async (tx) => {
+      // Asked for first, so a unit belonging to another school answers the
+      // same way a unit that does not exist does. Filtering alone would return
+      // an empty list, which reads as "this unit has no questions yet".
+      const unit = await tx.unit.findFirst({
+        where: { id: unitId, course: { ownerSchoolId: schoolId } },
+        select: { id: true },
+      });
+      if (!unit) throw new NotFoundException('Unit not found.');
+
+      return tx.question.findMany({
         where: {
           unitId,
           ...(options.onlyNeedingReview ? { needsReview: true } : {}),
@@ -51,8 +62,8 @@ export class QuestionsService {
           },
           section: { select: { id: true, title: true } },
         },
-      }),
-    );
+      });
+    });
   }
 
   /** How much of an imported unit still needs checking. */

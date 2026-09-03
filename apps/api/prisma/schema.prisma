@@ -261,7 +261,13 @@ model Course {
   ownerSchoolId  String  @map("owner_school_id") @db.Uuid
   /// True for the master library every school may read but only the owner may
   /// change. A school-specific version is a copy with this false (SRS 37.2).
-  isSharedMaster Boolean @default(true) @map("is_shared_master")
+  ///
+  /// Defaults to false, because the row-level policy reads this as "every
+  /// school may read it". A default of true meant each school's own private
+  /// curriculum was published to every other tenant the moment it was
+  /// created. Sharing a course is a deliberate act, never what happens when
+  /// nobody says otherwise.
+  isSharedMaster Boolean @default(false) @map("is_shared_master")
   /// Set on a copy, pointing at the master it came from.
   sourceCourseId String? @map("source_course_id") @db.Uuid
 

@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { AppModule } from './app.module';
+import { RlsDenialFilter } from './common/rls-denial.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -31,6 +32,11 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
+
+  // A query the row-level policies refuse is answered "not found", so a
+  // stranger cannot tell another school's content from an address with
+  // nothing behind it.
+  app.useGlobalFilters(new RlsDenialFilter());
 
   const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:3000';
   app.enableCors({ origin: corsOrigin, credentials: true });

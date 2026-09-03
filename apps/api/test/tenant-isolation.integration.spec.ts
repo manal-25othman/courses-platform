@@ -33,6 +33,14 @@ const VOCAB_PROGRESS_A = '77777777-7777-7777-7777-777777777777';
 const MEDIA_Q = 'aaaaaaaa-0000-4000-8000-000000000001';
 const MEDIA_V = 'aaaaaaaa-0000-4000-8000-000000000002';
 
+// An ordinary school's own curriculum: owned by school A and shared with
+// nobody. Everything above it is the shared master library, which school B may
+// read on purpose; these are the rows school B must never see.
+const PRIVATE_COURSE_A = 'aaaaaaaa-0000-4000-8000-000000000010';
+const PRIVATE_UNIT_A = 'aaaaaaaa-0000-4000-8000-000000000011';
+const PRIVATE_QUESTION_A = 'aaaaaaaa-0000-4000-8000-000000000012';
+const PRIVATE_VOCAB_A = 'aaaaaaaa-0000-4000-8000-000000000013';
+
 const owner = new PrismaClient({ datasourceUrl: OWNER_URL });
 const app = new PrismaClient({ datasourceUrl: APP_URL });
 
@@ -115,6 +123,54 @@ beforeAll(async () => {
     where: { id: SET_A },
     update: {},
     create: { id: SET_A, unitId: UNIT_A, title: 'Isolation Test Set' },
+  });
+
+  // School A's own curriculum, shared with nobody. Created the way the
+  // application creates one, so the flag is whatever a real course gets.
+  await owner.course.upsert({
+    where: { id: PRIVATE_COURSE_A },
+    update: {},
+    create: {
+      id: PRIVATE_COURSE_A,
+      title: 'Isolation Test Private Course',
+      ownerSchoolId: SCHOOL_A,
+      isSharedMaster: false,
+    },
+  });
+  await owner.unit.upsert({
+    where: { id: PRIVATE_UNIT_A },
+    update: {},
+    create: {
+      id: PRIVATE_UNIT_A,
+      courseId: PRIVATE_COURSE_A,
+      title: 'Isolation Test Private Unit',
+      orderIndex: 0,
+      // Published, because the leak this guards against reached a student
+      // through her own unit list, which only ever holds published units.
+      status: 'PUBLISHED',
+    },
+  });
+  await owner.question.upsert({
+    where: { id: PRIVATE_QUESTION_A },
+    update: {},
+    create: {
+      id: PRIVATE_QUESTION_A,
+      unitId: PRIVATE_UNIT_A,
+      typeKey: 'multiple_choice',
+      prompt: 'Private question',
+      payload: { options: [{ id: 'a', text: 'x' }] },
+      answerKey: { correctOptionId: 'a' },
+    },
+  });
+  await owner.vocabularyItem.upsert({
+    where: { id: PRIVATE_VOCAB_A },
+    update: {},
+    create: {
+      id: PRIVATE_VOCAB_A,
+      unitId: PRIVATE_UNIT_A,
+      orderIndex: 0,
+      wordEn: 'private',
+    },
   });
 
   // Every content table needs at least one row owned by school A, otherwise a
@@ -258,6 +314,10 @@ afterAll(async () => {
   await owner.question.deleteMany({ where: { unitId: UNIT_A } });
   await owner.unit.deleteMany({ where: { id: UNIT_A } });
   await owner.course.deleteMany({ where: { id: COURSE_A } });
+  await owner.vocabularyItem.deleteMany({ where: { unitId: PRIVATE_UNIT_A } });
+  await owner.question.deleteMany({ where: { unitId: PRIVATE_UNIT_A } });
+  await owner.unit.deleteMany({ where: { id: PRIVATE_UNIT_A } });
+  await owner.course.deleteMany({ where: { id: PRIVATE_COURSE_A } });
   await owner.user.deleteMany({ where: { schoolId: { in: [SCHOOL_A, SCHOOL_B] } } });
   await owner.school.deleteMany({ where: { id: { in: [SCHOOL_A, SCHOOL_B] } } });
 
@@ -415,6 +475,7 @@ describe('only the owning school may change shared content', () => {
 
     expect(seen).toHaveLength(2);
   });
+
 
   it("refuses to add an item to another school's question set", async () => {
     await expect(
@@ -923,5 +984,118 @@ describe('the application role cannot switch the protection off', () => {
       expect(table.relrowsecurity, `${table.relname} does not have RLS enabled`).toBe(true);
       expect(table.relforcerowsecurity, `${table.relname} is missing FORCE`).toBe(true);
     }
+  });
+});
+
+/**
+ * A school's own curriculum is private to it.
+ *
+ * `is_shared_master` decides whether a course is the master library everyone
+ * may read, and it once defaulted to true while no code ever set it — so every
+ * school's private curriculum was published to every other tenant the moment
+ * it was created. A teacher opening the Curriculum screen was shown another
+ * school's units; a student's own unit list carried another school's published
+ * unit; and the questions hanging off those units gave up their answer keys.
+ *
+ * The tests above cover the master library, which school B may read on
+ * purpose. These cover the ordinary case, which is every other course. Both
+ * matter: the bug was not that sharing existed, it was that nothing
+ * distinguished a shared course from a private one.
+ */
+describe('a private course belongs to one school alone', () => {
+  it('does not share a course unless it is told to', async () => {
+    const [column] = await owner.$queryRaw<{ column_default: string | null }[]>`
+      SELECT column_default FROM information_schema.columns
+      WHERE table_name = 'courses' AND column_name = 'is_shared_master'
+    `;
+
+    expect(column?.column_default).toBe('false');
+  });
+
+  it('lets the owning school read its own private course', async () => {
+    const seen = await forSchool(SCHOOL_A, (tx) =>
+      tx.course.findMany({ where: { id: PRIVATE_COURSE_A } }),
+    );
+
+    expect(seen).toHaveLength(1);
+  });
+
+  it.each([
+    ['course', (tx: PrismaClient) => tx.course.findMany({ where: { id: PRIVATE_COURSE_A } })],
+    ['units', (tx: PrismaClient) => tx.unit.findMany({ where: { courseId: PRIVATE_COURSE_A } })],
+    ['questions', (tx: PrismaClient) => tx.question.findMany({ where: { unitId: PRIVATE_UNIT_A } })],
+    ['vocabulary', (tx: PrismaClient) => tx.vocabularyItem.findMany({ where: { unitId: PRIVATE_UNIT_A } })],
+  ] as const)("hides school A's private %s from another school", async (_what, read) => {
+    const seen = await forSchool(SCHOOL_B, (tx) => read(tx));
+
+    expect(seen).toHaveLength(0);
+  });
+
+  /**
+   * Knowing the identifier must not help. The teacher screens address a unit
+   * by its id, so this is the shape a cross-tenant attempt actually takes.
+   */
+  it('hides a private unit from another school that knows its identifier', async () => {
+    const seen = await forSchool(SCHOOL_B, (tx) =>
+      tx.unit.findUnique({ where: { id: PRIVATE_UNIT_A } }),
+    );
+
+    expect(seen).toBeNull();
+  });
+
+  /**
+   * The leak that reached students: her unit list asks for published units,
+   * and a private unit belonging to someone else answered it.
+   */
+  it("keeps another school's published unit out of a student's unit list", async () => {
+    const published = await forSchool(SCHOOL_B, (tx) =>
+      tx.unit.findMany({ where: { status: 'PUBLISHED' } }),
+    );
+
+    expect(published.map((unit) => unit.id)).not.toContain(PRIVATE_UNIT_A);
+  });
+
+  it("refuses a write to school A's private curriculum", async () => {
+    await expect(
+      forSchool(SCHOOL_B, (tx) =>
+        tx.unit.update({
+          where: { id: PRIVATE_UNIT_A },
+          data: { title: 'changed by another school' },
+        }),
+      ),
+    ).rejects.toThrow();
+
+    const unit = await owner.unit.findUnique({ where: { id: PRIVATE_UNIT_A } });
+    expect(unit?.title).toBe('Isolation Test Private Unit');
+  });
+
+  it("refuses to add vocabulary to school A's private unit", async () => {
+    await expect(
+      forSchool(SCHOOL_B, (tx) =>
+        tx.vocabularyItem.create({
+          data: { unitId: PRIVATE_UNIT_A, orderIndex: 99, wordEn: 'intruder' },
+        }),
+      ),
+    ).rejects.toThrow();
+
+    const added = await owner.vocabularyItem.count({
+      where: { unitId: PRIVATE_UNIT_A, wordEn: 'intruder' },
+    });
+    expect(added).toBe(0);
+  });
+
+  it("refuses a delete of school A's private course", async () => {
+    let deleted = -1;
+
+    await forSchool(SCHOOL_B, async (tx) => {
+      deleted = await tx.$executeRawUnsafe(
+        `DELETE FROM "courses" WHERE id = '${PRIVATE_COURSE_A}'`,
+      );
+      throw new RollBack();
+    }).catch((error: unknown) => {
+      if (!(error instanceof RollBack)) throw error;
+    });
+
+    expect(deleted).toBe(0);
   });
 });
