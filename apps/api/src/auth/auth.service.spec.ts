@@ -30,6 +30,10 @@ function makeUser(overrides: Partial<User> = {}): User {
 describe('AuthService.login', () => {
   let user: User | null;
   let audited: string[];
+  /** Whether the school the fixture user belongs to is open. */
+  let schoolOpen = true;
+  /** The `reason` each recorded failure carried, where it carried one. */
+  let reasons: string[] = [];
   let service: AuthService;
 
   /** Verifies only the exact password "right". */
@@ -45,12 +49,17 @@ describe('AuthService.login', () => {
   beforeEach(() => {
     user = makeUser();
     audited = [];
+    reasons = [];
+    schoolOpen = true;
 
     const prisma = {
       // Signing in cannot be scoped to a school, because the school is what is
       // being established, so it goes through the narrow lookup instead.
       findUsersForAuthentication: async () => (user ? [user] : []),
       findUserForAuthentication: async () => user,
+      // Signing in now also asks whether her school is open, so the fake has
+      // to answer. The tests that care about a closed school set this.
+      schoolIsActive: async () => schoolOpen,
       // Everything after sign-in runs inside the caller's own school.
       forSchool: async <T>(_schoolId: string, work: (t: unknown) => Promise<T>) =>
         work({ user: { update: async () => user } }),
@@ -58,8 +67,11 @@ describe('AuthService.login', () => {
     } as unknown as PrismaService;
 
     const audit = {
-      record: async (entry: { action: string }) => {
+      record: async (entry: { action: string; metadata?: Record<string, unknown> }) => {
         audited.push(entry.action);
+        // Kept alongside rather than instead of the action, so the tests that
+        // only care which action was recorded are unaffected.
+        if (typeof entry.metadata?.reason === 'string') reasons.push(entry.metadata.reason);
       },
     } as unknown as AuditService;
 
@@ -116,6 +128,25 @@ describe('AuthService.login', () => {
     user = makeUser({ deletedAt: null });
 
     await expect(service.login({ username: 'sara', password: 'right' })).resolves.toBeDefined();
+  });
+
+  /**
+   * A school's status used to be recorded and never read, so a school could be
+   * marked disabled while everybody in it carried on working. These hold the
+   * line now that it means something.
+   */
+  it('refuses a sign-in when the school is closed', async () => {
+    schoolOpen = false;
+
+    await expect(service.login({ username: 'sara', password: 'right' })).rejects.toThrow();
+  });
+
+  it('records why, without telling the caller', async () => {
+    schoolOpen = false;
+    const refused = await service.login({ username: 'sara', password: 'right' }).catch((e) => e);
+
+    expect(reasons).toContain('school_disabled');
+    expect(refused.message).toBe('Incorrect username or password.');
   });
 
   it('never reveals why a sign-in failed', async () => {

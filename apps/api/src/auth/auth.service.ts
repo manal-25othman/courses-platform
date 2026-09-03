@@ -89,6 +89,22 @@ export class AuthService {
       throw failure;
     }
 
+    // Her own account is in order; her school also has to be open. Closing a
+    // school used to change nothing at all — the status was recorded and never
+    // read — so a school could be marked disabled while everybody in it
+    // carried on working. The same generic failure is returned as for a wrong
+    // password: whether a school is open is not something to confirm to
+    // somebody who cannot get in.
+    if (!(await this.prisma.schoolIsActive(user.schoolId))) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.LOGIN_FAILED,
+        schoolId: user.schoolId,
+        actorUserId: user.id,
+        metadata: { reason: 'school_disabled' },
+      });
+      throw failure;
+    }
+
     const pair = await this.tokens.issuePair(user, deviceLabel);
 
     if (user.schoolId) {
@@ -117,6 +133,12 @@ export class AuthService {
     const user = await this.prisma.findUserForAuthentication(userId);
 
     if (!user || user.deletedAt !== null || user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid session.');
+    }
+
+    // A closed school is closed for this too, or somebody holding a valid
+    // token could still be setting passwords inside it.
+    if (!(await this.prisma.schoolIsActive(user.schoolId))) {
       throw new UnauthorizedException('Invalid session.');
     }
 
@@ -155,6 +177,13 @@ export class AuthService {
     const account = await this.prisma.findUserForAuthentication(userId);
 
     if (!account || account.deletedAt !== null || account.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Invalid session.');
+    }
+
+    // Checked here too, which is what makes a closed school take effect on
+    // the website within one page load rather than within one token lifetime:
+    // every screen asks who it is talking to before it draws anything.
+    if (!(await this.prisma.schoolIsActive(account.schoolId))) {
       throw new UnauthorizedException('Invalid session.');
     }
 

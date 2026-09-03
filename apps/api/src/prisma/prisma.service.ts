@@ -182,6 +182,30 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     return rows[0] ?? null;
   }
 
+  /**
+   * Whether a school is open for business.
+   *
+   * Asked while somebody is signing in or renewing a session, which happens
+   * before any school is established and so has no scope to read `schools`
+   * under. Goes through a database function that answers only this, in the
+   * same way the account lookups do.
+   *
+   * A user with no school — the platform operator — is never held up by this:
+   * she belongs to no school, and closing one must not lock out the person who
+   * has to reopen it.
+   */
+  async schoolIsActive(schoolId: string | null): Promise<boolean> {
+    if (schoolId === null) return true;
+
+    const rows = await this.$queryRaw<{ open: boolean }[]>`
+      SELECT school_is_active(${schoolId}::uuid) AS open
+    `;
+
+    // A missing answer is treated as closed. If this cannot be established,
+    // refusing the sign-in is the safe direction.
+    return rows[0]?.open === true;
+  }
+
   /** Escape hatch for raw work inside an existing scoped transaction. */
   static setSchool(tx: TenantClient, schoolId: string): Prisma.PrismaPromise<number> {
     return (tx as unknown as PrismaClient)

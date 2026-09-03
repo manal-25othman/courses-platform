@@ -2022,7 +2022,10 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
 .adminnav a[aria-current='page'] { background: var(--brand); color: var(--on-brand); }
 /* Not yet built, and saying so. Dimmed AND labelled, so the state does not
    depend on noticing a shade of grey. */
-.adminnav-soon { color: color-mix(in srgb, white 40%, var(--shade)); cursor: default; }
+/* Quieter than a live area, but still legible: at 40% white it sat at 3.76:1
+   on this bar, and the word is information — which area is coming — not
+   decoration. 55% clears 4.5:1 and still reads as the unreachable one. */
+.adminnav-soon { color: color-mix(in srgb, white 55%, var(--shade)); cursor: default; }
 /* Outlined rather than filled: a fill light enough to sit on this bar left
    the label at 2.78:1, and the badge does not need a fill to read as one. */
 .adminnav-soon em {
@@ -2044,12 +2047,21 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
   border-top: 1px solid var(--line);
 }
 .estate li:first-child .estate-row { border-top: 0; }
+/* The whole row opens the school — an anchor rather than a button, because it
+   is navigation and an operator will want to open two schools side by side.
+   The name is set in display type rather than link blue: the hover ground and
+   the cursor say it is reachable without turning a list of ten schools into a
+   list of ten underlines. */
+.estate-row { color: inherit; text-decoration: none; }
+.estate-row:hover { background: var(--ground); }
+.estate-row:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .estate-who { display: grid; gap: 2px; min-width: 0; }
 .estate-who b {
   font-family: var(--font-display); font-variation-settings: var(--wonk);
   font-size: var(--fs-lead); font-weight: 600; color: var(--ink);
 }
 .estate-who span { font-size: var(--fs-caption); color: var(--ink-3); font-weight: 500; }
+
 .estate-counts { display: flex; gap: var(--s4); flex-wrap: wrap; }
 .estate-counts span { font-size: var(--fs-small); color: var(--ink-2); white-space: nowrap; }
 .estate-counts b { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 700; }
@@ -2057,6 +2069,28 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
 /* A school with nothing outstanding says so quietly; a gap carries the warm
    colour, so the eye lands on the school that wants something. */
 .part[data-state='ready'] { background: var(--ground-2); color: var(--ink-2); border-color: var(--line); }
+
+/* What a school still needs, on the line under its counts rather than as a
+   chip adrift in the corner of the panel. */
+.gapline { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin: 0; }
+.gapline-label { font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
+
+/* The two things that can be done to a school. One row each, separated by a
+   rule, so the confirmation opens in the row it belongs to. */
+.schoolact { padding: var(--s4) var(--s5); border-top: 1px solid var(--line); }
+.schoolact-row {
+  display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
+  justify-content: space-between;
+}
+.schoolact-row p { margin: 0; font-size: var(--fs-small); color: var(--ink-2); max-width: 46ch; }
+
+/* The one-time handover: a username and a password, given side by side
+   because they are useless apart and are read out together. */
+.handover { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); margin: 0; }
+.handover div { display: grid; gap: var(--s1); }
+.handover dt { font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
+.handover dd { margin: 0; font-size: var(--fs-body); color: var(--ink); overflow-wrap: anywhere; }
+.handover code.temp { font-size: var(--fs-base); letter-spacing: .02em; }
 
 /* The totals. Supporting, so they are set as facts rather than as a hero
    row of big numbers — the schools above are what she came to read. */

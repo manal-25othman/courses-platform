@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ForbiddenException } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { UserRole, UserStatus } from '@prisma/client';
 import { AdminService } from './admin.service';
 import { CurrentUser } from '../auth/auth.types';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { PasswordService } from '../auth/password.service';
+import type { AuditService } from '../audit/audit.service';
 
 const operator: CurrentUser = {
   sub: 'op-1',
@@ -35,19 +37,51 @@ const schoolRow = {
 };
 
 /** Captures the SQL the service asks for, which is the point of the boundary. */
-function serviceWith(rows: { totals?: unknown[]; schools?: unknown[] } = {}) {
+function serviceWith(
+  rows: { totals?: unknown[]; schools?: unknown[]; detail?: unknown[] } = {},
+) {
   const asked: string[] = [];
+  const hashed: string[] = [];
+  const audited: { action: string }[] = [];
+
   const prisma = {
     $queryRaw: async (strings: TemplateStringsArray) => {
       const sql = strings.join('?');
       asked.push(sql.trim());
-      return sql.includes('platform_totals') ? (rows.totals ?? [totalsRow]) : (rows.schools ?? [schoolRow]);
+
+      if (sql.includes('platform_totals')) return rows.totals ?? [totalsRow];
+      if (sql.includes('platform_create_school')) {
+        return [{ school_id: 'school-1', admin_id: 'admin-1' }];
+      }
+      if (sql.includes('platform_school_detail')) return rows.detail ?? [schoolRow];
+      if (sql.includes('platform_rename_school')) return [];
+      if (sql.includes('platform_set_school_status')) return [];
+      return rows.schools ?? [schoolRow];
     },
     forSchool: vi.fn(),
   } as unknown as PrismaService;
 
-  return { service: new AdminService(prisma), asked, prisma };
+  const service = new AdminService(
+    prisma,
+    {
+      hash: async (password: string) => {
+        hashed.push(password);
+        return `hashed:${password}`;
+      },
+    } as unknown as PasswordService,
+    { record: async (entry: { action: string }) => void audited.push(entry) } as unknown as AuditService,
+  );
+
+  return { service, asked, prisma, hashed, audited };
 }
+
+/** The four fields the operator fills in to open a school. */
+const newSchool = {
+  name: 'A New School',
+  adminDisplayName: 'A Person',
+  adminUsername: 'a.person',
+  adminEmail: 'a@example.com',
+};
 
 describe('AdminService authorization', () => {
   it.each([
@@ -79,6 +113,27 @@ describe('AdminService authorization', () => {
     const { service } = serviceWith();
 
     await expect(service.overview(operator)).resolves.toBeDefined();
+  });
+
+  /**
+   * Every school route, not just the one that reads. A route added to this
+   * service later without the check would be a way for a school administrator
+   * to open, rename or close any school on the platform.
+   */
+  it.each([
+    ['reading one school', (service: AdminService, who: CurrentUser) => service.school(who, 'school-1')],
+    ['creating a school', (service: AdminService, who: CurrentUser) => service.createSchool(who, newSchool)],
+    ['renaming a school', (service: AdminService, who: CurrentUser) => service.renameSchool(who, 'school-1', 'Other')],
+    [
+      'closing a school',
+      (service: AdminService, who: CurrentUser) =>
+        service.setSchoolStatus(who, 'school-1', UserStatus.DISABLED),
+    ],
+  ])('refuses a school administrator %s', async (_what, call) => {
+    const { service } = serviceWith();
+    const schoolAdmin = { ...operator, role: UserRole.ADMIN, schoolId: 'school-1' };
+
+    await expect(call(service, schoolAdmin as CurrentUser)).rejects.toThrow(ForbiddenException);
   });
 
   /**
@@ -183,5 +238,94 @@ describe('AdminService reporting', () => {
     ]) {
       expect(serialised).not.toContain(forbidden);
     }
+  });
+});
+
+
+/**
+ * Opening a school.
+ *
+ * The password is the one plaintext credential this API ever hands back, so
+ * what happens to it is worth pinning down: generated here, hashed before it
+ * reaches the database, returned once, and never stored in a readable form.
+ */
+describe('AdminService school creation', () => {
+  it('generates the first password rather than letting anyone choose it', async () => {
+    const { service, hashed } = serviceWith();
+
+    const created = await service.createSchool(operator, newSchool);
+
+    expect(created.firstAdmin.temporaryPassword).toHaveLength(14);
+    expect(hashed, 'the password reached the database unhashed').toEqual([
+      created.firstAdmin.temporaryPassword,
+    ]);
+  });
+
+  /**
+   * Read aloud, written on a slip of paper, or typed from a phone screen: a
+   * password with an l and a 1 in it costs somebody a support call.
+   */
+  it('uses only characters that cannot be confused for one another', async () => {
+    const { service } = serviceWith();
+
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const created = await service.createSchool(operator, newSchool);
+      expect(created.firstAdmin.temporaryPassword).toMatch(/^[abcdefghjkmnpqrstuvwxyz23456789]+$/);
+    }
+  });
+
+  it('gives two schools two different passwords', async () => {
+    const { service } = serviceWith();
+
+    const first = await service.createSchool(operator, newSchool);
+    const second = await service.createSchool(operator, newSchool);
+
+    expect(first.firstAdmin.temporaryPassword).not.toEqual(second.firstAdmin.temporaryPassword);
+  });
+
+  it('creates the school and the administrator in one statement', async () => {
+    const { service, asked } = serviceWith();
+
+    await service.createSchool(operator, newSchool);
+
+    // One call, not three writes that could half-succeed.
+    expect(asked.filter((sql) => sql.includes('platform_create_school'))).toHaveLength(1);
+    expect(asked.some((sql) => sql.includes('INSERT'))).toBe(false);
+  });
+
+  it('records that a school was opened', async () => {
+    const { service, audited } = serviceWith();
+
+    await service.createSchool(operator, newSchool);
+
+    expect(audited.map((entry) => entry.action)).toContain('school.created');
+  });
+});
+
+describe('AdminService school status', () => {
+  it('says outright whether people can sign in, rather than leaving it to be inferred', async () => {
+    const open = serviceWith({ detail: [schoolRow] });
+    const closed = serviceWith({ detail: [{ ...schoolRow, status: 'DISABLED' as const }] });
+
+    expect((await open.service.school(operator, 'school-1')).signInAllowed).toBe(true);
+    expect((await closed.service.school(operator, 'school-1')).signInAllowed).toBe(false);
+  });
+
+  it.each([
+    [UserStatus.DISABLED, 'school.disabled'],
+    [UserStatus.ACTIVE, 'school.enabled'],
+  ])('records %s as %s', async (status, action) => {
+    const { service, audited } = serviceWith();
+
+    await service.setSchoolStatus(operator, 'school-1', status);
+
+    expect(audited.map((entry) => entry.action)).toContain(action);
+  });
+
+  /** A school that is not there is not a 500, and not a blank page. */
+  it('reports a school that does not exist as not found', async () => {
+    const { service } = serviceWith({ detail: [] });
+
+    await expect(service.school(operator, 'nope')).rejects.toThrow(NotFoundException);
   });
 });

@@ -22,9 +22,9 @@ import { Icon } from './Icon';
 /** Where the platform screens live. Only the ones that exist are reachable. */
 const AREAS = [
   { href: '/admin', label: 'Dashboard', icon: 'home' as const, ready: true },
-  // Both are the next phases. They are drawn so the shape of the platform is
-  // visible, and made unreachable so nothing here is a dead link.
-  { href: '/admin/schools', label: 'Schools', icon: 'teacher' as const, ready: false },
+  { href: '/admin/schools', label: 'Schools', icon: 'teacher' as const, ready: true },
+  // The next phase. Drawn so the shape of the platform is visible, and made
+  // unreachable so nothing here is a dead link.
   { href: '/admin/teachers', label: 'Teachers', icon: 'progress' as const, ready: false },
 ];
 

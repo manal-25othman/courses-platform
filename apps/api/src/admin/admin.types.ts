@@ -43,3 +43,26 @@ export interface PlatformOverview {
   totals: PlatformTotals;
   schools: SchoolOverview[];
 }
+
+/** A school, with what the platform may know about it. */
+export interface SchoolDetail extends SchoolOverview {
+  /** Whether people in this school can currently sign in. */
+  signInAllowed: boolean;
+}
+
+/**
+ * What creating a school hands back.
+ *
+ * The password appears once, here, and is never stored in a readable form or
+ * returned again. It is the operator's job to pass it on.
+ */
+export interface CreatedSchool {
+  school: SchoolDetail;
+  firstAdmin: {
+    username: string;
+    email: string | null;
+    displayName: string;
+    /** Shown once. Not retrievable afterwards. */
+    temporaryPassword: string;
+  };
+}

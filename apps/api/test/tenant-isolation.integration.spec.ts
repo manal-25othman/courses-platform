@@ -1211,3 +1211,226 @@ describe('the platform boundary is narrow and explicit', () => {
     expect(seen.map((school) => school.id)).toEqual([SCHOOL_B]);
   });
 });
+
+/**
+ * Opening, closing and renaming a school.
+ *
+ * A platform operator can do these because five functions let her, and for no
+ * other reason: `app_user` cannot insert a school under any scope, which is
+ * why creating one is a function call rather than a write with the policies
+ * held open. These check that the five are as narrow as the two before them,
+ * that creating a school is all-or-nothing, and that closing one really does
+ * end the sessions inside it.
+ */
+describe('schools are managed through narrow functions', () => {
+  const SCHOOLS = [
+    'school_is_active',
+    'platform_create_school',
+    'platform_school_detail',
+    'platform_rename_school',
+    'platform_set_school_status',
+  ];
+
+  /** How each is called, for the privilege check, which needs the signature. */
+  const SIGNATURES: Record<string, string> = {
+    school_is_active: 'school_is_active(uuid)',
+    platform_create_school: 'platform_create_school(text, text, text, text, text)',
+    platform_school_detail: 'platform_school_detail(uuid)',
+    platform_rename_school: 'platform_rename_school(uuid, text)',
+    platform_set_school_status: 'platform_set_school_status(uuid, user_status)',
+  };
+
+  const NEW_SCHOOL = 'Isolation Test C';
+
+  async function dropSchool(name: string): Promise<void> {
+    const rows = await owner.school.findMany({ where: { name } });
+    for (const school of rows) {
+      await owner.refreshToken.deleteMany({ where: { user: { schoolId: school.id } } });
+      await owner.teacherProfile.deleteMany({ where: { user: { schoolId: school.id } } });
+      await owner.user.deleteMany({ where: { schoolId: school.id } });
+      await owner.school.delete({ where: { id: school.id } });
+    }
+  }
+
+  afterAll(async () => {
+    await dropSchool(NEW_SCHOOL);
+    await dropSchool('Isolation Test C renamed');
+  });
+
+  it.each(SCHOOLS)('%s runs as its owner, with a pinned search path', async (name) => {
+    const [fn] = await owner.$queryRawUnsafe<
+      { prosecdef: boolean; proconfig: string[] | null }[]
+    >(`SELECT prosecdef, proconfig FROM pg_proc WHERE proname = '${name}'`);
+
+    expect(fn.prosecdef, `${name} is not SECURITY DEFINER`).toBe(true);
+    expect(fn.proconfig, `${name} does not pin its search_path`).toContain('search_path=public');
+  });
+
+  it.each(SCHOOLS)('%s is not executable by everybody', async (name) => {
+    const [grant] = await owner.$queryRawUnsafe<{ open: boolean }[]>(
+      `SELECT has_function_privilege('public', '${SIGNATURES[name]}', 'EXECUTE') AS open`,
+    );
+
+    expect(grant.open, `${name} is executable by PUBLIC`).toBe(false);
+  });
+
+  /**
+   * The detail function answers the same question as the overview, for one
+   * school, so it must be as free of personal columns.
+   */
+  it('returns no column that could carry anything personal', async () => {
+    const columns = await owner.$queryRaw<{ name: string }[]>`
+      SELECT lower(unnest(proargnames)) AS name
+      FROM pg_proc WHERE proname = 'platform_school_detail'
+    `;
+
+    const named = columns.map((column) => column.name);
+    expect(named.length).toBeGreaterThan(0);
+    for (const forbidden of ['username', 'email', 'password_hash', 'token', 'full_name']) {
+      expect(named, `platform_school_detail returns ${forbidden}`).not.toContain(forbidden);
+    }
+  });
+
+  /**
+   * The reason creating a school is one function call rather than three
+   * writes. If the administrator cannot be made, the school must not exist
+   * either: a school nobody can sign into is worse than a visible failure.
+   */
+  it('creates a school and its first administrator together, or not at all', async () => {
+    const [created] = await owner.$queryRawUnsafe<{ school_id: string; admin_id: string }[]>(
+      `SELECT * FROM platform_create_school(
+         '${NEW_SCHOOL}', 'iso-c-admin', 'iso-c@example.com', 'hash', 'Isolation C Admin')`,
+    );
+
+    const admin = await owner.user.findUnique({ where: { id: created.admin_id } });
+    expect(admin?.role).toBe('ADMIN');
+    expect(admin?.schoolId, 'the first admin belongs to the new school and no other').toBe(
+      created.school_id,
+    );
+    expect(admin?.mustChangePassword, 'she is not left on the operator’s password').toBe(true);
+
+    // A second school by the same name is refused, and leaves nothing behind.
+    const before = await owner.user.count();
+    // Matched on the SQLSTATE, not the wording: the function raises a sentence
+    // of its own and Prisma replaces it before anything sees it. 23505 is what
+    // AdminService reads to turn this into a 409, so it is what is asserted.
+    await expect(
+      owner.$executeRawUnsafe(
+        `SELECT platform_create_school(
+           '${NEW_SCHOOL.toLowerCase()}', 'iso-c-other', 'other@example.com', 'hash', 'Other')`,
+      ),
+    ).rejects.toThrow(/23505/);
+
+    expect(await owner.user.count(), 'a refused creation left a user behind').toBe(before);
+    expect(await owner.school.count({ where: { name: NEW_SCHOOL.toLowerCase() } })).toBe(0);
+  });
+
+  it('renames a school, and refuses a name already taken', async () => {
+    const school = await owner.school.findFirstOrThrow({ where: { name: NEW_SCHOOL } });
+
+    await owner.$executeRawUnsafe(
+      `SELECT platform_rename_school('${school.id}'::uuid, 'Isolation Test C renamed')`,
+    );
+    expect((await owner.school.findUniqueOrThrow({ where: { id: school.id } })).name).toBe(
+      'Isolation Test C renamed',
+    );
+
+    await expect(
+      owner.$executeRawUnsafe(
+        `SELECT platform_rename_school('${school.id}'::uuid, 'Isolation Test A')`,
+      ),
+    ).rejects.toThrow(/23505/);
+  });
+
+  /**
+   * Closing a school has to mean something. `school_is_active` is what the
+   * sign-in, renewal and describe paths consult, and the same statement that
+   * closes a school ends every session in it.
+   */
+  it('closes a school, ending the sessions inside it and no others', async () => {
+    const closing = await owner.school.findFirstOrThrow({
+      where: { name: 'Isolation Test C renamed' },
+    });
+    const inside = await owner.user.findFirstOrThrow({ where: { schoolId: closing.id } });
+    const outside = await owner.user.findFirstOrThrow({ where: { schoolId: SCHOOL_A } });
+
+    for (const user of [inside, outside]) {
+      await owner.refreshToken.create({
+        data: {
+          userId: user.id,
+          familyId: user.id,
+          tokenHash: `iso-close-${user.id}`,
+          expiresAt: new Date(Date.now() + 86_400_000),
+        },
+      });
+    }
+
+    await owner.$executeRawUnsafe(
+      `SELECT platform_set_school_status('${closing.id}'::uuid, 'DISABLED'::"user_status")`,
+    );
+
+    const [state] = await owner.$queryRawUnsafe<{ open: boolean }[]>(
+      `SELECT school_is_active('${closing.id}'::uuid) AS open`,
+    );
+    expect(state.open, 'a closed school still lets people in').toBe(false);
+
+    const closed = await owner.refreshToken.findFirstOrThrow({
+      where: { tokenHash: `iso-close-${inside.id}` },
+    });
+    const untouched = await owner.refreshToken.findFirstOrThrow({
+      where: { tokenHash: `iso-close-${outside.id}` },
+    });
+
+    expect(closed.revokedAt, 'a session inside the closed school survived').not.toBeNull();
+    expect(untouched.revokedAt, 'a session in another school was revoked too').toBeNull();
+
+    // And opening it again lets people back in.
+    await owner.$executeRawUnsafe(
+      `SELECT platform_set_school_status('${closing.id}'::uuid, 'ACTIVE'::"user_status")`,
+    );
+    const [reopened] = await owner.$queryRawUnsafe<{ open: boolean }[]>(
+      `SELECT school_is_active('${closing.id}'::uuid) AS open`,
+    );
+    expect(reopened.open).toBe(true);
+
+    await owner.refreshToken.deleteMany({ where: { tokenHash: `iso-close-${outside.id}` } });
+  });
+
+  /**
+   * The platform operator has no school, and `school_is_active` is asked about
+   * her too. A school-less account must not be locked out by a rule about
+   * schools — and an id that names nothing must not be treated as open.
+   */
+  it('treats no school as open and an unknown school as closed', async () => {
+    const [none] = await owner.$queryRawUnsafe<{ open: boolean }[]>(
+      `SELECT school_is_active(NULL) AS open`,
+    );
+    const [unknown] = await owner.$queryRawUnsafe<{ open: boolean }[]>(
+      `SELECT school_is_active('00000000-0000-4000-8000-000000000000'::uuid) AS open`,
+    );
+
+    expect(none.open, 'the platform operator belongs to no school and must still sign in').toBe(
+      true,
+    );
+    expect(unknown.open, 'a school that does not exist was treated as open').toBe(false);
+  });
+
+  /** Creating a school changes nothing about what a school can see. */
+  it('still shows a school only its own row', async () => {
+    const seen = await forSchool(SCHOOL_A, (tx) => tx.school.findMany());
+
+    expect(seen.map((school) => school.id)).toEqual([SCHOOL_A]);
+  });
+
+  /** And the restricted role still cannot make one for itself. */
+  it('refuses a school created by the application role', async () => {
+    await expect(
+      forSchool(SCHOOL_A, (tx) =>
+        tx.$executeRawUnsafe(`
+          INSERT INTO schools (id, name, status, created_at, updated_at)
+          VALUES (gen_random_uuid(), 'Isolation Test Sneak', 'ACTIVE', now(), now())
+        `),
+      ),
+    ).rejects.toThrow();
+  });
+});

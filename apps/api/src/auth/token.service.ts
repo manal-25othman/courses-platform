@@ -117,6 +117,14 @@ export class TokenService {
       throw new UnauthorizedException('Invalid session.');
     }
 
+    // Renewing is where a closed school stops a session that was already
+    // running. The family is revoked as well, so the refusal is permanent
+    // rather than something to retry until the school is reopened.
+    if (!(await this.prisma.schoolIsActive(user.schoolId))) {
+      await this.revokeFamily(stored.familyId);
+      throw new UnauthorizedException('Invalid session.');
+    }
+
     // Consume the presented token before issuing its replacement.
     await this.prisma.refreshToken.update({
       where: { id: stored.id },

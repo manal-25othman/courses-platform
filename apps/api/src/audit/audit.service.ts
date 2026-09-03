@@ -12,6 +12,13 @@ export const AUDIT_ACTIONS = {
   PASSWORD_CHANGED: 'auth.password_changed',
   PASSWORD_RESET_REQUESTED: 'auth.password_reset_requested',
   PASSWORD_RESET_COMPLETED: 'auth.password_reset_completed',
+  // Platform-level, recorded against the school they concern so the school's
+  // own history reads in order.
+  SCHOOL_CREATED: 'school.created',
+  SCHOOL_UPDATED: 'school.updated',
+  SCHOOL_DISABLED: 'school.disabled',
+  SCHOOL_ENABLED: 'school.enabled',
+
   STUDENT_CREATED: 'student.created',
   STUDENT_UPDATED: 'student.updated',
   STUDENT_DISABLED: 'student.disabled',

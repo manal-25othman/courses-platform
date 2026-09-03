@@ -26,8 +26,8 @@ import { AdminHeader } from '@/components/AdminShell';
  * name, no address, no progress — those belong to the people who teach, and
  * this screen has no business holding them.
  *
- * Nothing on this screen changes anything. Managing schools and their
- * administrators is the next phase; this one is for seeing.
+ * Nothing on this screen changes anything. Opening a school, closing one and
+ * changing its name are all done under Schools, which each row links to.
  */
 export default function AdminPage() {
   const router = useRouter();
@@ -154,14 +154,14 @@ export default function AdminPage() {
             </section>
 
             {totals.schoolsDisabled > 0 && (
-              // Said plainly, because the badge on the row would otherwise
-              // imply an enforcement that does not exist yet. Turning a
-              // school off for real is the Schools Management phase.
+              // Said plainly, because "closed" now does something: nobody in
+              // such a school can sign in. Worth stating rather than leaving
+              // to be read off a badge.
               <p className="alert warn">
                 {totals.schoolsDisabled}{' '}
-                {totals.schoolsDisabled === 1 ? 'school is' : 'schools are'} marked disabled.{' '}
-                <strong>That mark does not yet stop anyone signing in</strong> — it is recorded
-                but not enforced.
+                {totals.schoolsDisabled === 1 ? 'school is' : 'schools are'} closed.{' '}
+                <strong>Nobody in a closed school can sign in.</strong>{' '}
+                <a href="/admin/schools">Manage schools</a>
               </p>
             )}
           </>
@@ -182,7 +182,7 @@ function Tally({ label, value }: { label: string; value: number }) {
 
 /** What each operational state means, in the operator's words. */
 const NEEDS: Record<SchoolNeed, string> = {
-  marked_disabled: 'Marked disabled',
+  marked_disabled: 'Closed',
   no_teacher: 'No teacher',
   no_students: 'No students',
   no_course: 'No course',
@@ -215,41 +215,43 @@ function SchoolRow({ school }: { school: SchoolOverview }) {
   });
 
   return (
-    <li className="estate-row">
-      <div className="estate-who">
-        <b>{school.name}</b>
-        <span>Added {joined}</span>
-      </div>
+    <li>
+      <a className="estate-row" href={`/admin/schools/${school.id}`}>
+        <span className="estate-who">
+          <b>{school.name}</b>
+          <span>Added {joined}</span>
+        </span>
 
-      <div className="estate-counts">
-        <span>
-          <b>{school.teachers}</b> {school.teachers === 1 ? 'teacher' : 'teachers'}
-        </span>
-        <span>
-          <b>{school.students}</b> {school.students === 1 ? 'student' : 'students'}
-        </span>
-        <span>
-          <b>{school.courses}</b> {school.courses === 1 ? 'course' : 'courses'}
-        </span>
-      </div>
-
-      <div className="estate-needs">
-        {school.needs.length === 0 ? (
-          <span className="part" data-state="ready">
-            Ready
+        <span className="estate-counts">
+          <span>
+            <b>{school.teachers}</b> {school.teachers === 1 ? 'teacher' : 'teachers'}
           </span>
-        ) : (
-          school.needs.map((need) => (
-            <span
-              key={need}
-              className="part"
-              data-state={BLOCKING.includes(need) ? 'gap' : 'ready'}
-            >
-              {NEEDS[need]}
+          <span>
+            <b>{school.students}</b> {school.students === 1 ? 'student' : 'students'}
+          </span>
+          <span>
+            <b>{school.courses}</b> {school.courses === 1 ? 'course' : 'courses'}
+          </span>
+        </span>
+
+        <span className="estate-needs">
+          {school.needs.length === 0 ? (
+            <span className="part" data-state="ready">
+              Ready
             </span>
-          ))
-        )}
-      </div>
+          ) : (
+            school.needs.map((need) => (
+              <span
+                key={need}
+                className="part"
+                data-state={BLOCKING.includes(need) ? 'gap' : 'ready'}
+              >
+                {NEEDS[need]}
+              </span>
+            ))
+          )}
+        </span>
+      </a>
     </li>
   );
 }

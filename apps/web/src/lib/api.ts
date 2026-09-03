@@ -229,6 +229,33 @@ export interface PlatformOverview {
   schools: SchoolOverview[];
 }
 
+/**
+ * One school, opened.
+ *
+ * `signInAllowed` is said outright rather than left to be worked out from the
+ * status, so a screen never has to guess what closing a school actually does.
+ */
+export interface SchoolDetail extends SchoolOverview {
+  signInAllowed: boolean;
+}
+
+/**
+ * A school that has just been made, with the way in.
+ *
+ * The password is here exactly once — it is not stored in a readable form and
+ * no later request can return it. Whoever creates the school has to pass it on
+ * before leaving the screen.
+ */
+export interface CreatedSchool {
+  school: SchoolDetail;
+  firstAdmin: {
+    username: string;
+    email: string;
+    displayName: string;
+    temporaryPassword: string;
+  };
+}
+
 /** The course this school teaches. Its title is data, never a constant. */
 export interface Course {
   id: string;
