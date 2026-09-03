@@ -1897,3 +1897,82 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
   .vocab-table td[colspan] { display: block; }
   .vocab-table td[colspan]::before { content: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   Students management.
+
+   Accounts, not learning. A row says who she is and whether she can sign in;
+   the actions that change an account live behind it, because this screen is
+   read far more often than it is used to change anything, and a row of eight
+   buttons puts "stop this child working" one slip away from "see her work".
+   --------------------------------------------------------------------------- */
+.pupillist { list-style: none; margin: 0; padding: 0; }
+.pupilrow { border-top: 1px solid var(--line); }
+.pupillist li:first-child { border-top: 0; }
+
+.pupilrow-open {
+  width: 100%; display: flex; align-items: center; gap: var(--s4);
+  padding: var(--s4) var(--s5); background: none; border: 0; cursor: pointer; text-align: start;
+}
+.pupilrow-open:hover { background: var(--ground); }
+.pupilrow-who { flex: 1 1 11rem; min-width: 0; display: grid; gap: 2px; }
+.pupilrow-who b {
+  font-size: var(--fs-base); font-weight: 700; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pupilrow-user { font-size: var(--fs-small); color: var(--ink-3); font-weight: 500; }
+.pupilrow-state { flex: 0 1 auto; display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.pupilrow-seen {
+  flex: 0 0 auto; font-size: var(--fs-small); color: var(--ink-3); font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.pupilrow-open > .ico {
+  flex: none; width: .8rem; height: .8rem; color: var(--ink-3);
+  transform: rotate(180deg); transition: transform var(--t-state) var(--ease);
+}
+.pupilrow-open[aria-expanded='true'] > .ico { transform: rotate(270deg); }
+
+.pupil-account {
+  padding: 0 var(--s5) var(--s5); background: var(--ground);
+  display: grid; gap: var(--s4);
+}
+.pupil-does { display: flex; gap: var(--s2); flex-wrap: wrap; }
+
+/* A confirmation sits in the row it is about, so what is changing stays in
+   view beside the question. */
+.confirm {
+  border: 1px solid var(--warn); background: var(--warn-soft);
+  border-radius: var(--r-md); padding: var(--s4); display: grid; gap: var(--s2);
+}
+.confirm-title { margin: 0; font-weight: 700; color: var(--ink); }
+.confirm-body { margin: 0; font-size: var(--fs-body); color: var(--ink-2); }
+
+.editpupil {
+  display: grid; gap: var(--s4);
+  border: 1px solid var(--brand); background: var(--surface);
+  border-radius: var(--r-md); padding: var(--s4);
+}
+
+/* Two fields side by side where there is room, stacked where there is not. */
+.pair { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+
+.panel-sort { display: flex; align-items: center; gap: var(--s2); margin: 0; }
+.panel-sort span { font-size: var(--fs-caption); color: var(--ink-3); font-weight: 600; }
+.panel-sort select { width: auto; }
+
+@media (max-width: 46rem) {
+  /* The row becomes a small card: name, then state, then when she was last
+     here — each on its own line, with nothing pushed off the edge. */
+  .pupilrow-open {
+    display: grid; gap: var(--s2);
+    grid-template-columns: 1fr auto;
+    grid-template-areas: 'who ico' 'state state' 'seen seen';
+    align-items: start; padding: var(--s4);
+  }
+  .pupilrow-who { grid-area: who; }
+  .pupilrow-state { grid-area: state; }
+  .pupilrow-seen { grid-area: seen; }
+  .pupilrow-open > .ico { grid-area: ico; align-self: center; }
+  .pupil-account { padding: 0 var(--s4) var(--s4); }
+  .pupil-does > button { flex: 1 1 9rem; }
+}

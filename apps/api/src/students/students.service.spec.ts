@@ -196,3 +196,153 @@ describe('StudentsService.create', () => {
     expect(createdData.mustChangePassword).toBe(true);
   });
 });
+
+/**
+ * The account actions a teacher takes, and what each one does to the account
+ * and to any session the student already has.
+ *
+ * These pin the behaviour the Students screen describes to her in words. If
+ * one of them changes, the wording on that screen becomes a lie, which is a
+ * worse failure than a broken button.
+ */
+describe('StudentsService account actions', () => {
+  const STUDENT = 'student-9';
+
+  /** A service whose one student exists, capturing what is written. */
+  function serviceFor(row: Record<string, unknown>) {
+    const written: { data?: Record<string, unknown> } = {};
+    const revokeAllForUser = vi.fn();
+    const student = {
+      id: STUDENT,
+      schoolId: SCHOOL_A,
+      username: 'sara',
+      email: null,
+      status: UserStatus.ACTIVE,
+      deletedAt: null,
+      mustChangePassword: false,
+      lastLoginAt: null,
+      createdAt: new Date(),
+      studentProfile: { fullName: 'Sara' },
+      ...row,
+    };
+
+    const tx = {
+      user: {
+        findFirst: async () => student,
+        findUnique: async () => student,
+        update: async (args: { data: Record<string, unknown> }) => {
+          written.data = args.data;
+          return { ...student, ...args.data };
+        },
+        create: async () => student,
+      },
+    };
+
+    const prisma = {
+      forSchool: async <T>(_s: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+      user: tx.user,
+    } as unknown as PrismaService;
+
+    const service = new StudentsService(
+      prisma,
+      { hash: async (p: string) => `hashed:${p}` } as unknown as PasswordService,
+      { revokeAllForUser } as unknown as TokenService,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    return { service, written, revokeAllForUser };
+  }
+
+  it('ends the sessions a student already has when her account is turned off', async () => {
+    const { service, written, revokeAllForUser } = serviceFor({});
+
+    await service.setStatus(teacher, STUDENT, UserStatus.DISABLED);
+
+    expect(written.data).toEqual({ status: UserStatus.DISABLED });
+    expect(revokeAllForUser).toHaveBeenCalledWith(STUDENT);
+  });
+
+  it('does not revoke anything when an account is turned back on', async () => {
+    const { service, revokeAllForUser } = serviceFor({ status: UserStatus.DISABLED });
+
+    await service.setStatus(teacher, STUDENT, UserStatus.ACTIVE);
+
+    expect(revokeAllForUser).not.toHaveBeenCalled();
+  });
+
+  /**
+   * "Remove" keeps everything. The screen promises a teacher that her
+   * progress, answers and messages survive, and the only thing written here
+   * is a timestamp saying when she was hidden.
+   */
+  it('removes a student by marking her hidden, erasing nothing', async () => {
+    const { service, written, revokeAllForUser } = serviceFor({});
+
+    const view = await service.softDelete(teacher, STUDENT);
+
+    expect(Object.keys(written.data ?? {})).toEqual(['deletedAt']);
+    expect(written.data?.deletedAt).toBeInstanceOf(Date);
+    expect(view.isDeleted).toBe(true);
+    expect(revokeAllForUser).toHaveBeenCalledWith(STUDENT);
+  });
+
+  it('puts a removed student back by clearing the same timestamp', async () => {
+    const { service, written } = serviceFor({ deletedAt: new Date() });
+
+    const view = await service.restore(teacher, STUDENT);
+
+    expect(written.data).toEqual({ deletedAt: null });
+    expect(view.isDeleted).toBe(false);
+  });
+
+  it('hands back a new password once and requires her to replace it', async () => {
+    const { service, written, revokeAllForUser } = serviceFor({});
+
+    const result = await service.resetPassword(teacher, STUDENT);
+
+    expect(result.temporaryPassword).toMatch(/^[a-z2-9]{10}$/);
+    expect(written.data?.mustChangePassword).toBe(true);
+    expect(written.data?.passwordHash).toBe(`hashed:${result.temporaryPassword}`);
+    // The stored form must never travel back with it.
+    expect(JSON.stringify(result.student)).not.toContain('hashed:');
+    expect(revokeAllForUser).toHaveBeenCalledWith(STUDENT);
+  });
+
+  it('never returns the stored password in a student view', async () => {
+    const { service } = serviceFor({});
+
+    const view = await service.get(teacher, STUDENT);
+
+    expect(Object.keys(view)).not.toContain('passwordHash');
+  });
+
+  /**
+   * An address may be shared. Siblings using one parent's mailbox is the
+   * ordinary case here, and recovery is built to mail every account behind an
+   * address rather than assume one. A uniqueness check added later would
+   * quietly break that, so it is asserted absent on purpose.
+   */
+  it('lets two students share one email address', async () => {
+    const { service, written } = serviceFor({});
+
+    await service.update(teacher, STUDENT, { email: 'family@example.invalid' });
+
+    expect(written.data?.email).toBe('family@example.invalid');
+  });
+
+  it('clears the address when an empty one is sent', async () => {
+    const { service, written } = serviceFor({ email: 'old@example.invalid' });
+
+    await service.update(teacher, STUDENT, { email: '' });
+
+    expect(written.data?.email).toBeNull();
+  });
+
+  it('leaves a username alone when it has not changed', async () => {
+    const { service, written } = serviceFor({});
+
+    await service.update(teacher, STUDENT, { username: 'sara' });
+
+    expect(written.data?.username).toBe('sara');
+  });
+});
