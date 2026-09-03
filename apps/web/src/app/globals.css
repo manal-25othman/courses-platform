@@ -1976,3 +1976,119 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
   .pupil-account { padding: 0 var(--s4) var(--s4); }
   .pupil-does > button { flex: 1 1 9rem; }
 }
+
+/* ---------------------------------------------------------------------------
+   The platform, for whoever runs it.
+
+   The teacher's bar is white and the pages under it are about one class in one
+   school. This bar is dark and the pages under it are about the estate. Same
+   palette, same type — `--shade` is the dark ground the system already
+   reserves — but you can tell in one glance which of the two you are in,
+   which matters when the same person may hold both kinds of account.
+   --------------------------------------------------------------------------- */
+.admin-bar {
+  background: var(--shade);
+  border-bottom-color: color-mix(in srgb, var(--shade) 70%, white);
+  backdrop-filter: none;
+}
+.admin-bar .bar-rule { background: color-mix(in srgb, var(--shade) 60%, white); }
+.admin-bar .who-name { color: color-mix(in srgb, white 78%, var(--shade)); }
+.admin-bar .ghost { color: color-mix(in srgb, white 78%, var(--shade)); }
+.admin-bar .ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--shade) 78%, white); color: #fff;
+}
+
+.admin-mark { display: flex; align-items: center; gap: var(--s2); flex: none; }
+.admin-glyph {
+  width: 1.75rem; height: 1.75rem; border-radius: 9px; flex: none;
+  display: grid; place-items: center;
+  background: var(--brand); color: var(--on-brand);
+}
+.admin-glyph .ico { width: 1rem; height: 1rem; }
+.admin-wordmark {
+  font-family: var(--font-ui); font-weight: 800; letter-spacing: -.02em;
+  color: #fff; white-space: nowrap;
+}
+
+.adminnav { display: flex; gap: var(--s1); overflow-x: auto; scrollbar-width: none; flex: none; }
+.adminnav::-webkit-scrollbar { display: none; }
+.adminnav a, .adminnav-soon {
+  display: inline-flex; align-items: center; gap: var(--s2); white-space: nowrap;
+  padding: var(--s2) var(--s3); border-radius: var(--r-chip);
+  font-size: var(--fs-body); font-weight: 700; text-decoration: none;
+  color: color-mix(in srgb, white 72%, var(--shade));
+}
+.adminnav a:hover { background: color-mix(in srgb, var(--shade) 78%, white); color: #fff; }
+.adminnav a[aria-current='page'] { background: var(--brand); color: var(--on-brand); }
+/* Not yet built, and saying so. Dimmed AND labelled, so the state does not
+   depend on noticing a shade of grey. */
+.adminnav-soon { color: color-mix(in srgb, white 40%, var(--shade)); cursor: default; }
+/* Outlined rather than filled: a fill light enough to sit on this bar left
+   the label at 2.78:1, and the badge does not need a fill to read as one. */
+.adminnav-soon em {
+  font-style: normal; font-size: var(--fs-micro); font-weight: 700;
+  padding: .05rem .35rem; border-radius: var(--r-sm);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, white 34%, var(--shade));
+  color: color-mix(in srgb, white 82%, var(--shade));
+}
+.adminnav-soon .ico { opacity: .6; }
+
+/* The estate. One row per school: what it is, what it holds, what it wants. */
+.estate { list-style: none; margin: 0; padding: 0; }
+.estate-row {
+  display: grid; gap: var(--s3);
+  grid-template-columns: minmax(9rem, 1.2fr) auto minmax(6rem, auto);
+  align-items: center;
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--line);
+}
+.estate li:first-child .estate-row { border-top: 0; }
+.estate-who { display: grid; gap: 2px; min-width: 0; }
+.estate-who b {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-lead); font-weight: 600; color: var(--ink);
+}
+.estate-who span { font-size: var(--fs-caption); color: var(--ink-3); font-weight: 500; }
+.estate-counts { display: flex; gap: var(--s4); flex-wrap: wrap; }
+.estate-counts span { font-size: var(--fs-small); color: var(--ink-2); white-space: nowrap; }
+.estate-counts b { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 700; }
+.estate-needs { display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
+/* A school with nothing outstanding says so quietly; a gap carries the warm
+   colour, so the eye lands on the school that wants something. */
+.part[data-state='ready'] { background: var(--ground-2); color: var(--ink-2); border-color: var(--line); }
+
+/* The totals. Supporting, so they are set as facts rather than as a hero
+   row of big numbers — the schools above are what she came to read. */
+.tally { display: grid; gap: var(--s5); grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); margin: 0; }
+.tally div { display: grid; gap: var(--s1); }
+.tally dt { font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
+.tally dd {
+  margin: 0; font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-title); font-weight: 600; color: var(--ink);
+  line-height: 1; font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 40rem) {
+  .admin-bar .bar-rule { display: block; }
+  .admin-bar .who { display: flex; }
+}
+
+@media (max-width: 61.99rem) {
+  /* The bar wraps rather than running off the edge, the same way the
+     teacher's does. Three areas, a name and a sign-out do not fit across
+     390px on one line. */
+  .admin-bar .topbar-inner { flex-wrap: wrap; row-gap: var(--s2); padding-bottom: var(--s2); }
+  .admin-bar .bar-rule { display: none; }
+  .adminnav { order: 3; width: 100%; }
+}
+
+@media (max-width: 52rem) {
+  /* Stacked, because three columns of counts across 390px would either
+     scroll sideways or shrink the school's own name to nothing. */
+  .estate-row {
+    grid-template-columns: 1fr;
+    padding: var(--s4);
+  }
+  .estate-needs { justify-content: flex-start; }
+}

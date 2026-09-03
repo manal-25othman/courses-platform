@@ -11,6 +11,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { EmailModule } from './email/email.module';
 import { SettingsModule } from './settings/settings.module';
 import { StudentsModule } from './students/students.module';
+import { AdminModule } from './admin/admin.module';
 import { ContentModule } from './content/content.module';
 import { QuestionsModule } from './questions/questions.module';
 import { LearningModule } from './learning/learning.module';
@@ -30,6 +31,7 @@ import { MessagesModule } from './messages/messages.module';
     AuditModule,
     AuthModule,
     StudentsModule,
+    AdminModule,
     ContentModule,
     QuestionsModule,
     LearningModule,

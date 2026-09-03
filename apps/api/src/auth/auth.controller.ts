@@ -133,7 +133,7 @@ export class AuthController {
    * to sign in again afterwards with the new password.
    */
   @UseGuards(AuthThrottleGuard)
-  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
   @Post('change-password')
   @HttpCode(HttpStatus.NO_CONTENT)
   async changePassword(
@@ -183,7 +183,7 @@ export class AuthController {
   }
 
   /** The caller's own details. Every role may ask about themselves. */
-  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
+  @Roles(UserRole.PLATFORM_ADMIN, UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
   @Get('me')
   async me(@CurrentUser() user: CurrentUserType): Promise<AuthenticatedUserView> {
     return this.auth.describe(user.userId);

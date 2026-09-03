@@ -107,7 +107,14 @@ export const api = {
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
-export type Role = 'ADMIN' | 'TEACHER' | 'STUDENT';
+/**
+ * Who somebody is.
+ *
+ * PLATFORM_ADMIN operates the platform and belongs to no school. ADMIN is a
+ * school's own administrator and belongs to exactly one. The two are separate
+ * on purpose — see the note on the enum in the Prisma schema.
+ */
+export type Role = 'PLATFORM_ADMIN' | 'ADMIN' | 'TEACHER' | 'STUDENT';
 
 export interface Me {
   id: string;
@@ -188,6 +195,40 @@ export interface UnitDetail extends Omit<UnitSummary, '_count'> {
   vocabularyItems: VocabularyItem[];
 }
 
+// --- The platform, as its operator sees it ---------------------------------
+
+/** How big the platform is. Aggregates, from `platform_totals()`. */
+export interface PlatformTotals {
+  schools: number;
+  schoolsActive: number;
+  schoolsDisabled: number;
+  teachers: number;
+  students: number;
+  schoolAdmins: number;
+  platformAdmins: number;
+}
+
+/** Something about a school an operator may want to act on. */
+export type SchoolNeed = 'no_teacher' | 'no_students' | 'no_course' | 'marked_disabled';
+
+/** One school, counted. Carries nothing about any individual person. */
+export interface SchoolOverview {
+  id: string;
+  name: string;
+  status: 'ACTIVE' | 'DISABLED';
+  createdAt: string;
+  teachers: number;
+  students: number;
+  schoolAdmins: number;
+  courses: number;
+  needs: SchoolNeed[];
+}
+
+export interface PlatformOverview {
+  totals: PlatformTotals;
+  schools: SchoolOverview[];
+}
+
 /** The course this school teaches. Its title is data, never a constant. */
 export interface Course {
   id: string;
@@ -250,6 +291,9 @@ export interface AssessmentRules {
 /** Where a signed-in user belongs, by role. */
 export function homeFor(user: Me): string {
   if (user.mustChangePassword) return '/change-password';
+  // The platform operator has her own place and none of the teacher screens
+  // would work for her: they resolve a school, and she has none.
+  if (user.role === 'PLATFORM_ADMIN') return '/admin';
   // A teacher lands on her dashboard; the student list is one of the places
   // she goes from it, not the first thing she is shown.
   return user.role === 'STUDENT' ? '/home' : '/dashboard';

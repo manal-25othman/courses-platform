@@ -61,12 +61,23 @@ model Setting {
 // See ARCHITECTURE.md sections 5.1, 8, 9, 10, 11, 12.
 // ---------------------------------------------------------------------------
 
-/// The three roles from SRS sections 3, 4 and 5.
+/// Who somebody is on the platform.
 ///
-/// Stored as data so a future role can be added without restructuring
-/// (SRS 44). What each role is *allowed to do* is enforced centrally in the
-/// API and is never editable by a user (client decision, 2026-08-30).
+/// The three tenant roles come from SRS sections 3, 4 and 5; PLATFORM_ADMIN
+/// sits outside them. What each role is *allowed to do* is enforced centrally
+/// in the API and is never editable by a user (client decision, 2026-08-30).
+///
+/// PLATFORM_ADMIN is a separate value rather than a variant of ADMIN on
+/// purpose. Every teacher-facing endpoint already declares
+/// `@Roles(TEACHER, ADMIN)` and then resolves the caller's school; teaching
+/// ADMIN to mean "platform" as well would have silently handed a platform
+/// operator teacher powers inside whichever school happened to resolve. A
+/// distinct value leaves all of those declarations meaning exactly what they
+/// meant before.
 enum UserRole {
+  /// The platform operator. Belongs to no school; see the constraint on User.
+  PLATFORM_ADMIN
+  /// A school's own administrator. Belongs to exactly one school.
   ADMIN
   TEACHER
   STUDENT
@@ -99,6 +110,12 @@ model School {
 }
 
 /// A sign-in identity. One row per person, whatever their role.
+///
+/// The relationship between `role` and `schoolId` is a rule, not a
+/// convention, and the database holds it: a PLATFORM_ADMIN has no school and
+/// everybody else has one. See `users_platform_admin_has_no_school` in the
+/// migration. Prisma cannot express a check constraint, so it is written
+/// there and asserted by the isolation suite rather than only trusted here.
 model User {
   id       String   @id @default(uuid()) @db.Uuid
   /// Null ONLY for a platform admin, who sits above every school (SRS 3.1).

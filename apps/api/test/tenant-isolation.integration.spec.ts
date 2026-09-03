@@ -41,6 +41,9 @@ const PRIVATE_UNIT_A = 'aaaaaaaa-0000-4000-8000-000000000011';
 const PRIVATE_QUESTION_A = 'aaaaaaaa-0000-4000-8000-000000000012';
 const PRIVATE_VOCAB_A = 'aaaaaaaa-0000-4000-8000-000000000013';
 
+// The platform operator, who belongs to no school at all.
+const PLATFORM_ADMIN = 'aaaaaaaa-0000-4000-8000-000000000020';
+
 const owner = new PrismaClient({ datasourceUrl: OWNER_URL });
 const app = new PrismaClient({ datasourceUrl: APP_URL });
 
@@ -319,6 +322,8 @@ afterAll(async () => {
   await owner.unit.deleteMany({ where: { id: PRIVATE_UNIT_A } });
   await owner.course.deleteMany({ where: { id: PRIVATE_COURSE_A } });
   await owner.user.deleteMany({ where: { schoolId: { in: [SCHOOL_A, SCHOOL_B] } } });
+  await owner.user.deleteMany({ where: { id: PLATFORM_ADMIN } });
+  await owner.user.deleteMany({ where: { username: 'iso-invariant' } });
   await owner.school.deleteMany({ where: { id: { in: [SCHOOL_A, SCHOOL_B] } } });
 
   // Safety net. The tests below deliberately try to switch the protection off,
@@ -1097,5 +1102,112 @@ describe('a private course belongs to one school alone', () => {
     });
 
     expect(deleted).toBe(0);
+  });
+});
+
+/**
+ * The platform operator's boundary.
+ *
+ * Reading across schools is the one thing the row-level policies are built to
+ * prevent, so the platform dashboard does not ask them to make an exception:
+ * it goes through two functions that return counts and school-level facts and
+ * nothing else. These check that the boundary is as narrow as it claims — that
+ * the policies are untouched, that the functions cannot be reached by anybody
+ * else, and that a platform admin cannot also be a member of a school.
+ */
+describe('the platform boundary is narrow and explicit', () => {
+  /**
+   * The rule that keeps platform sight and tenant membership apart. Held by
+   * the database, because a rule enforced only by whichever code path happens
+   * to create a row is not enforced.
+   */
+  it.each([
+    ['a platform admin with a school', `'PLATFORM_ADMIN'`, `'${SCHOOL_A}'`],
+    ['a teacher with no school', `'TEACHER'`, 'NULL'],
+    ['a school admin with no school', `'ADMIN'`, 'NULL'],
+    ['a student with no school', `'STUDENT'`, 'NULL'],
+  ])('refuses %s', async (_name, role, school) => {
+    await expect(
+      owner.$executeRawUnsafe(`
+        INSERT INTO users (id, school_id, role, username, password_hash, updated_at)
+        VALUES (gen_random_uuid(), ${school}, ${role}, 'iso-invariant', 'x', now())
+      `),
+    ).rejects.toThrow(/users_platform_admin_has_no_school/);
+  });
+
+  it('allows a platform admin with no school', async () => {
+    await owner.$executeRawUnsafe(`
+      INSERT INTO users (id, school_id, role, username, password_hash, updated_at)
+      VALUES ('${PLATFORM_ADMIN}', NULL, 'PLATFORM_ADMIN', 'iso-operator', 'x', now())
+    `);
+
+    const row = await owner.user.findUnique({ where: { id: PLATFORM_ADMIN } });
+    expect(row?.schoolId).toBeNull();
+  });
+
+  /**
+   * The functions are the platform's whole read surface, and a SECURITY
+   * DEFINER function is only as narrow as its grants.
+   */
+  it.each(['platform_totals', 'platform_school_overview'])(
+    '%s runs as its owner, with a pinned search path',
+    async (name) => {
+      const [fn] = await owner.$queryRawUnsafe<
+        { prosecdef: boolean; proconfig: string[] | null }[]
+      >(`SELECT prosecdef, proconfig FROM pg_proc WHERE proname = '${name}'`);
+
+      expect(fn.prosecdef, `${name} is not SECURITY DEFINER`).toBe(true);
+      expect(fn.proconfig, `${name} does not pin its search_path`).toContain('search_path=public');
+    },
+  );
+
+  it.each(['platform_totals', 'platform_school_overview'])(
+    '%s is not executable by everybody',
+    async (name) => {
+      const [grant] = await owner.$queryRawUnsafe<{ open: boolean }[]>(
+        `SELECT has_function_privilege('public', '${name}()', 'EXECUTE') AS open`,
+      );
+
+      expect(grant.open, `${name} is executable by PUBLIC`).toBe(false);
+    },
+  );
+
+  /**
+   * The counts must be counts. A column carrying a name, an address or a
+   * hash would turn an aggregate route into a way of reading the roster of
+   * every school at once, so the shape is asserted rather than trusted.
+   */
+  it('returns no column that could carry anything personal', async () => {
+    const columns = await owner.$queryRaw<{ name: string }[]>`
+      SELECT lower(unnest(proargnames)) AS name
+      FROM pg_proc
+      WHERE proname IN ('platform_totals', 'platform_school_overview')
+    `;
+
+    const named = columns.map((column) => column.name);
+    expect(named.length).toBeGreaterThan(0);
+    for (const forbidden of ['username', 'email', 'password_hash', 'token', 'body', 'full_name']) {
+      expect(named, `a function returns ${forbidden}`).not.toContain(forbidden);
+    }
+  });
+
+  /** The policies themselves are exactly as they were. */
+  it('leaves every tenant table with row level security forced', async () => {
+    const tables = await owner.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*) AS n FROM pg_class
+      WHERE relname = ANY(${[...TENANT_TABLES]}) AND relrowsecurity AND relforcerowsecurity
+    `;
+
+    expect(Number(tables[0].n)).toBe(TENANT_TABLES.length);
+  });
+
+  /**
+   * And the ordinary path is unchanged: a school still sees only itself, so
+   * nothing about adding a platform role loosened the tenant barrier.
+   */
+  it('still shows a school only its own row', async () => {
+    const seen = await forSchool(SCHOOL_B, (tx) => tx.school.findMany());
+
+    expect(seen.map((school) => school.id)).toEqual([SCHOOL_B]);
   });
 });
