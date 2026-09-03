@@ -788,10 +788,27 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 6px 16px rgba(108, 76, 224, .35);
   transition: transform var(--t-tap) var(--pop), box-shadow var(--t-state) var(--ease);
 }
-.speak-btn:hover:not(:disabled) { transform: scale(1.05); }
+/* The generic button hover (button:hover, 0-1-1) outranks .speak-btn (0-1-0),
+   so without naming the background here the control turned grey under the
+   cursor. Specificity, not colour choice — the same trap this file warns
+   about at the top. */
+.speak-btn:hover:not(:disabled) { background: var(--vocab); transform: scale(1.05); }
+.speak-btn:disabled { background: var(--vocab); }
 .speak-btn:active:not(:disabled) { transform: scale(.96); box-shadow: var(--e1); }
-.speak-btn[data-playing='true'] { animation: pulse 1s var(--ease) infinite; }
+/* Speaking: a slow, quiet pulse. It says "sound is coming out of this" and
+   stops the moment it does not, which is the only job motion has here. */
+.speak-btn[data-phase='speaking'] { animation: pulse 1.1s var(--ease) infinite; }
+/* Preparing: voices can take a moment to arrive on a phone, and a control
+   that looks inert for a second reads as broken. */
+.speak-btn[data-phase='preparing'] { opacity: .75; }
+.speak-btn[data-phase='preparing'] .ico { animation: pulse 1s var(--ease) infinite; }
+.speak-btn:disabled { cursor: progress; }
 .speak-label { font-size: var(--fs-micro); font-weight: 700; color: var(--ink-3); }
+/* Whose voice, when it is not the device's. */
+.speak-source {
+  font-size: var(--fs-micro); font-weight: 600; color: var(--vocab-ink);
+  background: var(--vocab-soft); padding: .1rem .5rem; border-radius: var(--r-chip);
+}
 
 /* Read, heard, checked. Three steps, shown as steps rather than as a form —
    and never by colour alone: each carries its own tick when it is done. */

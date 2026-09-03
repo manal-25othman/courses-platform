@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, ApiError, apiUrl, CheckAnswerResult, LearnWord, VocabularyCheck } from '@/lib/api';
-import { canSpeak, playRecording, speak } from '@/lib/speech';
+import { englishSpeechStatus, pronounce, stopPronouncing, type SpokenBy } from '@/lib/pronounce';
 import { Icon } from './Icon';
 
 /**
@@ -23,8 +23,25 @@ export function VocabularyCards({
   words: LearnWord[];
   onChanged: () => Promise<void> | void;
 }) {
-  const [speaking, setSpeaking] = useState<string | null>(null);
-  const [supported, setSupported] = useState(true);
+  /**
+   * What the pronunciation control is doing, for the word it is doing it to.
+   *
+   * `preparing` covers the gap between the tap and the first sound — voices
+   * can take a moment to arrive on a phone, and a button that looks inert for
+   * a second reads as broken.
+   */
+  const [audioState, setAudioState] = useState<{
+    id: string;
+    phase: 'preparing' | 'speaking';
+  } | null>(null);
+  /**
+   * Whether this device can say an English word at all.
+   *
+   * `no-voice` means it speaks but has no English voice — common where the
+   * device language is Arabic — which needs different advice from a browser
+   * with no speech at all, so the two are kept apart.
+   */
+  const [speech, setSpeech] = useState<'ok' | 'no-voice' | 'unsupported'>('ok');
   const [problem, setProblem] = useState<string | null>(null);
   const [checking, setChecking] = useState<VocabularyCheck | null>(null);
   const [verdict, setVerdict] = useState<CheckAnswerResult | null>(null);
@@ -35,13 +52,16 @@ export function VocabularyCards({
 
   useEffect(() => {
     let current = true;
-    void canSpeak().then((able) => {
-      if (current) setSupported(able);
+    void englishSpeechStatus().then((status) => {
+      if (current) setSpeech(status);
     });
     return () => {
       current = false;
     };
   }, []);
+
+  // Leaving the screen must not leave the device talking to itself.
+  useEffect(() => () => stopPronouncing(), []);
 
   if (words.length === 0) {
     return (
@@ -69,70 +89,53 @@ export function VocabularyCards({
     await onChanged();
   }
 
-  /** Plays the teacher's own recording of the word. */
-  async function playRecordingFor(word: LearnWord) {
-    if (!word.teacherAudioUrl) return;
-
-    setProblem(null);
-    setSpeaking(word.id);
-
-    const played = await playRecording(apiUrl(word.teacherAudioUrl));
-
-    setSpeaking(null);
-
-    if (!played) {
-      setProblem('That recording could not be played. Please try again.');
-      return;
-    }
-
-    await recordHeard(word, 'teacher_audio');
-  }
-
   /**
-   * Plays the word with the browser's own voice, falling back to the
-   * teacher's recording when the browser has no working voice.
+   * Says the word, and records that she heard it — but only if a sound
+   * really started.
    *
-   * Nothing here marks the word heard unless something actually played. There
-   * is deliberately no button that simply says "I heard it" — a student may
-   * not claim to have heard a word (client, 2026-08-31).
+   * `onStart` fires from a real playback event, never from a timer or from
+   * the tap itself. That distinction is the whole point: a word is not
+   * learned until it has been heard (SRS 22), completion gates the unit test,
+   * and the previous version marked a word heard when it had been cancelled
+   * before it ever began.
    */
   async function play(word: LearnWord) {
     setProblem(null);
-    setSpeaking(word.id);
+    setAudioState({ id: word.id, phase: 'preparing' });
 
-    const result = await speak(word.wordEn);
+    let recorded = false;
+    const result = await pronounce({
+      text: word.wordEn,
+      recordingUrl: word.teacherAudioUrl ? apiUrl(word.teacherAudioUrl) : null,
+      onStart: (by: SpokenBy) => {
+        setAudioState({ id: word.id, phase: 'speaking' });
+        // Told the moment sound begins, so a word she hears in full counts
+        // even if she navigates away before it finishes.
+        recorded = true;
+        void recordHeard(word, by);
+      },
+    });
 
-    if (result.spoke) {
-      setSpeaking(null);
-      await recordHeard(word, 'browser_tts');
+    // Another word took over: that word's own call owns the control now.
+    if (!result.spoke && result.reason === 'superseded') return;
+
+    setAudioState(null);
+
+    if (result.spoke || recorded) return;
+
+    if (result.reason === 'no-english') {
+      setSpeech('no-voice');
       return;
     }
-
-    // A browser with no voice cannot be retried into working. If the teacher
-    // has recorded this word, that is the way through; if she has not, the
-    // message says so rather than leaving the student pressing a dead button.
-    const noVoice = result.reason === 'unsupported' || result.reason === 'no-voice';
-
-    if (noVoice) setSupported(false);
-
-    if (word.teacherAudioUrl) {
-      const played = await playRecording(apiUrl(word.teacherAudioUrl));
-      setSpeaking(null);
-
-      if (played) {
-        await recordHeard(word, 'teacher_audio');
-        return;
-      }
-
-      setProblem('That word could not be played. Please try again.');
+    if (result.reason === 'no-source') {
+      setSpeech('unsupported');
       return;
     }
-
-    setSpeaking(null);
-
-    if (!noVoice) {
-      setProblem('That word could not be played. Please try again.');
-    }
+    setProblem(
+      word.teacherAudioUrl
+        ? 'That word would not play. Please try again.'
+        : 'This device could not say that word. Please try again.',
+    );
   }
 
   /**
@@ -233,6 +236,9 @@ export function VocabularyCards({
   const index = Math.min(at, words.length - 1);
   const word = words[index];
 
+  const phase = audioState?.id === word.id ? audioState.phase : null;
+  const busyOnThisWord = phase !== null;
+
   /** What this word still needs, named so she is never left guessing. */
   const nextStep = word.learned
     ? null
@@ -330,14 +336,36 @@ export function VocabularyCards({
           <button
             className="speak-btn"
             onClick={() => play(word)}
-            disabled={speaking === word.id}
-            data-playing={speaking === word.id}
+            disabled={busyOnThisWord}
+            data-phase={phase ?? 'ready'}
+            data-playing={phase === 'speaking'}
             data-testid={`play-${word.wordEn}`}
-            aria-label={`Hear the word ${word.wordEn}`}
+            aria-label={
+              word.audioPlayed ? `Hear ${word.wordEn} again` : `Hear the word ${word.wordEn}`
+            }
           >
             <Icon name="sound" className="ico-lg" />
           </button>
-          <span className="speak-label">{speaking === word.id ? 'Playing…' : 'Hear it'}</span>
+          {/*
+            The label says what the control is doing, and once she has heard
+            the word it says the thing she can do next rather than repeating
+            the thing she already did.
+          */}
+          <span className="speak-label" data-testid="speak-label">
+            {phase === 'preparing'
+              ? 'Getting ready…'
+              : phase === 'speaking'
+                ? 'Speaking…'
+                : word.audioPlayed
+                  ? 'Hear it again'
+                  : 'Hear it'}
+          </span>
+          {/* Whose voice she is about to hear, when it is the teacher's. */}
+          {word.teacherAudioUrl && (
+            <span className="speak-source" data-testid="speak-source">
+              Your teacher&rsquo;s recording
+            </span>
+          )}
         </div>
 
         <div className="lamps" data-testid="word-lamps">
@@ -366,17 +394,6 @@ export function VocabularyCards({
         )}
 
         <div className="row" style={{ justifyContent: 'center' }}>
-          {word.teacherAudioUrl && (
-            <button
-              className="small"
-              onClick={() => playRecordingFor(word)}
-              disabled={speaking === word.id}
-              data-testid={`teacher-audio-${word.wordEn}`}
-              aria-label={`Hear your teacher say ${word.wordEn}`}
-            >
-              Your teacher&rsquo;s voice
-            </button>
-          )}
           {!word.seen && (
             <button className="small" onClick={() => markSeen(word)} data-testid="mark-seen">
               I have read this
@@ -419,37 +436,59 @@ export function VocabularyCards({
         the words. The second is one tap, because "ask your teacher" is not
         much help to an eleven-year-old on her own.
       */}
-      {!supported && (
+      {speech !== 'ok' && silentWords.length > 0 && (
         <div className="alert warn" role="status" data-testid="no-voice">
-          {silentWords.length === 0 ? (
-            <p style={{ margin: 0 }}>
-              This browser has no voice installed. Every word here has a recording from your
-              teacher, so you can still finish them all. Use “Your teacher’s voice” on each card.
-            </p>
-          ) : (
-            <>
-              <p style={{ margin: 0 }}>
-                This browser has no voice installed, so {silentWords.length}{' '}
-                {silentWords.length === 1 ? 'word' : 'words'} cannot be played here. A word has to
-                be heard before it counts, so there are two ways forward:
-              </p>
-              <ul style={{ margin: '.5rem 0 0', paddingInlineStart: '1.2rem' }}>
-                <li>Open this page in Chrome, Edge or Safari, which can read words aloud.</li>
-                <li>Ask your teacher to record them for you.</li>
-              </ul>
-              <div className="row" style={{ marginTop: '.6rem' }}>
-                <button
-                  className="small"
-                  onClick={askTeacherToRecord}
-                  disabled={busy || asked}
-                  data-testid="ask-for-recordings"
-                >
-                  {asked ? 'Your teacher has been asked' : 'Ask my teacher to record these words'}
-                </button>
-              </div>
-            </>
-          )}
+          {/*
+            Two different problems, because they need different advice. A
+            device with no speech at all needs a different browser; a device
+            that speaks but has no English voice — common where the device
+            language is Arabic — needs an English voice pack, and changing
+            browser will not help.
+
+            Counted, not claimed: only the words that really have no way of
+            being heard are named. The old copy told her every word had a
+            recording from her teacher, which was true only in one branch and
+            read as a blanket promise.
+          */}
+          <p style={{ margin: 0 }}>
+            {speech === 'unsupported'
+              ? 'This browser cannot read words aloud, so '
+              : 'This device has no English voice installed, so '}
+            {silentWords.length} of {words.length}{' '}
+            {silentWords.length === 1 ? 'word has' : 'words have'} no way to be played here. A
+            word has to be heard before it counts, so there are two ways forward:
+          </p>
+          <ul style={{ margin: '.5rem 0 0', paddingInlineStart: '1.2rem' }}>
+            <li>
+              {speech === 'unsupported'
+                ? 'Open this page in Chrome, Edge or Safari, which can read words aloud.'
+                : 'Add an English voice in your device’s language or accessibility settings.'}
+            </li>
+            <li>Ask your teacher to record them for you.</li>
+          </ul>
+          <div className="row" style={{ marginTop: '.6rem' }}>
+            <button
+              className="small"
+              onClick={askTeacherToRecord}
+              disabled={busy || asked}
+              data-testid="ask-for-recordings"
+            >
+              {asked ? 'Your teacher has been asked' : 'Ask my teacher to record these words'}
+            </button>
+          </div>
         </div>
+      )}
+
+      {/*
+        The device cannot speak, but every word still outstanding does have a
+        recording — so she can finish them all, and this says so without
+        claiming anything about the words she has already done.
+      */}
+      {speech !== 'ok' && silentWords.length === 0 && (
+        <p className="alert ok" role="status" data-testid="recordings-cover">
+          This device cannot read words aloud, but your teacher has recorded every word you still
+          need, so you can finish them all here.
+        </p>
       )}
 
       <div className="word-move">
