@@ -12,6 +12,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { PrismaService, TenantClient } from '../prisma/prisma.service';
+import { assessmentPool } from '../questions/assessment-pool';
 import { SettingsService } from '../settings/settings.service';
 import { SETTING_KEYS } from '../settings/settings.types';
 import { QuestionEngineService, StoredQuestion } from '../questions/question-engine.service';
@@ -366,19 +367,14 @@ export class LearningService {
    * Either way the questions are from this unit alone, published, and settled:
    * one still waiting on a teacher's answer is never asked.
    */
-  private async assessmentPool(
-    tx: TenantClient,
-    unitId: string,
-  ): Promise<{ where: Record<string, unknown>; curated: boolean }> {
-    const settled = { status: ContentStatus.PUBLISHED, needsReview: false };
-
-    const curated = await tx.question.count({
-      where: { unitId, purpose: QuestionPurpose.ASSESSMENT, ...settled },
-    });
-
-    return curated > 0
-      ? { where: { unitId, purpose: QuestionPurpose.ASSESSMENT, ...settled }, curated: true }
-      : { where: { unitId, purpose: QuestionPurpose.ACTIVITY, ...settled }, curated: false };
+  /**
+   * Which questions this unit's test draws from.
+   *
+   * The rule lives in `questions/assessment-pool` because the teacher's
+   * preview has to answer exactly the same question; see the note there.
+   */
+  private async assessmentPool(tx: TenantClient, unitId: string) {
+    return assessmentPool(tx, unitId);
   }
 
   private async assessmentState(

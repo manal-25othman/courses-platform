@@ -6,24 +6,32 @@ import {
   api,
   ApiError,
   apiUrl,
+  AssessmentRules,
+  CurriculumOverview,
   homeFor,
   Me,
+  PresentedQuestion,
   Section,
   SectionType,
+  UnitContents,
   UnitDetail,
   VocabularyItem,
 } from '@/lib/api';
 import { QuestionList } from '@/components/QuestionList';
+import { TeacherHeader } from '@/components/TeacherShell';
+import { Icon } from '@/components/Icon';
+import { unfinished } from '../page';
 
 type Tab = 'vocabulary' | 'grammar' | 'activities' | 'assessment';
 
 /**
- * One unit, in the four parts a student meets it in.
+ * One unit, in the order a student meets it: words, then grammar, then the
+ * activity, then the test.
  *
- * They used to be one long page. Splitting them means a teacher preparing the
- * word list is not scrolling past every question to reach it, and — more to
- * the point — that the unit's assessment is a place of its own rather than
- * questions mixed in with the practice ones.
+ * The order is the point. It is the sequence the platform unlocks in and the
+ * sequence the class and student screens report against, so a teacher who
+ * learns it once knows where she is everywhere. Splitting the parts also means
+ * preparing a word list does not involve scrolling past every question.
  */
 export default function UnitPage() {
   const router = useRouter();
@@ -32,26 +40,47 @@ export default function UnitPage() {
 
   const [me, setMe] = useState<Me | null>(null);
   const [unit, setUnit] = useState<UnitDetail | null>(null);
+  const [contents, setContents] = useState<UnitContents | null>(null);
   const [types, setTypes] = useState<SectionType[]>([]);
+  const [rules, setRules] = useState<AssessmentRules | null>(null);
+  const [rulesFailed, setRulesFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>('vocabulary');
 
   const load = useCallback(async () => {
     try {
-      const [detail, sectionTypes] = await Promise.all([
+      // The overview is asked for the same counts the Curriculum screen shows,
+      // so the two cannot disagree about what this unit holds.
+      const [detail, sectionTypes, overview] = await Promise.all([
         api.get<UnitDetail>(`/content/units/${unitId}`),
         api.get<SectionType[]>('/content/section-types'),
+        api.get<CurriculumOverview>('/content/overview'),
       ]);
       setUnit(detail);
       setTypes(sectionTypes);
+      setContents(overview.units.find((one) => one.id === unitId) ?? null);
       setError(null);
+
+      // Its own request, and its own failure: the test rules not loading is
+      // worth saying on the test tab, not worth blanking the whole unit.
+      try {
+        setRules(await api.get<AssessmentRules>(`/content/units/${unitId}/assessment-rules`));
+        setRulesFailed(false);
+      } catch {
+        setRulesFailed(true);
+      }
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         router.push('/login');
         return;
       }
-      setError(caught instanceof ApiError ? caught.message : 'Could not load this unit.');
+      setError(
+        caught instanceof ApiError && caught.status === 404
+          ? 'That unit is not part of your course.'
+          : 'This unit could not be loaded. Check your connection and try again.',
+      );
     }
   }, [unitId, router]);
 
@@ -84,96 +113,384 @@ export default function UnitPage() {
     }
   }
 
-  if (!me || !unit) {
+  async function setVisibility(open: boolean) {
+    setBusy(true);
+    await run(
+      () =>
+        open
+          ? api.post(`/content/units/${unitId}/publish`)
+          : api.post(`/content/units/${unitId}/status`, { status: 'DRAFT' }),
+      open ? 'This unit is now open to students.' : 'This unit is hidden from students again.',
+    );
+    setBusy(false);
+  }
+
+  if (!me) {
     return (
       <main className="page">
-        {error ? <p className="alert error">{error}</p> : <p className="muted">Loading…</p>}
+        <p className="muted">Loading…</p>
       </main>
     );
   }
 
+  if (!unit) {
+    return (
+      <>
+        <TeacherHeader me={me} />
+        <main className="page stack">
+          <button className="crumb" onClick={() => router.push('/content')}>
+            <Icon name="back" />
+            Curriculum
+          </button>
+          {error ? (
+            <p className="alert error" role="alert">
+              {error}{' '}
+              <button className="small" onClick={() => void load()}>
+                Try again
+              </button>
+            </p>
+          ) : (
+            <p className="muted">Loading…</p>
+          )}
+        </main>
+      </>
+    );
+  }
+
+  const live = unit.status === 'PUBLISHED';
+  const todo = contents ? unfinished(contents) : [];
+  const grammarSections = unit.sections.filter(
+    (section) => section.type?.progressComponent === 'grammar',
+  ).length;
+
+  const tabs: { key: Tab; label: string; count: number | null }[] = [
+    { key: 'vocabulary', label: 'Vocabulary', count: unit.vocabularyItems.length },
+    { key: 'grammar', label: 'Grammar', count: grammarSections },
+    { key: 'activities', label: 'Activity', count: contents?.activity.total ?? null },
+    { key: 'assessment', label: 'Unit test', count: contents?.assessment.total ?? null },
+  ];
+
   return (
-    <main className="page stack">
-      <div className="between">
-        <div>
-          <h1>{unit.title}</h1>
-          <p className="muted">
-            {unit.kind ? `${unit.kind} · ` : ''}
-            {unit.status === 'PUBLISHED' ? 'Visible to students' : 'Draft — not visible to students'}
-          </p>
+    <>
+      <TeacherHeader me={me} />
+      <main className="page stack">
+        <button className="crumb" onClick={() => router.push('/content')}>
+          <Icon name="back" />
+          Curriculum
+        </button>
+
+        <div className="unithead">
+          <div className="unithead-id">
+            <h1>{unit.title}</h1>
+            <span className="flag" data-tone={live ? 'quiet' : 'hidden'}>
+              <Icon name={live ? 'tick' : 'lock'} />
+              {live ? 'Open to students' : 'Hidden from students'}
+            </span>
+            {unit.kind && <span className="muted">{unit.kind}</span>}
+          </div>
+          <button disabled={busy} onClick={() => void setVisibility(!live)}>
+            {busy ? 'Working…' : live ? 'Hide from students' : 'Open to students'}
+          </button>
         </div>
-        <button onClick={() => router.push('/content')}>Back to curriculum</button>
-      </div>
 
-      {error && <p className="alert error" role="alert">{error}</p>}
-      {notice && <p className="alert ok" role="status">{notice}</p>}
+        {error && (
+          <p className="alert error" role="alert">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p className="alert ok" role="status">
+            {notice}
+          </p>
+        )}
 
-      <div className="tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === 'vocabulary'}
-          onClick={() => setTab('vocabulary')}
-          data-testid="cms-tab-vocabulary"
-        >
-          Vocabulary ({unit.vocabularyItems.length})
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'grammar'}
-          onClick={() => setTab('grammar')}
-          data-testid="cms-tab-grammar"
-        >
-          Grammar ({unit.sections.length})
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'activities'}
-          onClick={() => setTab('activities')}
-          data-testid="cms-tab-activities"
-        >
-          Activities
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'assessment'}
-          onClick={() => setTab('assessment')}
-          data-testid="cms-tab-assessment"
-        >
-          Assessment
-        </button>
-      </div>
+        {live && (
+          <p className="alert warn">
+            This unit is open. <strong>Every change you make here is live straight away</strong> —
+            there is no separate draft copy. To work on it privately, hide it first.
+          </p>
+        )}
 
-      {tab === 'vocabulary' && <VocabularyList unit={unit} onRun={run} />}
+        {todo.length > 0 && (
+          <section className="panel">
+            <div className="panel-head">
+              <h2 className="panel-title">Still to do</h2>
+              <span className="panel-note">Counted from what is stored</span>
+            </div>
+            <ul className="todo-list">
+              {todo.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-      {tab === 'grammar' && <SectionList unit={unit} types={types} onRun={run} />}
+        <div className="tabs" role="tablist" aria-label="Parts of this unit">
+          {tabs.map((one) => (
+            <button
+              key={one.key}
+              role="tab"
+              aria-selected={tab === one.key}
+              onClick={() => setTab(one.key)}
+              data-testid={`cms-tab-${one.key}`}
+            >
+              {one.label}
+              {one.count !== null && <span className="num">{one.count}</span>}
+            </button>
+          ))}
+        </div>
 
-      {/*
-        The same editor serves both, filtered by what the question is for.
-        Practice and assessment questions differ in nothing a teacher writes —
-        the wording, the choices, the marking are identical — so one editor
-        with a filter is one place to fix a bug rather than two.
-      */}
-      {tab === 'activities' && (
-        <QuestionList
-          key="activities"
-          unitId={unit.id}
-          purpose="ACTIVITY"
-          sections={unit.sections}
-          onRun={run}
-        />
-      )}
+        {tab === 'vocabulary' && <VocabularyList unit={unit} onRun={run} />}
 
-      {tab === 'assessment' && (
-        <QuestionList
-          key="assessment"
-          unitId={unit.id}
-          purpose="ASSESSMENT"
-          sections={unit.sections}
-          onRun={run}
-        />
-      )}
-    </main>
+        {tab === 'grammar' && <SectionList unit={unit} types={types} onRun={run} />}
+
+        {/*
+          The same editor serves both, filtered by what the question is for.
+          Practice and test questions differ in nothing a teacher writes — the
+          wording, the choices, the marking are identical — so one editor with
+          a filter is one place to fix a bug rather than two.
+        */}
+        {tab === 'activities' && (
+          <>
+            <StudentPreview unitId={unit.id} purpose="ACTIVITY" />
+            <QuestionList
+              key="activities"
+              unitId={unit.id}
+              purpose="ACTIVITY"
+              sections={unit.sections}
+              onRun={run}
+            />
+          </>
+        )}
+
+        {tab === 'assessment' && (
+          <>
+            <TestRules rules={rules} failed={rulesFailed} contents={contents} />
+            <StudentPreview
+              unitId={unit.id}
+              purpose="ASSESSMENT"
+              asked={rules?.questionCount ?? null}
+            />
+            <QuestionList
+              key="assessment"
+              unitId={unit.id}
+              purpose="ASSESSMENT"
+              sections={unit.sections}
+              onRun={run}
+            />
+          </>
+        )}
+      </main>
+    </>
   );
+}
+
+/**
+ * The rules this unit's test will run under.
+ *
+ * Read-only, and said plainly, because a teacher writing test questions is
+ * entitled to know the mark her students have to reach and how many tries they
+ * get. These are settings resolved for this unit; changing one is not
+ * something this screen does.
+ */
+function TestRules({
+  rules,
+  failed,
+  contents,
+}: {
+  rules: AssessmentRules | null;
+  failed: boolean;
+  contents: UnitContents | null;
+}) {
+  if (failed) {
+    return (
+      <p className="alert error" role="alert">
+        The rules for this test could not be loaded.
+      </p>
+    );
+  }
+  if (!rules) return <p className="muted">Loading the test rules…</p>;
+
+  const pool = contents?.testPool;
+  const asks =
+    pool && rules.questionCount !== null
+      ? Math.min(pool.available, rules.questionCount)
+      : (pool?.available ?? null);
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2 className="panel-title">How this test runs</h2>
+        <span className="panel-note">Set for the whole course</span>
+      </div>
+      <div className="panel-body stack">
+        <dl className="rules">
+          <div>
+            <dt>Pass mark</dt>
+            <dd>{rules.passingScore}%</dd>
+          </div>
+          <div>
+            <dt>Tries allowed</dt>
+            <dd>{rules.maxAttempts === null ? 'No limit' : rules.maxAttempts}</dd>
+          </div>
+          <div>
+            <dt>Questions asked</dt>
+            <dd>{asks === null ? '\u2014' : asks}</dd>
+          </div>
+          <div>
+            <dt>Score kept</dt>
+            <dd>{rules.resultPolicy === 'latest' ? 'The latest try' : 'Her best try'}</dd>
+          </div>
+        </dl>
+
+        {pool && (
+          <p className="note-line">
+            {pool.available === 0 ? (
+              <>
+                There is nothing for this test to ask. Add test questions below, or publish
+                activity questions — a unit with no test questions of its own uses its activity
+                questions instead.
+              </>
+            ) : pool.source === 'activity' ? (
+              <>
+                This unit has no test questions of its own, so the test draws from its{' '}
+                <strong>{pool.available} activity questions</strong>. Add a question here and the
+                test will use only the questions you add.
+              </>
+            ) : (
+              <>
+                The test draws from the <strong>{pool.available} test questions</strong> below that
+                are published and not waiting on your review.
+              </>
+            )}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * What a student would be shown.
+ *
+ * The platform's own preview route builds this: shuffled the way she would get
+ * it, with every answer stripped on the server. Asking for it records nothing —
+ * no attempt, no answer, no progress — so a teacher can look as often as she
+ * likes without touching a single student's results.
+ */
+function StudentPreview({
+  unitId,
+  purpose,
+  asked,
+}: {
+  unitId: string;
+  purpose: 'ACTIVITY' | 'ASSESSMENT';
+  /** How many of the pool one student is actually asked, when fewer than all. */
+  asked?: number | null;
+}) {
+  const [shown, setShown] = useState<PresentedQuestion[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  async function look() {
+    setBusy(true);
+    setFailed(null);
+    try {
+      const got = await api.post<PresentedQuestion[]>(`/questions/unit/${unitId}/preview`, {
+        purpose,
+        seed: String(Date.now()),
+      });
+      setShown(got);
+    } catch (caught) {
+      setFailed(caught instanceof ApiError ? caught.message : 'The preview could not be built.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2 className="panel-title">See it as a student</h2>
+        <span className="panel-note">Records nothing</span>
+      </div>
+      <div className="panel-body stack">
+        <div className="row">
+          <button onClick={() => void look()} disabled={busy}>
+            {busy ? 'Building…' : shown ? 'Shuffle again' : 'Show me'}
+          </button>
+          {shown && (
+            <button className="small" onClick={() => setShown(null)}>
+              Close
+            </button>
+          )}
+        </div>
+
+        {failed && (
+          <p className="alert error" role="alert">
+            {failed}
+          </p>
+        )}
+
+        {shown && shown.length === 0 && (
+          <p className="note-line">
+            Nothing would be shown. A question appears here once it is published and no longer
+            waiting on your review.
+          </p>
+        )}
+
+        {shown && shown.length > 0 && typeof asked === 'number' && asked < shown.length && (
+          <p className="note-line">
+            These are the {shown.length} questions the test can draw on. Each student is asked{' '}
+            <strong>{asked}</strong> of them, shuffled afresh for her.
+          </p>
+        )}
+
+        {shown && shown.length > 0 && (
+          <ol className="preview-list">
+            {shown.map((question) => (
+              <li key={question.id}>
+                <p className="preview-prompt">{question.prompt}</p>
+                <PreviewChoices payload={question.payload} />
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** The choices a student would be offered, in the order she would see them. */
+function PreviewChoices({ payload }: { payload: Record<string, unknown> }) {
+  const options = Array.isArray(payload.options)
+    ? (payload.options as { id: string; text: string }[])
+    : null;
+  const tokens = Array.isArray(payload.tokens)
+    ? (payload.tokens as { id: string; text: string }[])
+    : null;
+
+  if (options) {
+    return (
+      <ul className="preview-options">
+        {options.map((option) => (
+          <li key={option.id}>{option.text}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (tokens) {
+    return (
+      <p className="preview-tokens">
+        {tokens.map((token) => (
+          <span key={token.id}>{token.text}</span>
+        ))}
+      </p>
+    );
+  }
+
+  return null;
 }
 
 function SectionList({
@@ -550,11 +867,12 @@ function VocabularyList({
 
       {unit.vocabularyItems.length > 0 && (
         <div className="table-wrap" style={{ marginTop: '1rem' }}>
-          <table>
+          <table className="vocab-table">
             <thead>
               <tr>
                 <th>English</th>
                 <th>Arabic</th>
+                <th>Sound</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -563,9 +881,25 @@ function VocabularyList({
               {unit.vocabularyItems.map((item: VocabularyItem) => (
                 <Fragment key={item.id}>
                   <tr>
-                    <td>{item.wordEn}</td>
+                    <td data-label="English" className="word-cell">{item.wordEn}</td>
                     <td data-label="Arabic" dir="rtl" lang="ar">
-                      {item.meaningAr ?? '—'}
+                      {item.meaningAr ?? '\u2014'}
+                    </td>
+                    {/*
+                      Whether the teacher recorded this word, said in the list
+                      rather than only inside the editor — otherwise the only
+                      way to know is to open all eight words one at a time.
+                    */}
+                    <td data-label="Sound">
+                      {item.media?.some((file) => file.mimeType?.startsWith('audio/')) ? (
+                        <span className="part" data-state="ready">
+                          Your recording
+                        </span>
+                      ) : (
+                        <span className="part" data-state="empty">
+                          Device voice
+                        </span>
+                      )}
                     </td>
                     <td data-label="Status">
                       <span
@@ -584,7 +918,7 @@ function VocabularyList({
                         </span>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Actions">
                       <div className="row">
                         <button
                           className="small"
@@ -788,7 +1122,9 @@ function WordMedia({
   return (
     <div className="row" style={{ alignItems: 'flex-start' }}>
       <div style={{ flex: '1 1 12rem' }}>
-        <label htmlFor={`audio-${item.id}`}>Your recording of this word</label>
+        <label htmlFor={`audio-${item.id}`}>
+          {recording ? 'Replace your recording' : 'Record this word yourself (optional)'}
+        </label>
         <input
           id={`audio-${item.id}`}
           type="file"
@@ -801,17 +1137,26 @@ function WordMedia({
           }}
           data-testid="word-audio-upload"
         />
-        {recording && (
+        {recording ? (
           <div className="row" style={{ marginTop: '.4rem' }}>
             {/* A recording of one word: there is nothing to caption. */}
             <audio controls src={apiUrl(recording.url)} data-testid="word-audio" />
             <button
               className="small danger"
-              onClick={() => onRun(() => api.del(`/content/media/${recording.id}`), 'Recording removed.')}
+              onClick={() =>
+                onRun(() => api.del(`/content/media/${recording.id}`), 'Recording removed.')
+              }
             >
               Remove
             </button>
           </div>
+        ) : (
+          // Said plainly, because the alternative is a teacher assuming
+          // silence and recording all 132 words to be safe.
+          <p className="muted" style={{ margin: '.4rem 0 0' }}>
+            No recording. Students hear this word read by their own device&rsquo;s English voice,
+            which is enough for most words — record one where the device gets it wrong.
+          </p>
         )}
       </div>
 

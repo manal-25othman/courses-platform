@@ -57,9 +57,9 @@
   /* --- state -------------------------------------------------------------
      Mint is reserved: it means finished, and it is used for nothing else. */
   --ok:           #0FB98E;  --ok-soft:     #E0F8F1;  --ok-ink:      #067A5E;
-  --warn:         #C77800;  --warn-soft:   #FFF3DF;  --warn-ink:    var(--warn-ink);
+  --warn:         #C77800;  --warn-soft:   #FFF3DF;  --warn-ink:    #8A5300;
   --bad:          #E23D6D;  --bad-soft:    #FFE9EF;  --bad-ink:     #A3183F;
-  --locked:       #A9A2C7;  --locked-soft: #F2EFFB;
+  --locked:       #A9A2C7;  --locked-soft: #F2EFFB;  --locked-ink:  #575070;
   /* Edges of a marked answer: the tint one step darker than its soft fill. */
   --ok-edge:      #A7E5D2;  --bad-edge:    #F6C2D2;
   --on-brand:     #FFFFFF;  /* type and glyphs sitting on a brand-coloured fill */
@@ -242,7 +242,7 @@ button.signal:active:not(:disabled) { box-shadow: none; transform: translateY(2p
 button.ghost { background: transparent; border-color: transparent; }
 button.ghost:hover:not(:disabled) { background: var(--ground-2); }
 
-button.danger { color: var(--bad); border-color: var(--bad-edge); background: var(--surface); }
+button.danger { color: var(--bad-ink); border-color: var(--bad-edge); background: var(--surface); }
 button.danger:hover:not(:disabled) { background: var(--bad-soft); }
 
 button.small { min-height: 2.25rem; padding: var(--s1) var(--s3); font-size: .8125rem; }
@@ -285,10 +285,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   padding: .2rem .55rem; border-radius: var(--r-chip);
   background: var(--ground-2); color: var(--ink-2);
 }
-.badge.active  { background: var(--ok-soft);   color: var(--ok); }
-.badge.warn    { background: var(--warn-soft); color: var(--warn); }
-.badge.bad     { background: var(--bad-soft);  color: var(--bad); }
-.badge.disabled{ background: var(--locked-soft); color: var(--locked); }
+.badge.active  { background: var(--ok-soft);   color: var(--ok-ink); }
+.badge.warn    { background: var(--warn-soft); color: var(--warn-ink); }
+.badge.bad     { background: var(--bad-soft);  color: var(--bad-ink); }
+.badge.disabled{ background: var(--locked-soft); color: var(--locked-ink); }
 
 .alert {
   padding: var(--s3) var(--s4);
@@ -1735,3 +1735,165 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
   background: var(--ground-2); transition: background var(--t-state) var(--ease);
 }
 .tally i[data-on='true'] { background: var(--kind, var(--brand)); }
+
+/* ---------------------------------------------------------------------------
+   Curriculum — the teacher's view of the course.
+
+   A unit is a row rather than a table cell: what she needs is the shape of
+   each unit and whether anything is unfinished, which is a sentence, not a
+   column. The four chips reuse `.step` from the student detail screen on
+   purpose — the parts of a unit look the same wherever she meets them.
+   --------------------------------------------------------------------------- */
+.unitlist { list-style: none; margin: 0; padding: 0; }
+.unitrow {
+  display: grid; gap: var(--s2);
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'main do' 'todo do';
+  align-items: center;
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--line);
+}
+.unitlist li:first-child .unitrow { border-top: 0; }
+.unitrow-main { grid-area: main; display: grid; gap: var(--s2); min-width: 0; }
+.unitrow-id { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.unitrow-open {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-lead); color: var(--ink); font-weight: 600;
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: start;
+  border-radius: var(--r-sm);
+}
+.unitrow-open { display: inline-flex; align-items: center; gap: var(--s2); }
+.unitrow-open .ico { width: .8rem; height: .8rem; transform: rotate(180deg); color: var(--ink-3); }
+.unitrow-open:hover { color: var(--brand-ink); }
+.unitrow-open:hover .ico { color: var(--brand-ink); }
+.unitrow-open:hover span, .unitrow-open:hover { text-decoration: underline; }
+
+/* The parts of a unit. Ready is quiet on purpose: four green chips a row
+   would make every unit look urgent and none look finished. */
+.parts { display: flex; gap: var(--s2); flex-wrap: wrap; min-width: 0; }
+.part {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  font-size: var(--fs-caption); font-weight: 600;
+  padding: .2rem .55rem; border-radius: var(--r-sm);
+  background: var(--ground-2); color: var(--ink-2); border: 1px solid var(--line);
+}
+.part[data-state='gap']   { background: var(--warn-soft); color: var(--warn-ink); border-color: var(--warn); }
+.part[data-state='empty'] { background: transparent; color: var(--ink-3); border-style: dashed; border-color: var(--line-2); }
+.unitrow-do { grid-area: do; display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
+.unitrow-todo {
+  grid-area: todo; margin: 0;
+  display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap;
+  font-size: var(--fs-small); color: var(--ink-2);
+}
+/* The state is named, not only coloured. */
+.todo-label {
+  flex: none; font-size: var(--fs-micro); font-weight: 700; text-transform: none;
+  color: var(--warn-ink); background: var(--warn-soft);
+  padding: .1rem .45rem; border-radius: var(--r-sm);
+}
+.flag[data-tone='hidden'] { background: var(--warn-soft); color: var(--warn-ink); }
+
+@media (max-width: 640px) {
+  /* Actions belong under the unit on a narrow screen, not squeezed beside it. */
+  .unitrow {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'main' 'todo' 'do';
+    padding: var(--s4);
+  }
+  .unitrow-do { justify-content: flex-start; }
+}
+
+/* ---------------------------------------------------------------------------
+   The unit editor.
+   --------------------------------------------------------------------------- */
+.unithead {
+  display: flex; align-items: flex-start; gap: var(--s4);
+  justify-content: space-between; flex-wrap: wrap;
+}
+.unithead-id { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; min-width: 0; }
+.unithead-id h1 { margin: 0; }
+
+/* What is unfinished, one line each. A list, because a teacher works through
+   it; a sentence would hide the second item behind the first. */
+.todo-list { list-style: none; margin: 0; padding: 0; }
+.todo-list li {
+  padding: var(--s3) var(--s5);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-body); color: var(--ink-2);
+}
+.todo-list li:first-child { border-top: 0; }
+
+/* The rules a test runs under. Read-only, so they are set as facts, not
+   fields — nothing here should look like it can be typed into. */
+.rules { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); margin: 0; }
+.rules div { display: grid; gap: var(--s1); }
+.rules dt { font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
+.rules dd {
+  margin: 0; font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-title); font-weight: 600; color: var(--ink); line-height: 1;
+}
+
+/* The student's view. Deliberately plain: it is a quotation of the real
+   screen, not a second design of it. */
+.preview-list { margin: 0; padding-inline-start: 1.4rem; display: grid; gap: var(--s4); }
+.preview-list > li { color: var(--ink-2); }
+.preview-prompt { margin: 0 0 var(--s2); color: var(--ink); font-weight: 600; }
+.preview-options { list-style: none; margin: 0; padding: 0; display: flex; gap: var(--s2); flex-wrap: wrap; }
+.preview-options li {
+  font-size: var(--fs-small); padding: .2rem .6rem;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--ground);
+}
+.preview-tokens { margin: 0; display: flex; gap: var(--s2); flex-wrap: wrap; }
+.preview-tokens span {
+  font-size: var(--fs-small); padding: .2rem .55rem;
+  border: 1px dashed var(--line-2); border-radius: var(--r-sm); color: var(--ink-2);
+}
+
+/* The count beside a tab label. */
+.tabs .num {
+  margin-inline-start: .4rem; font-variant-numeric: tabular-nums;
+  font-size: var(--fs-caption); opacity: .7;
+}
+
+@media (max-width: 640px) {
+  .unithead { flex-direction: column; align-items: stretch; }
+  .todo-list li { padding-inline: var(--s4); }
+}
+
+/* ---------------------------------------------------------------------------
+   The word list on a phone.
+
+   Eight words with a meaning, a sound, a state and two buttons do not fit
+   across 390px, and a table that scrolls sideways hides the buttons off the
+   edge — a teacher cannot press what she cannot see. Each row becomes a block
+   with its columns labelled, the same trade the roster makes.
+   --------------------------------------------------------------------------- */
+@media (max-width: 40rem) {
+  .vocab-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .vocab-table, .vocab-table tbody, .vocab-table tr, .vocab-table td { display: block; width: auto; }
+  .vocab-table tr {
+    border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: var(--s3); margin-bottom: var(--s3); background: var(--surface);
+  }
+  .vocab-table td {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+    padding: var(--s2) 0; border: 0; text-align: start;
+  }
+  .vocab-table td::before {
+    content: attr(data-label);
+    flex: none; font-size: var(--fs-caption); font-weight: 700; color: var(--ink-3);
+  }
+  /* The Arabic cell reads right-to-left, which would carry its label across
+     with it. The label belongs in the same column as every other label. */
+  .vocab-table td[dir='rtl'] { flex-direction: row-reverse; }
+  /* The word itself is the heading of its own card, so it keeps no label. */
+  .vocab-table td.word-cell {
+    font-family: var(--font-display); font-variation-settings: var(--wonk);
+    font-size: var(--fs-lead); font-weight: 600; color: var(--ink);
+    padding-top: 0;
+  }
+  .vocab-table td.word-cell::before { content: none; }
+  /* An editor opened inside a row spans it rather than sitting in a column. */
+  .vocab-table td[colspan] { display: block; }
+  .vocab-table td[colspan]::before { content: none; }
+}

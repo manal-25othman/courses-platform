@@ -135,6 +135,199 @@ export class ContentService {
     );
   }
 
+  /**
+   * The course and its units, with enough about each to say what is there and
+   * what is missing.
+   *
+   * Built for the teacher's Curriculum screen, which needs a count per part of
+   * the unit rather than the whole of every unit. The counts are gathered in
+   * three grouped queries over all the units at once rather than one query per
+   * unit, so a course with thirty units costs the same as one with four.
+   *
+   * Everything returned is counted from stored rows. Nothing here judges the
+   * material — how a teacher reads "no test questions yet" is her business.
+   */
+  async curriculumOverview(actor: CurrentUser) {
+    const course = await this.currentCourse(actor);
+    const schoolId = this.schoolOf(actor);
+    const statuses = this.visibleStatuses(actor);
+
+    return this.prisma.forSchool(schoolId, async (tx) => {
+      const units = await tx.unit.findMany({
+        where: { courseId: course.id, status: { in: statuses } },
+        orderBy: { orderIndex: 'asc' },
+        include: {
+          sections: {
+            where: { status: { in: statuses } },
+            orderBy: { orderIndex: 'asc' },
+            select: {
+              id: true,
+              typeKey: true,
+              status: true,
+              body: true,
+              videoUrl: true,
+              needsReview: true,
+              type: { select: { progressComponent: true, displayName: true } },
+              _count: { select: { media: true } },
+            },
+          },
+        },
+      });
+
+      const unitIds = units.map((unit) => unit.id);
+      if (unitIds.length === 0) {
+        return { course, units: [] };
+      }
+
+      const [questionCounts, wordCounts, wordsMissingMeaning] = await Promise.all([
+        tx.question.groupBy({
+          // `needsReview` is grouped as well because a question awaiting a
+          // teacher's eye is held out of the test even once published, so a
+          // count that ignored it would overstate what a student will be
+          // asked. See `assessmentPool` in the learning service, which this
+          // mirrors.
+          by: ['unitId', 'purpose', 'status', 'needsReview'],
+          where: { unitId: { in: unitIds } },
+          _count: { _all: true },
+        }),
+        tx.vocabularyItem.groupBy({
+          by: ['unitId', 'status'],
+          where: { unitId: { in: unitIds } },
+          _count: { _all: true },
+        }),
+        tx.vocabularyItem.groupBy({
+          by: ['unitId'],
+          where: { unitId: { in: unitIds }, OR: [{ meaningAr: null }, { meaningAr: '' }] },
+          _count: { _all: true },
+        }),
+      ]);
+
+      const countOf = <T extends { unitId: string; _count: { _all: number } }>(
+        rows: T[],
+        unitId: string,
+        match: (row: T) => boolean = () => true,
+      ) =>
+        rows
+          .filter((row) => row.unitId === unitId && match(row))
+          .reduce((total, row) => total + row._count._all, 0);
+
+      return {
+        course,
+        units: units.map((unit) => {
+          // Which section carries the grammar is a property of the section
+          // type, not of its name, so a curriculum with differently named
+          // sections needs no change here.
+          const grammar = unit.sections.filter(
+            (section) => section.type.progressComponent === 'grammar',
+          );
+
+          // A question is only asked once it is published and nobody has
+          // flagged it for review.
+          const settled = (purpose: 'ACTIVITY' | 'ASSESSMENT') =>
+            countOf(
+              questionCounts,
+              unit.id,
+              (r) =>
+                r.purpose === purpose &&
+                r.status === ContentStatus.PUBLISHED &&
+                !r.needsReview,
+            );
+
+          const settledActivity = settled('ACTIVITY');
+          const settledAssessment = settled('ASSESSMENT');
+
+          return {
+            id: unit.id,
+            title: unit.title,
+            kind: unit.kind,
+            orderIndex: unit.orderIndex,
+            status: unit.status,
+            countsTowardCompletion: unit.countsTowardCompletion,
+            vocabulary: {
+              total: countOf(wordCounts, unit.id),
+              published: countOf(wordCounts, unit.id, (r) => r.status === ContentStatus.PUBLISHED),
+              missingMeaning: countOf(wordsMissingMeaning, unit.id),
+            },
+            grammar: {
+              sections: grammar.length,
+              published: grammar.filter((s) => s.status === ContentStatus.PUBLISHED).length,
+              // A grammar page a student can learn from has something on it.
+              withContent: grammar.filter(
+                (s) => (s.body ?? '').trim() !== '' || s._count.media > 0 || s.videoUrl,
+              ).length,
+            },
+            activity: {
+              total: countOf(questionCounts, unit.id, (r) => r.purpose === 'ACTIVITY'),
+              published: countOf(
+                questionCounts,
+                unit.id,
+                (r) => r.purpose === 'ACTIVITY' && r.status === ContentStatus.PUBLISHED,
+              ),
+              asked: settledActivity,
+            },
+            assessment: {
+              total: countOf(questionCounts, unit.id, (r) => r.purpose === 'ASSESSMENT'),
+              published: countOf(
+                questionCounts,
+                unit.id,
+                (r) => r.purpose === 'ASSESSMENT' && r.status === ContentStatus.PUBLISHED,
+              ),
+              asked: settledAssessment,
+            },
+            /**
+             * Where this unit's test will actually draw its questions from.
+             *
+             * A unit with its own test questions uses them. A unit without any
+             * falls back to its practice questions, which is why a unit
+             * showing no test questions can still set a test — and why saying
+             * "no test" on the strength of that count alone would be wrong.
+             */
+            testPool:
+              settledAssessment > 0
+                ? { source: 'assessment' as const, available: settledAssessment }
+                : { source: 'activity' as const, available: settledActivity },
+            sectionsNeedingReview: unit.sections.filter((s) => s.needsReview).length,
+            questionsNeedingReview: countOf(questionCounts, unit.id, (r) => r.needsReview),
+          };
+        }),
+      };
+    });
+  }
+
+  /**
+   * The rules that will govern this unit's test, as the platform will resolve
+   * them when a student sits it.
+   *
+   * Read-only. These come from the settings store, where a value may be set
+   * for this unit, the course, the school or everywhere, and the most specific
+   * one wins. The teacher screens state them so a pass mark is never a number
+   * a teacher has to guess at; changing one is not something any route here
+   * does.
+   */
+  async assessmentRules(actor: CurrentUser, unitId: string) {
+    const schoolId = this.schoolOf(actor);
+
+    // Proves the unit is hers before any setting is read, so the rules of a
+    // unit in another school are not readable either.
+    await this.prisma.forSchool(schoolId, async (tx) => {
+      const unit = await tx.unit.findFirst({
+        where: { id: unitId, course: { ownerSchoolId: schoolId } },
+        select: { id: true },
+      });
+      if (!unit) throw new NotFoundException('Unit not found.');
+    });
+
+    const scopes = this.unitScopes(unitId);
+    const [passingScore, maxAttempts, questionCount, resultPolicy] = await Promise.all([
+      this.settings.resolve<number>(SETTING_KEYS.ASSESSMENT_PASSING_SCORE, scopes),
+      this.settings.resolve<number | null>(SETTING_KEYS.ASSESSMENT_MAX_ATTEMPTS, scopes),
+      this.settings.resolve<number | null>(SETTING_KEYS.ASSESSMENT_QUESTION_COUNT, scopes),
+      this.settings.resolve<string>(SETTING_KEYS.ASSESSMENT_RESULT_POLICY, scopes),
+    ]);
+
+    return { passingScore, maxAttempts, questionCount, resultPolicy };
+  }
+
   async getUnit(actor: CurrentUser, unitId: string) {
     const statuses = this.visibleStatuses(actor);
     const schoolId = this.schoolOf(actor);

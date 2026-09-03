@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { CurrentUser } from '../auth/auth.types';
 import { QuestionEngineService, StoredQuestion } from './question-engine.service';
+import { assessmentPool } from './assessment-pool';
 import { CreateQuestionDto, UpdateQuestionDto } from './dto/question.dto';
 
 /** A question as the teacher sees it, answer key included. */
@@ -68,7 +69,18 @@ export class QuestionsService {
 
   /** How much of an imported unit still needs checking. */
   async reviewSummary(actor: CurrentUser, unitId: string) {
-    return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
+    const schoolId = this.schoolOf(actor);
+
+    return this.prisma.forSchool(schoolId, async (tx) => {
+      // As in `listForUnit`: a unit that is not this school's answers the same
+      // way one that does not exist does. Counting first would return a row of
+      // zeros, which reads as "an empty unit of yours" rather than "not yours".
+      const unit = await tx.unit.findFirst({
+        where: { id: unitId, course: { ownerSchoolId: schoolId } },
+        select: { id: true },
+      });
+      if (!unit) throw new NotFoundException('Unit not found.');
+
       const [total, needingReview, published, assessmentTotal, assessmentPublished] =
         await Promise.all([
           tx.question.count({ where: { unitId } }),
@@ -233,13 +245,45 @@ export class QuestionsService {
    * Everything here goes through the engine, so no answer key is included and
    * the order follows the seed.
    */
+  /**
+   * What a student would be shown.
+   *
+   * This has to answer exactly as the real thing does, or it is worse than
+   * useless: a preview of a test that shows nothing while the test itself asks
+   * twenty-one questions would send a teacher looking for a fault that is not
+   * there. So a test preview goes through the same pool rule the learning
+   * service uses — its own questions where it has them, its practice questions
+   * where it does not, and in both cases only what is published and not still
+   * flagged for review.
+   *
+   * An activity preview stays a straight listing: the activity has no fallback
+   * and asks everything it holds.
+   *
+   * Nothing is recorded. No attempt, no answer, no progress — a teacher may
+   * look as often as she likes.
+   */
   async preview(actor: CurrentUser, unitId: string, seed: string, purpose?: QuestionPurpose) {
-    const questions = await this.prisma.forSchool(this.schoolOf(actor), (tx) =>
-      tx.question.findMany({
-        where: { unitId, status: ContentStatus.PUBLISHED, ...(purpose ? { purpose } : {}) },
-        orderBy: { orderIndex: 'asc' },
-      }),
-    );
+    const schoolId = this.schoolOf(actor);
+
+    const questions = await this.prisma.forSchool(schoolId, async (tx) => {
+      const unit = await tx.unit.findFirst({
+        where: { id: unitId, course: { ownerSchoolId: schoolId } },
+        select: { id: true },
+      });
+      if (!unit) throw new NotFoundException('Unit not found.');
+
+      const where =
+        purpose === QuestionPurpose.ASSESSMENT
+          ? (await assessmentPool(tx, unitId)).where
+          : {
+              unitId,
+              status: ContentStatus.PUBLISHED,
+              needsReview: false,
+              ...(purpose ? { purpose } : {}),
+            };
+
+      return tx.question.findMany({ where, orderBy: { orderIndex: 'asc' } });
+    });
 
     const stored: StoredQuestion[] = questions.map((q) => ({
       id: q.id,

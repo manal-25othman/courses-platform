@@ -55,6 +55,27 @@ export class ContentController {
     return this.content.listUnits(actor);
   }
 
+  /** The course this school works in. Its title is data, never a constant. */
+  @Roles(...EVERYONE)
+  @Get('course')
+  async course(@CurrentUser() actor: Actor) {
+    return this.content.currentCourse(actor);
+  }
+
+  /** The course and what each unit holds, for the teacher's Curriculum screen. */
+  @Roles(...TEACHER)
+  @Get('overview')
+  async overview(@CurrentUser() actor: Actor) {
+    return this.content.curriculumOverview(actor);
+  }
+
+  /** The pass mark and attempt limit that will govern this unit's test. */
+  @Roles(...TEACHER)
+  @Get('units/:id/assessment-rules')
+  async assessmentRules(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.content.assessmentRules(actor, id);
+  }
+
   @Roles(...EVERYONE)
   @Get('units/:id')
   async getUnit(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {

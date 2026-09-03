@@ -138,6 +138,8 @@ export interface SectionType {
   description: string | null;
   isVocabulary: boolean;
   isPaperBased: boolean;
+  /** Which part of progress this kind counts towards: "vocabulary", "grammar", or none. */
+  progressComponent?: string | null;
   orderIndex: number;
 }
 
@@ -184,6 +186,65 @@ export interface VocabularyItem {
 export interface UnitDetail extends Omit<UnitSummary, '_count'> {
   sections: Section[];
   vocabularyItems: VocabularyItem[];
+}
+
+/** The course this school teaches. Its title is data, never a constant. */
+export interface Course {
+  id: string;
+  title: string;
+  description: string | null;
+  status: ContentStatus;
+}
+
+/** What one unit holds, counted for the Curriculum screen. */
+export interface UnitContents {
+  id: string;
+  title: string;
+  kind: string | null;
+  orderIndex: number;
+  status: ContentStatus;
+  /** False for material that is offered but does not count towards the course. */
+  countsTowardCompletion: boolean;
+  vocabulary: { total: number; published: number; missingMeaning: number };
+  grammar: { sections: number; published: number; withContent: number };
+  /** `asked` is what a student can actually meet: published and not flagged. */
+  activity: { total: number; published: number; asked: number };
+  assessment: { total: number; published: number; asked: number };
+  /**
+   * Where the unit test draws from. A unit with no test questions of its own
+   * falls back to its practice questions, so a count of zero above does not
+   * mean there is no test.
+   */
+  testPool: { source: 'assessment' | 'activity'; available: number };
+  sectionsNeedingReview: number;
+  questionsNeedingReview: number;
+}
+
+export interface CurriculumOverview {
+  course: Course;
+  units: UnitContents[];
+}
+
+/**
+ * One question as a student would be shown it.
+ *
+ * Built by the server's preview route, which strips the answer key before it
+ * leaves. There is no field here to hold an answer, on purpose.
+ */
+export interface PresentedQuestion {
+  id: string;
+  typeKey: string;
+  prompt: string;
+  payload: Record<string, unknown>;
+  points: number;
+}
+
+/** The rules that will govern a unit's test. Read-only. */
+export interface AssessmentRules {
+  passingScore: number;
+  maxAttempts: number | null;
+  questionCount: number | null;
+  resultPolicy: string;
 }
 
 /** Where a signed-in user belongs, by role. */

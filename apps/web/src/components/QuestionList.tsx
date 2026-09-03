@@ -95,7 +95,15 @@ export function QuestionList({
           {heading} ({questions.length})
         </h2>
         <div className="row">
-          <label className="row" style={{ gap: '.4rem', fontSize: 'var(--fs-body)' }}>
+          <label
+            className="row"
+            style={{
+              gap: '.4rem',
+              fontSize: 'var(--fs-body)',
+              alignItems: 'center',
+              flexWrap: 'nowrap',
+            }}
+          >
             <input
               type="checkbox"
               checked={onlyReview}
@@ -116,8 +124,9 @@ export function QuestionList({
 
       {isAssessment && (
         <p className="muted" style={{ margin: 0 }}>
-          These are the questions a student must pass to finish the unit. They are separate from
-          the practice activities and are never mixed into them.
+          The questions a student must pass to finish the unit. A question you add here is used by
+          the test and never mixed into the practice activities. The panel above says where this
+          unit&rsquo;s test draws from today.
         </p>
       )}
 
@@ -153,7 +162,7 @@ export function QuestionList({
           {onlyReview
             ? 'Nothing here needs checking.'
             : isAssessment
-              ? 'This unit has no assessment yet. Add a question to start one.'
+              ? 'No test questions of its own yet. Until you add one, the test uses this unit\u2019s activity questions.'
               : 'This unit has no questions yet.'}
         </p>
       ) : (
