@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError, ClassOverview, homeFor, Me, timeAgo } from '@/lib/api';
+import { TeacherHeader } from '@/components/TeacherShell';
 
 /**
  * How the class is getting on.
@@ -50,6 +51,8 @@ export default function ClassProgressPage() {
   }
 
   return (
+    <>
+      <TeacherHeader me={me} />
     <main className="page stack">
       <div className="between">
         <div>
@@ -60,8 +63,7 @@ export default function ClassProgressPage() {
           </p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/students')}>My students</button>
-          <button onClick={() => router.push('/content')}>Curriculum</button>
+
         </div>
       </div>
 
@@ -169,5 +171,6 @@ export default function ClassProgressPage() {
         </div>
       )}
     </main>
+    </>
   );
 }

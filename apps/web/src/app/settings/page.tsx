@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, ApiError, homeFor, Me, TeacherProfile } from '@/lib/api';
+import { TeacherHeader } from '@/components/TeacherShell';
 
 /**
  * The teacher's own details.
@@ -69,10 +70,12 @@ export default function TeacherSettingsPage() {
   }
 
   return (
+    <>
+      <TeacherHeader me={me} />
     <main className="page stack">
       <div className="between">
         <h1>My details</h1>
-        <button onClick={() => router.push('/students')}>Back to my students</button>
+
       </div>
 
       {error && (
@@ -133,5 +136,6 @@ export default function TeacherSettingsPage() {
         </div>
       </form>
     </main>
+    </>
   );
 }

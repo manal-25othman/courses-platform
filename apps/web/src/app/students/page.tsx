@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, FormEvent } from 'react';
 import { api, ApiError, homeFor, Me, Student } from '@/lib/api';
+import { TeacherHeader } from '@/components/TeacherShell';
 
 export default function StudentsPage() {
   const router = useRouter();
@@ -86,14 +87,11 @@ export default function StudentsPage() {
     }
   }
 
-  async function signOut() {
-    await api.post('/auth/logout').catch(() => undefined);
-    router.push('/login');
-  }
-
   if (!me) return <main className="page"><p className="muted">Loading…</p></main>;
 
   return (
+    <>
+      <TeacherHeader me={me} />
     <main className="page stack">
       <div className="between">
         <div>
@@ -102,15 +100,10 @@ export default function StudentsPage() {
           <p className="muted">Signed in as {me.displayName}</p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/progress')} data-testid="nav-progress">
-            Class progress
-          </button>
-          <button onClick={() => router.push('/content')}>Curriculum</button>
           <button onClick={() => router.push('/settings')} data-testid="nav-settings">
             My details
           </button>
           <button onClick={() => router.push('/change-password')}>Change my password</button>
-          <button onClick={signOut}>Sign out</button>
         </div>
       </div>
 
@@ -284,6 +277,7 @@ export default function StudentsPage() {
         )}
       </div>
     </main>
+    </>
   );
 }
 

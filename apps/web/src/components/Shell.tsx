@@ -98,6 +98,43 @@ export function Avatar({ name }: { name: string }) {
   );
 }
 
+/**
+ * Where a teacher can go.
+ *
+ * Four destinations, and every one is a screen that already exists. There is
+ * deliberately no Messages entry: a teacher's conversations live inside a
+ * student's page, not in a place of their own, and a nav item pointing at the
+ * student-only /messages route would be a dead end.
+ */
+const TEACHER_NAV: { href: string; label: string; icon: IconName }[] = [
+  { href: '/dashboard', label: 'Dashboard', icon: 'home' },
+  { href: '/progress', label: 'Class progress', icon: 'progress' },
+  { href: '/students', label: 'Students', icon: 'teacher' },
+  { href: '/content', label: 'Curriculum', icon: 'grammar' },
+];
+
+/**
+ * The teacher's navigation.
+ *
+ * Two shapes for two habits. This screen is used mostly on a laptop or a
+ * tablet on a desk, so the header row is the primary form; the phone gets
+ * the same four as a scrollable strip under the header rather than a thumb
+ * bar, because a teacher is reading rather than tapping through a lesson.
+ */
+export function TeacherNav() {
+  const here = useHere();
+  return (
+    <nav className="teachernav" aria-label="Sections">
+      {TEACHER_NAV.map((item) => (
+        <Link key={item.href} href={item.href} aria-current={here(item.href) ? 'page' : undefined}>
+          <Icon name={item.icon} size={17} />
+          {item.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 export function TopBar({ right, nav = false }: { right?: ReactNode; nav?: boolean }) {
   return (
     <header className="topbar">

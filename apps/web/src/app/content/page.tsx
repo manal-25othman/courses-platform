@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, FormEvent } from 'react';
 import { api, ApiError, homeFor, Me, UnitSummary } from '@/lib/api';
+import { TeacherHeader } from '@/components/TeacherShell';
 
 /**
  * The curriculum, as the teacher manages it.
@@ -88,6 +89,8 @@ export default function ContentPage() {
   if (!me) return <main className="page"><p className="muted">Loading…</p></main>;
 
   return (
+    <>
+      <TeacherHeader me={me} />
     <main className="page stack">
       <div className="between">
         <div>
@@ -95,7 +98,7 @@ export default function ContentPage() {
           <p className="muted">TOP GOAL — signed in as {me.displayName}</p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/students')}>My students</button>
+
         </div>
       </div>
 
@@ -168,6 +171,7 @@ export default function ContentPage() {
         )}
       </div>
     </main>
+    </>
   );
 }
 

@@ -189,7 +189,9 @@ export interface UnitDetail extends Omit<UnitSummary, '_count'> {
 /** Where a signed-in user belongs, by role. */
 export function homeFor(user: Me): string {
   if (user.mustChangePassword) return '/change-password';
-  return user.role === 'STUDENT' ? '/home' : '/students';
+  // A teacher lands on her dashboard; the student list is one of the places
+  // she goes from it, not the first thing she is shown.
+  return user.role === 'STUDENT' ? '/home' : '/dashboard';
 }
 
 // --- Questions (Phase 4 engine, edited here in Phase 5) --------------------

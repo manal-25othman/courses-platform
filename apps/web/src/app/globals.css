@@ -1232,15 +1232,185 @@ button.memory-card.done::after { content: none; }
 .msg .when { font-size: .6875rem; opacity: .7; }
 
 /* ==========================================================================
-   TEACHER — same DNA, calmer voice. No gamification here.
+   TEACHER — the same product, with the volume down
+   The student side is built to pull an eleven-year-old back tomorrow. This
+   side is a working screen a teacher opens between lessons to decide who to
+   help, so the same tokens are spent differently: pink drops back to the
+   wordmark alone, mint still means finished, and amber — never red — carries
+   "worth a look", because what is being described is a child who is behind
+   rather than a fault to flag.
    ========================================================================== */
-.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--s3); }
-.stat {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
-  padding: var(--s4); border-top: 3px solid var(--kind, var(--brand));
+.teacher-bar .topbar-inner { gap: var(--s3); }
+.teacher-bar .brandmark { flex: none; }
+.teacher-bar .brandmark .name { white-space: nowrap; }
+.teacher-bar .ghost { flex: none; white-space: nowrap; }
+.who-name { white-space: nowrap; }
+/* The name is a courtesy, and the nav is not: where the bar runs out of room
+   the name goes first and every destination keeps its place. */
+@media (max-width: 78rem) { .who-name { display: none; } }
+.bar-rule { width: 1px; height: 1.5rem; background: var(--line); flex: none; display: none; }
+@media (min-width: 62rem) { .bar-rule { display: block; } }
+
+.who { display: none; align-items: center; gap: var(--s2); min-width: 0; }
+.who-name {
+  font-size: var(--fs-small); font-weight: 600; color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis;
 }
-.stat b { display: block; font-family: var(--font-display); font-size: 1.875rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
-.stat span { font-size: .8125rem; color: var(--ink-3); }
+@media (min-width: 48rem) { .who { display: flex; } }
+
+/* The nav: a header row on a desk, its own scrollable strip on a phone.
+   Squeezed beside the wordmark it showed one destination and hid the rest
+   with nothing to say they were there. */
+.teachernav {
+  display: flex; gap: var(--s1); overflow-x: auto; scrollbar-width: none;
+  position: relative; flex: none;
+}
+.teachernav::-webkit-scrollbar { display: none; }
+@media (max-width: 61.99rem) {
+  .teacher-bar .topbar-inner { flex-wrap: wrap; row-gap: var(--s2); padding-bottom: var(--s2); }
+  .teachernav { order: 10; width: 100%; margin-inline: calc(-1 * var(--s1)); padding-inline: var(--s1); }
+  /* A fade at the edge says the strip carries on. */
+  .teacher-bar { position: relative; }
+  .teacher-bar::after {
+    content: ''; position: absolute; right: 0; bottom: var(--s2); width: 2rem; height: 2.25rem;
+    background: linear-gradient(to right, transparent, var(--surface)); pointer-events: none;
+  }
+}
+.teachernav a {
+  display: inline-flex; align-items: center; gap: var(--s2); flex: none;
+  padding: var(--s2) var(--s3); border-radius: var(--r-chip);
+  font-size: var(--fs-body); font-weight: 600; color: var(--ink-2);
+  text-decoration: none; white-space: nowrap;
+  transition: background var(--t-state) var(--ease), color var(--t-state) var(--ease);
+}
+.teachernav a:hover { background: var(--ground-2); color: var(--ink); }
+.teachernav a[aria-current='page'] { background: var(--brand-soft); color: var(--brand-ink); }
+
+.teacher-page { max-width: 78rem; }
+.page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--s4); flex-wrap: wrap; margin-bottom: var(--s5);
+}
+.page-head h1 { font-size: clamp(1.4rem, 3.5vw, 1.9rem); }
+.page-lead { margin: var(--s2) 0 0; color: var(--ink-3); font-size: var(--fs-body); }
+
+/* --- the dashboard's shape ---------------------------------------------
+   Attention first and widest, because an average hides the one child who is
+   stuck and she is the reason this screen exists. The figures sit beside it
+   as a quiet band rather than a row of tiles across the top. */
+.dash { display: grid; gap: var(--s5); }
+@media (min-width: 64rem) {
+  .dash {
+    grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+    align-items: start;
+  }
+  /* Attention first, then the roster, both in the reading column; the
+     figures sit in their own column and are read second. */
+  .dash > .panel:nth-of-type(1) { grid-column: 1; grid-row: 1; }
+  .dash > .stack { grid-column: 2; grid-row: 1 / span 2; }
+  .dash > .panel:nth-of-type(2) { grid-column: 1; grid-row: 2; }
+  .dash-wide { grid-column: 1 / -1; }
+}
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); overflow: hidden;
+}
+.panel-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
+  padding: var(--s4) var(--s5); border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.panel-title { white-space: nowrap; }
+.panel-title {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-lead); font-weight: 700; letter-spacing: -.005em; margin: 0;
+}
+.panel-note { font-size: var(--fs-caption); color: var(--ink-3); font-weight: 500; }
+.panel-body { padding: var(--s4) var(--s5); }
+.panel-foot {
+  padding: var(--s3) var(--s5); border-top: 1px solid var(--line); background: var(--ground);
+}
+
+/* A student worth a look, and the reason why. */
+.attention { list-style: none; margin: 0; padding: 0; }
+.att {
+  display: flex; align-items: center; gap: var(--s4); width: 100%; text-align: left;
+  padding: var(--s4) var(--s5); border: 0; border-top: 1px solid var(--line);
+  background: var(--surface); border-radius: 0; min-height: 0;
+  transition: background var(--t-state) var(--ease);
+}
+.attention li:first-child .att { border-top: 0; }
+.att:hover { background: var(--ground); }
+.att-who { flex: 1; min-width: 0; display: grid; gap: 2px; }
+@media (max-width: 34rem) {
+  .att { flex-wrap: wrap; gap: var(--s2); padding: var(--s4); }
+  .att-who { flex: 1 1 100%; order: 1; }
+  .att .flag { order: 2; }
+  .att > .ico { order: 3; margin-left: auto; }
+}
+.att-name { font-size: var(--fs-base); font-weight: 700; color: var(--ink); }
+.att-why { font-size: var(--fs-small); color: var(--ink-3); font-weight: 500; }
+/* The reason, as a chip. Amber, never red: this is a child who needs help. */
+.flag {
+  display: inline-flex; align-items: center; gap: var(--s1); flex: none;
+  font-size: var(--fs-caption); font-weight: 700;
+  padding: .2rem .6rem; border-radius: var(--r-chip);
+  background: var(--warn-soft); color: var(--warn-ink);
+}
+.flag[data-tone='wait'] { background: var(--brand-soft); color: var(--brand-ink); }
+.flag[data-tone='quiet'] { background: var(--ground-2); color: var(--ink-3); }
+
+/* The class, as figures — deliberately quiet and deliberately few. */
+.figure { display: grid; gap: var(--s1); }
+.figure b {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 2.25rem; font-weight: 700; line-height: 1; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.figure span { font-size: var(--fs-small); color: var(--ink-3); font-weight: 500; }
+.figure-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
+
+/* Per-unit class progress. Grammar Review is absent because the API says it
+   does not count towards the course. */
+.unit-line { display: grid; gap: var(--s2); padding: var(--s3) 0; }
+.unit-line + .unit-line { border-top: 1px solid var(--line); }
+.unit-line .top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); }
+.unit-name { font-size: var(--fs-body); font-weight: 600; color: var(--ink); }
+.unit-pct { font-size: var(--fs-body); font-weight: 700; font-variant-numeric: tabular-nums; }
+.unit-split { font-size: var(--fs-caption); color: var(--ink-3); font-weight: 500; }
+
+/* The roster. A table on a desk; cards on a phone, because squeezing five
+   columns into 390px is how dashboards become unreadable. */
+.roster-card { display: none; }
+@media (max-width: 47.99rem) {
+  .roster-table { display: none; }
+  .roster-card { display: grid; gap: var(--s3); }
+}
+.rc {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: var(--s2); width: 100%; text-align: left;
+  padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface);
+}
+.rc-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
+.rc-name { font-size: var(--fs-base); font-weight: 700; }
+.rc-meta { display: flex; gap: var(--s3); flex-wrap: wrap; font-size: var(--fs-caption); color: var(--ink-3); }
+
+/* Status carries a mark as well as a colour, so state is never colour alone. */
+.state { display: inline-flex; align-items: center; gap: var(--s1); font-weight: 600; font-size: var(--fs-small); }
+.state[data-tone='done'] { color: var(--ok-ink); }
+.state[data-tone='going'] { color: var(--brand-ink); }
+.state[data-tone='idle'] { color: var(--ink-3); }
+
+/* An empty dashboard is a beginning, not a fault. */
+.blank {
+  display: grid; gap: var(--s3); justify-items: center; text-align: center;
+  padding: var(--s7) var(--s5); color: var(--ink-3);
+}
+.blank .mark { width: 3rem; height: 3rem; background: var(--brand-soft); color: var(--brand); }
+.blank strong { font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-lead); color: var(--ink); }
+.blank p { margin: 0; max-width: 40ch; font-size: var(--fs-body); }
 
 table { width: 100%; border-collapse: collapse; font-size: .875rem; }
 th { text-align: left; font-size: .8125rem; font-weight: 600; color: var(--ink-3);
