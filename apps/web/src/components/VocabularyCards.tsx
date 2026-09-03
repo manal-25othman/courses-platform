@@ -43,6 +43,15 @@ export function VocabularyCards({
    */
   const [speech, setSpeech] = useState<'ok' | 'no-voice' | 'unsupported'>('ok');
   const [problem, setProblem] = useState<string | null>(null);
+  /**
+   * Recordings that turned out not to play, this session.
+   *
+   * A word with a recording used to be counted as playable whatever the file
+   * actually did, so a school with broken recordings was told every word was
+   * covered. Once a recording has failed here, the word is treated as having
+   * no sound of its own — which is what the student is experiencing.
+   */
+  const [brokenAudio, setBrokenAudio] = useState<Set<string>>(new Set());
   const [checking, setChecking] = useState<VocabularyCheck | null>(null);
   const [verdict, setVerdict] = useState<CheckAnswerResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -121,7 +130,35 @@ export function VocabularyCards({
 
     setAudioState(null);
 
-    if (result.spoke || recorded) return;
+    // Her teacher's recording would not play. Whatever happened next, she is
+    // told — a word that silently does nothing is the dead end this fixes.
+    if (result.recordingFailed) {
+      setBrokenAudio((was) => new Set(was).add(word.id));
+    }
+
+    if (result.spoke) {
+      if (result.recordingFailed) {
+        setProblem(
+          `Your teacher’s recording of “${word.wordEn}” would not play, so this device read it out instead.`,
+        );
+      }
+      return;
+    }
+    if (recorded) return;
+
+    if (result.recordingFailed) {
+      // The recording failed and nothing else on this device can speak. Said
+      // in full, with what she can do about it, because she cannot finish
+      // this word until one of the two is fixed.
+      setProblem(
+        result.reason === 'no-english'
+          ? `Your teacher’s recording of “${word.wordEn}” would not play, and this device has no English voice. Try another browser or device, or ask your teacher to record it again.`
+          : `Your teacher’s recording of “${word.wordEn}” would not play, and this device cannot read words aloud. Try Chrome, Edge or Safari, or ask your teacher to record it again.`,
+      );
+      if (result.reason === 'no-english') setSpeech('no-voice');
+      if (result.reason === 'no-source') setSpeech('unsupported');
+      return;
+    }
 
     if (result.reason === 'no-english') {
       setSpeech('no-voice');
@@ -228,8 +265,14 @@ export function VocabularyCards({
   }
 
   const learned = words.filter((w) => w.learned).length;
-  /** Words she cannot hear here: no browser voice and no recording. */
-  const silentWords = words.filter((w) => !w.audioPlayed && !w.teacherAudioUrl);
+  /**
+   * Words she cannot hear here: no browser voice, and no recording that
+   * works. A recording that has already failed counts as none, because from
+   * where she is sitting it is none.
+   */
+  const silentWords = words.filter(
+    (w) => !w.audioPlayed && (!w.teacherAudioUrl || brokenAudio.has(w.id)),
+  );
 
   // The deck shows one word; the cursor is clamped in case the list shrinks
   // under it (a teacher can unpublish a word while she is on this screen).
@@ -249,6 +292,12 @@ export function VocabularyCards({
         : 'Answer the check to finish this word.';
 
   function go(to: number) {
+    // Leaving a word stops whatever it was about to say. Without this, a
+    // recording still loading when she moved on would start a moment later
+    // and mark the word she had left as heard — the browser's own voice was
+    // already cancelled here, but an <audio> element was not.
+    stopPronouncing();
+    setAudioState(null);
     setChecking(null);
     setVerdict(null);
     setProblem(null);

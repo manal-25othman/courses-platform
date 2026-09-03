@@ -23,7 +23,7 @@
 export type SpokenBy = 'teacher_audio' | 'browser_tts';
 
 export type PronounceResult =
-  | { spoke: true; by: SpokenBy }
+  | { spoke: true; by: SpokenBy; recordingFailed?: boolean }
   | {
       spoke: false;
       /**
@@ -33,6 +33,17 @@ export type PronounceResult =
        * `superseded`  — she moved to another word before this one started.
        */
       reason: 'no-source' | 'no-english' | 'failed' | 'superseded';
+      /**
+       * Her teacher's recording was tried and would not play.
+       *
+       * Reported separately from the reason because the two are different
+       * facts and need different words. Without it the caller could only see
+       * "nothing spoke", which on a device with no voice is indistinguishable
+       * from "this device never could speak" — so a broken recording said
+       * nothing at all to the student, and she was left tapping a button that
+       * would never work with no idea why.
+       */
+      recordingFailed?: boolean;
     };
 
 export interface PronounceRequest {
@@ -318,14 +329,21 @@ export async function pronounce(req: PronounceRequest): Promise<PronounceResult>
     playing = null;
   }
 
+  let recordingFailed = false;
+
   if (req.recordingUrl) {
     const played = await playRecording(req.recordingUrl, mine, req.onStart);
     if (played.spoke || played.reason === 'superseded') return played;
-    // The recording did not work. Fall through to the browser's voice.
+    // The recording did not work. Fall through to the browser's voice, and
+    // remember that it failed so the screen can say so either way — whether
+    // the voice rescues her or there is no voice to try.
+    recordingFailed = true;
   }
 
   if (mine !== token) return { spoke: false, reason: 'superseded' };
-  return speakIt(req.text, mine, req.onStart);
+
+  const spoken = await speakIt(req.text, mine, req.onStart);
+  return recordingFailed ? { ...spoken, recordingFailed: true } : spoken;
 }
 
 /**

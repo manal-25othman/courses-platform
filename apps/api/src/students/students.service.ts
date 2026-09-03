@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -141,6 +142,20 @@ export class StudentsService {
     );
   }
 
+  /**
+   * Adds a student, and settles who will teach her.
+   *
+   * A teacher adding a student is adding her to her own list, so the teacher
+   * is the answer and is never asked. An administrator is adding somebody
+   * else's student, so she says whose — including "nobody yet", which is a
+   * real answer she chooses rather than one she falls into.
+   *
+   * This used to hand an administrator's student to `firstTeacherOf` — the
+   * first row the database happened to return. In a school with one teacher
+   * that looked like sense; in a school with two it silently piled every
+   * student onto whichever teacher was created first, and no screen could
+   * move a single one of them afterwards.
+   */
   async create(actor: CurrentUser, dto: CreateStudentDto): Promise<StudentView> {
     const schoolId = this.schoolOf(actor);
     const passwordHash = await this.passwords.hash(dto.password);
@@ -149,7 +164,9 @@ export class StudentsService {
       await this.assertUsernameFree(tx, schoolId, dto.username);
 
       const teacherId =
-        actor.role === UserRole.TEACHER ? actor.userId : await this.firstTeacherOf(tx, schoolId);
+        actor.role === UserRole.TEACHER
+          ? actor.userId
+          : await this.chosenTeacher(tx, schoolId, dto.assignedTeacherId);
 
       return tx.user.create({
         data: {
@@ -373,11 +390,40 @@ export class StudentsService {
     }
   }
 
-  private async firstTeacherOf(tx: TenantClient, schoolId: string): Promise<string | null> {
+  /**
+   * The teacher an administrator named, checked before it is written.
+   *
+   * Undefined means she did not answer, which is refused: an unanswered
+   * question is how the old behaviour crept in. `null` means she answered
+   * "nobody yet" and is allowed.
+   *
+   * The teacher is looked up inside the administrator's own school, so an id
+   * belonging to another school names nothing here — and is reported as
+   * absent rather than as forbidden, which would confirm that she exists.
+   */
+  private async chosenTeacher(
+    tx: TenantClient,
+    schoolId: string,
+    teacherId: string | null | undefined,
+  ): Promise<string | null> {
+    if (teacherId === undefined) {
+      throw new BadRequestException('Choose which teacher she belongs to, or say nobody yet.');
+    }
+    if (teacherId === null) return null;
+
     const teacher = await tx.user.findFirst({
-      where: { schoolId, role: UserRole.TEACHER, deletedAt: null },
+      where: {
+        id: teacherId,
+        schoolId,
+        role: UserRole.TEACHER,
+        deletedAt: null,
+        status: UserStatus.ACTIVE,
+      },
+      select: { id: true },
     });
 
-    return teacher?.id ?? null;
+    if (!teacher) throw new NotFoundException('Teacher not found.');
+
+    return teacher.id;
   }
 }

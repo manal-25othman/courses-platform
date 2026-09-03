@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react';
-import { api, ApiError, homeFor, Me, Student } from '@/lib/api';
+import { api, ApiError, AssignableStudent, homeFor, Me, Student, Teacher } from '@/lib/api';
 import { TeacherHeader } from '@/components/TeacherShell';
 import { Icon } from '@/components/Icon';
 
@@ -36,6 +36,16 @@ export default function StudentsPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  /**
+   * Who teaches whom, and who there is to choose from.
+   *
+   * Loaded only for a school administrator: a teacher is adding students to
+   * her own list and has nobody to choose between, so she is asked nothing
+   * and these stay empty.
+   */
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [assigned, setAssigned] = useState<Map<string, string | null>>(new Map());
+  const isAdmin = me?.role === 'ADMIN';
 
   const [find, setFind] = useState('');
   const [sift, setSift] = useState<Sift>('all');
@@ -46,6 +56,17 @@ export default function StudentsPage() {
       // Everyone in one request, including those she has removed: the filters
       // below are then instant, and toggling one costs nothing.
       setStudents(await api.get<Student[]>('/students?includeDeleted=true'));
+
+      // An administrator also needs to know who teaches whom, and who else
+      // there is. Both are her own school's, from her own school's routes.
+      if (isAdmin) {
+        const [staff, roster] = await Promise.all([
+          api.get<Teacher[]>('/school/teachers'),
+          api.get<AssignableStudent[]>('/school/students'),
+        ]);
+        setTeachers(staff.filter((teacher) => !teacher.isDeleted && teacher.status === 'ACTIVE'));
+        setAssigned(new Map(roster.map((row) => [row.id, row.assignedTeacherId])));
+      }
       setError(null);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
@@ -60,7 +81,7 @@ export default function StudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, isAdmin]);
 
   useEffect(() => {
     api
@@ -251,6 +272,8 @@ export default function StudentsPage() {
 
         {adding && (
           <AddStudentForm
+            teachers={teachers}
+            chooseTeacher={isAdmin}
             onAdded={(name) => {
               setAdding(false);
               setNotice(`${name} was added. Give her the password you chose.`);
@@ -373,6 +396,16 @@ export default function StudentsPage() {
                           `${student.fullName} is back on your list.`,
                         )
                       }
+                      teachers={isAdmin ? teachers : []}
+                      teacherId={assigned.get(student.id) ?? null}
+                      onMoved={(name) => {
+                        setNotice(
+                          name === 'nobody'
+                            ? `${student.fullName} now has no teacher.`
+                            : `${student.fullName} is now ${name}'s student.`,
+                        );
+                        void load();
+                      }}
                     />
                   ))}
                 </ul>
@@ -429,6 +462,9 @@ function StudentRow({
   onEnable,
   onRemove,
   onRestore,
+  teachers,
+  teacherId,
+  onMoved,
 }: {
   student: Student;
   open: boolean;
@@ -444,8 +480,13 @@ function StudentRow({
   onEnable: () => void;
   onRemove: () => void;
   onRestore: () => void;
+  /** Set only for a school administrator; a teacher sees none of this. */
+  teachers: Teacher[];
+  teacherId: string | null;
+  onMoved: (teacherName: string) => void;
 }) {
   const [confirming, setConfirming] = useState<'disable' | 'remove' | null>(null);
+  const [moving, setMoving] = useState(false);
   const live = canSignIn(student);
 
   return (
@@ -546,7 +587,24 @@ function StudentRow({
               onCancel={() => setConfirming(null)}
             />
           ) : (
-            <div className="pupil-does">
+            <>
+              {teachers.length > 0 && !student.isDeleted && (
+                <MoveStudent
+                  student={student}
+                  teachers={teachers}
+                  teacherId={teacherId}
+                  open={moving}
+                  onOpen={() => setMoving(true)}
+                  onClose={() => setMoving(false)}
+                  onMoved={(name) => {
+                    setMoving(false);
+                    onMoved(name);
+                  }}
+                  onError={onError}
+                />
+              )}
+
+              <div className="pupil-does">
               <button className="small" onClick={onProgress}>
                 See her progress
               </button>
@@ -575,9 +633,10 @@ function StudentRow({
                   <button className="small danger" onClick={() => setConfirming('remove')}>
                     Remove from my list
                   </button>
-                </>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -625,14 +684,22 @@ function Confirm({
 function AddStudentForm({
   onAdded,
   onError,
+  teachers,
+  chooseTeacher,
 }: {
   onAdded: (name: string) => void;
   onError: (message: string) => void;
+  /** Who she may be given to. Empty for a teacher, who is the answer herself. */
+  teachers: Teacher[];
+  /** True for a school administrator, who has to say whose student this is. */
+  chooseTeacher: boolean;
 }) {
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
+  // '' is "not answered yet", 'none' is the deliberate "nobody yet".
+  const [teacherId, setTeacherId] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -647,12 +714,16 @@ function AddStudentForm({
         username,
         password,
         ...(email.trim() ? { email: email.trim() } : {}),
+        // Sent only by an administrator. A teacher's own student is hers, and
+        // the API assigns her without being told.
+        ...(chooseTeacher ? { assignedTeacherId: teacherId === 'none' ? null : teacherId } : {}),
       });
       onAdded(fullName);
       setFullName('');
       setUsername('');
       setPassword('');
       setEmail('');
+      setTeacherId('');
     } catch (caught) {
       // A clash belongs beside the field that caused it, not at the top of
       // the page where she has to hunt for what went wrong.
@@ -736,11 +807,45 @@ function AddStudentForm({
           </div>
         </div>
 
+        {chooseTeacher && (
+          <div>
+            <label htmlFor="assignedTeacher">Her teacher</label>
+            <select
+              id="assignedTeacher"
+              value={teacherId}
+              onChange={(e) => setTeacherId(e.target.value)}
+              aria-describedby="assignedTeacherHelp"
+              required
+            >
+              <option value="" disabled>
+                Choose a teacher…
+              </option>
+              {teachers.map((teacher) => (
+                <option key={teacher.id} value={teacher.id}>
+                  {teacher.displayName}
+                </option>
+              ))}
+              <option value="none">No teacher yet</option>
+            </select>
+            <p className="muted" id="assignedTeacherHelp">
+              {teacherId === 'none'
+                ? 'She will appear on no teacher’s list until you give her one, and will have nobody to message.'
+                : 'The teacher whose list she joins. You can move her to another teacher later.'}
+            </p>
+          </div>
+        )}
+
         <div className="row">
           <button
             className="primary"
             type="submit"
-            disabled={busy || !fullName.trim() || !username.trim() || password.length < 8}
+            disabled={
+              busy ||
+              !fullName.trim() ||
+              !username.trim() ||
+              password.length < 8 ||
+              (chooseTeacher && teacherId === '')
+            }
           >
             {busy ? 'Adding…' : 'Add student'}
           </button>
@@ -853,5 +958,107 @@ function EditStudentForm({
         </button>
       </div>
     </form>
+  );
+}
+
+
+/**
+ * Moving one student to another teacher.
+ *
+ * The whole reason this exists: a school administrator could move a teacher's
+ * entire class, or hand out a student who had nobody, but could not move one
+ * named girl from one teacher to another — so a school with two teachers
+ * could not be arranged correctly from the screens at all.
+ *
+ * Only the school's own teachers are offered, and the API checks that again
+ * before it writes anything, so a name from another school cannot be reached
+ * from here or accepted if it were.
+ */
+function MoveStudent({
+  student,
+  teachers,
+  teacherId,
+  open,
+  onOpen,
+  onClose,
+  onMoved,
+  onError,
+}: {
+  student: Student;
+  teachers: Teacher[];
+  teacherId: string | null;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onMoved: (teacherName: string) => void;
+  onError: (message: string) => void;
+}) {
+  const [to, setTo] = useState(teacherId ?? '');
+  const [busy, setBusy] = useState(false);
+  const hers = teachers.find((teacher) => teacher.id === teacherId);
+
+  async function move(): Promise<void> {
+    const next = to === 'none' ? null : to;
+    const named = next === null ? 'nobody' : teachers.find((t) => t.id === next)?.displayName;
+    if (named === undefined) return;
+
+    setBusy(true);
+    try {
+      await api.post(`/school/students/${student.id}/assign`, { teacherId: next });
+      onMoved(named);
+    } catch (caught) {
+      onError(caught instanceof ApiError ? caught.message : 'She could not be moved.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="row" style={{ marginBottom: 'var(--s3)' }}>
+        <p className="muted" style={{ margin: 0 }}>
+          {hers ? `Taught by ${hers.displayName}.` : 'She has no teacher yet.'}
+        </p>
+        <button className="small" onClick={onOpen}>
+          {hers ? 'Change her teacher' : 'Give her a teacher'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="confirm" role="group" aria-label={`Change ${student.fullName}'s teacher`}>
+      <p className="confirm-title">Who teaches {student.fullName}?</p>
+      <p className="confirm-body">
+        Her work, marks and messages stay exactly as they are. Only who is responsible for her
+        changes.
+      </p>
+      <div className="row">
+        <label className="assign-pick">
+          <span className="sr-only">Her teacher</span>
+          <select value={to} disabled={busy} onChange={(event) => setTo(event.target.value)}>
+            <option value="" disabled>
+              Choose a teacher…
+            </option>
+            {teachers.map((teacher) => (
+              <option key={teacher.id} value={teacher.id}>
+                {teacher.displayName}
+              </option>
+            ))}
+            <option value="none">No teacher</option>
+          </select>
+        </label>
+        <button
+          className="small primary"
+          disabled={busy || to === '' || to === (teacherId ?? '')}
+          onClick={() => void move()}
+        >
+          {busy ? 'Moving…' : 'Save'}
+        </button>
+        <button className="small" disabled={busy} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }

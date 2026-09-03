@@ -213,3 +213,68 @@ describe('ContentService duplicate vocabulary', () => {
     ).resolves.toBeDefined();
   });
 });
+
+/**
+ * What a teacher is allowed to attach to a word.
+ *
+ * The E2E QA uploaded a text file labelled `audio/wav`. It was accepted, the
+ * vocabulary screen offered it as "your teacher's recording", and it silently
+ * refused to play — leaving a child unable to finish that word with nothing
+ * on screen to explain why. A file that does not begin with its own format's
+ * marker is certainly not that format, so it is refused at the door.
+ */
+describe('ContentService media signatures', () => {
+  /** Reaches the private check the upload path uses. */
+  const looks = (bytes: number[], mimeType: string): boolean =>
+    (
+      ContentService as unknown as {
+        looksLikeItsType(b: Uint8Array, m: string): boolean;
+      }
+    ).looksLikeItsType(new Uint8Array(bytes), mimeType);
+
+  const ascii = (text: string) => [...text].map((c) => c.charCodeAt(0));
+
+  it('accepts a real WAV', () => {
+    expect(looks([...ascii('RIFF'), 0, 0, 0, 0, ...ascii('WAVE')], 'audio/wav')).toBe(true);
+  });
+
+  /** The exact file that caused the dead end. */
+  it('refuses a text file calling itself a recording', () => {
+    expect(looks(ascii('this is not audio at all'), 'audio/wav')).toBe(false);
+  });
+
+  it.each([
+    ['audio/mpeg', ascii('ID3')],
+    ['audio/mpeg', [0xff, 0xfb, 0x90]],
+    ['audio/ogg', ascii('OggS')],
+    ['audio/webm', [0x1a, 0x45, 0xdf, 0xa3]],
+    ['audio/mp4', [0, 0, 0, 0x20, ...ascii('ftyp')]],
+    ['image/png', [0x89, 0x50, 0x4e, 0x47]],
+    ['image/jpeg', [0xff, 0xd8, 0xff]],
+    ['image/gif', ascii('GIF8')],
+  ])('accepts a real %s', (mimeType, bytes) => {
+    expect(looks(bytes as number[], mimeType as string)).toBe(true);
+  });
+
+  it.each([
+    ['audio/mpeg', ascii('not an mp3')],
+    ['audio/ogg', ascii('not an ogg')],
+    ['audio/webm', ascii('not a webm')],
+    ['image/png', ascii('not a png')],
+  ])('refuses something that is not %s', (mimeType, bytes) => {
+    expect(looks(bytes as number[], mimeType as string)).toBe(false);
+  });
+
+  /**
+   * The limit of the claim. A header can be right while the rest of the file
+   * is ruined, and this does not pretend otherwise — the student's screen
+   * handles a recording that fails to play.
+   */
+  it('does not claim a file with a right header will play', () => {
+    expect(looks([...ascii('RIFF'), 0, 0, 0, 0, ...ascii('WAVE')], 'audio/wav')).toBe(true);
+  });
+
+  it('leaves a type it does not know alone', () => {
+    expect(looks(ascii('anything'), 'audio/x-something-new')).toBe(true);
+  });
+});

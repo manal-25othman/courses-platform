@@ -636,6 +636,61 @@ export class ContentService {
    * a choice for the size of this pilot, not a permanent one — see
    * docs/CURRICULUM-FINDINGS.md.
    */
+  /**
+   * Whether a file's first bytes match the kind of file it says it is.
+   *
+   * A cheap, honest check and nothing more: every one of these formats begins
+   * with a fixed marker, so a file that lacks its own marker is certainly not
+   * that format and no student's browser will play it. It exists because a
+   * teacher could upload anything at all as `audio/wav`, the recording would
+   * be accepted, the vocabulary screen would offer it, and the file would
+   * silently refuse to play — leaving a child unable to finish the word.
+   *
+   * What it deliberately does NOT claim: that a file which passes will play.
+   * A truncated or corrupt recording with a correct header still gets in, and
+   * the student's screen handles that case on its own. Deciding more than
+   * this means decoding audio on the server, which is a great deal of
+   * machinery for a small gain — an unknown type is therefore allowed rather
+   * than guessed at.
+   */
+  private static looksLikeItsType(bytes: Uint8Array, mimeType: string): boolean {
+    const starts = (...signature: number[]) =>
+      signature.every((byte, index) => bytes[index] === byte);
+    const ascii = (text: string, at = 0) =>
+      [...text].every((character, index) => bytes[at + index] === character.charCodeAt(0));
+
+    switch (mimeType) {
+      case 'image/png':
+        return starts(0x89, 0x50, 0x4e, 0x47);
+      case 'image/jpeg':
+        return starts(0xff, 0xd8, 0xff);
+      case 'image/gif':
+        return ascii('GIF8');
+      case 'image/webp':
+        return ascii('RIFF') && ascii('WEBP', 8);
+      case 'audio/wav':
+      case 'audio/x-wav':
+      case 'audio/wave':
+        return ascii('RIFF') && ascii('WAVE', 8);
+      case 'audio/ogg':
+        return ascii('OggS');
+      case 'audio/webm':
+        return starts(0x1a, 0x45, 0xdf, 0xa3);
+      case 'audio/mpeg':
+      case 'audio/mp3':
+        // An ID3 tag, or a bare frame header.
+        return ascii('ID3') || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0);
+      case 'audio/mp4':
+      case 'audio/x-m4a':
+      case 'audio/aac':
+        return ascii('ftyp', 4);
+      default:
+        // A type this does not know is left alone rather than refused on a
+        // guess: the allow-list above has already decided it is acceptable.
+        return true;
+    }
+  }
+
   private async attachMedia(
     actor: CurrentUser,
     parent: { section: string } | { question: string } | { word: string },
@@ -677,6 +732,13 @@ export class ContentService {
 
     if (bytes.length > ContentService.MAX_IMAGE_BYTES) {
       throw new BadRequestException('That file is too large. The limit is 2 MB.');
+    }
+
+    if (!ContentService.looksLikeItsType(bytes, dto.mimeType)) {
+      throw new BadRequestException(
+        'That file does not look like the kind of file it claims to be, so a student’s ' +
+          'browser would not be able to play or show it. Please upload it again.',
+      );
     }
 
     const asset = await this.prisma.forSchool(schoolId, async (tx) => {

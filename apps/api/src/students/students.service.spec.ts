@@ -346,3 +346,148 @@ describe('StudentsService account actions', () => {
     expect(written.data?.username).toBe('sara');
   });
 });
+
+/**
+ * Who a new student belongs to.
+ *
+ * The defect this pins down: an administrator's student used to be handed to
+ * `firstTeacherOf` — whichever teacher row the database returned first. In a
+ * school with one teacher that looked like sense. In a school with two it
+ * silently piled every student onto the same teacher, and nothing in the
+ * screens could move one of them afterwards.
+ */
+describe('StudentsService assignment', () => {
+  /** A fake that records the profile written, and can hide a teacher. */
+  function serviceWriting(options: { teacherFound?: boolean } = {}) {
+    const written: Record<string, unknown>[] = [];
+    const asked: Prisma.UserWhereInput[] = [];
+
+    const tx = {
+      user: {
+        findFirst: async (args: { where: Prisma.UserWhereInput }) => {
+          asked.push(args.where);
+          // The username check comes first and must find nothing.
+          if (args.where.role !== UserRole.TEACHER) return null;
+          return options.teacherFound === false ? null : { id: args.where.id };
+        },
+        create: async (args: { data: Record<string, unknown> }) => {
+          written.push(args.data);
+          return {
+            id: 'new-student',
+            username: 'sara',
+            email: null,
+            status: UserStatus.ACTIVE,
+            deletedAt: null,
+            mustChangePassword: true,
+            lastLoginAt: null,
+            createdAt: new Date(),
+            studentProfile: { fullName: 'Sara' },
+          };
+        },
+        findMany: async () => [],
+        update: async () => ({}),
+      },
+    };
+
+    const prisma = {
+      forSchool: async <T>(_s: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+      user: tx.user,
+    } as unknown as PrismaService;
+
+    const service = new StudentsService(
+      prisma,
+      { hash: async (p: string) => `hashed:${p}` } as unknown as PasswordService,
+      { revokeAllForUser: vi.fn() } as unknown as TokenService,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    return { service, written, asked };
+  }
+
+  const details = { fullName: 'Sara', username: 'sara', password: 'a-password' };
+
+  /** The whole point: no teacher is ever chosen on the student's behalf. */
+  it('refuses an administrator who does not say whose student this is', async () => {
+    const { service, written } = serviceWriting();
+
+    await expect(service.create(admin, details)).rejects.toThrow(
+      /Choose which teacher she belongs to/,
+    );
+    expect(written, 'a student was created without an answer').toEqual([]);
+  });
+
+  it('gives the student to the teacher the administrator named', async () => {
+    const { service, written } = serviceWriting();
+
+    await service.create(admin, { ...details, assignedTeacherId: TEACHER_1 });
+
+    expect(written[0].studentProfile).toEqual({
+      create: { fullName: 'Sara', assignedTeacherId: TEACHER_1 },
+    });
+  });
+
+  /** Nobody is a real answer, chosen rather than fallen into. */
+  it('accepts a deliberate "no teacher yet"', async () => {
+    const { service, written } = serviceWriting();
+
+    await service.create(admin, { ...details, assignedTeacherId: null });
+
+    expect(written[0].studentProfile).toEqual({
+      create: { fullName: 'Sara', assignedTeacherId: null },
+    });
+  });
+
+  /**
+   * The teacher is looked up inside the administrator's own school, so a
+   * teacher elsewhere names nothing — and is reported as absent rather than
+   * as forbidden, which would confirm that she exists.
+   */
+  it('refuses a teacher who is not in this school, without saying she exists', async () => {
+    const { service, written } = serviceWriting({ teacherFound: false });
+
+    await expect(
+      service.create(admin, { ...details, assignedTeacherId: 'teacher-elsewhere' }),
+    ).rejects.toThrow(NotFoundException);
+    await expect(
+      service.create(admin, { ...details, assignedTeacherId: 'teacher-elsewhere' }),
+    ).rejects.toThrow('Teacher not found.');
+    expect(written, 'a cross-school assignment was written').toEqual([]);
+  });
+
+  it('looks the teacher up inside the school, never by id alone', async () => {
+    const { service, asked } = serviceWriting();
+
+    await service.create(admin, { ...details, assignedTeacherId: TEACHER_1 });
+
+    const lookup = asked.find((where) => where.role === UserRole.TEACHER);
+    expect(lookup).toMatchObject({
+      id: TEACHER_1,
+      schoolId: SCHOOL_A,
+      role: UserRole.TEACHER,
+      deletedAt: null,
+      status: UserStatus.ACTIVE,
+    });
+  });
+
+  /** A teacher adding her own student is never asked to pick herself. */
+  it('gives a teacher’s own student to that teacher', async () => {
+    const { service, written } = serviceWriting();
+
+    await service.create(teacher, details);
+
+    expect(written[0].studentProfile).toEqual({
+      create: { fullName: 'Sara', assignedTeacherId: TEACHER_1 },
+    });
+  });
+
+  /** And she cannot hand her student to somebody else by sending an id. */
+  it('ignores a teacher id sent by a teacher', async () => {
+    const { service, written } = serviceWriting();
+
+    await service.create(teacher, { ...details, assignedTeacherId: 'someone-else' });
+
+    expect(written[0].studentProfile).toEqual({
+      create: { fullName: 'Sara', assignedTeacherId: TEACHER_1 },
+    });
+  });
+});
