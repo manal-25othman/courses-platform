@@ -1537,6 +1537,126 @@ th button.sortcol .dir { font-size: .7rem; color: var(--brand); }
   padding: var(--s3) var(--s4); border-top: 1px solid var(--line); background: var(--ground);
 }
 
+/* ==========================================================================
+   STUDENT DETAIL
+   Opened from a row on Class Progress, so it speaks the same language: the
+   same state words, the same amber for "worth a look", the same mint for
+   finished. Everything is collapsed until she asks for it — the old page put
+   every unit, every word and every attempt on screen at once.
+   ========================================================================== */
+
+/* Text for a screen reader only, where a mark carries the meaning visually. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.crumb {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  font-size: var(--fs-small); font-weight: 600; color: var(--ink-2);
+  background: none; border: 0; padding: var(--s2); margin-inline-start: calc(-1 * var(--s2));
+  border-radius: var(--r-sm); min-height: 2.25rem;
+}
+.crumb:hover { background: var(--ground-2); color: var(--ink); }
+
+/* Who she is, and where she is. Never an internal identifier. */
+.pupil { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
+.pupil .avatar { width: 3rem; height: 3rem; font-size: var(--fs-lead); }
+.pupil-facts { display: flex; gap: var(--s5); flex-wrap: wrap; }
+.fact { display: grid; gap: 2px; }
+.fact b {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-title); font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.fact span { font-size: var(--fs-caption); color: var(--ink-3); font-weight: 500; }
+
+/* A unit, shut. The four steps read across, the same words as the class list. */
+.unit-row { border-top: 1px solid var(--line); }
+.unit-row:first-child { border-top: 0; }
+.unit-open {
+  display: flex; align-items: center; gap: var(--s4); width: 100%; text-align: left;
+  padding: var(--s4) var(--s5); border: 0; background: var(--surface); border-radius: 0;
+  min-height: 0; transition: background var(--t-state) var(--ease);
+}
+.unit-open:hover { background: var(--ground); }
+.unit-open .title {
+  flex: 0 0 10rem; font-size: var(--fs-base); font-weight: 700; color: var(--ink); min-width: 0;
+}
+.unit-open .meter { flex: 0 1 8rem; height: .35rem; }
+.unit-open .pct {
+  flex: none; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3rem; text-align: right;
+}
+.unit-open .ico { flex: none; transform: rotate(180deg); transition: transform var(--t-state) var(--ease); }
+.unit-open[aria-expanded='true'] .ico { transform: rotate(270deg); }
+
+/* The four steps of a unit, side by side. */
+.steps { display: flex; gap: var(--s2); flex: 1; flex-wrap: wrap; min-width: 0; }
+.step {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  font-size: var(--fs-caption); font-weight: 600;
+  padding: .2rem .55rem; border-radius: var(--r-sm);
+  background: var(--ground-2); color: var(--ink-3); border: 1px solid transparent;
+}
+.step[data-state='done']    { background: var(--ok-soft);   color: var(--ok-ink);   border-color: var(--ok); }
+.step[data-state='stuck']   { background: var(--warn-soft); color: var(--warn-ink); border-color: var(--warn); }
+.step[data-state='locked']  { background: var(--ground-2);  color: var(--ink-3);    border-style: dashed; border-color: var(--line-2); }
+.step[data-state='working'] { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand); }
+.step .ico { width: .75rem; height: .75rem; }
+
+/* A unit, opened. */
+.unit-detail { padding: 0 var(--s5) var(--s5); display: grid; gap: var(--s5); background: var(--ground); }
+.unit-detail > section { display: grid; gap: var(--s3); }
+.unit-detail .detail-head {
+  margin: 0; font-size: var(--fs-small); font-weight: 700; color: var(--ink);
+  padding-top: var(--s4); font-family: var(--font-ui); letter-spacing: 0;
+}
+.note-line { font-size: var(--fs-body); color: var(--ink-2); margin: 0; }
+
+/* The word list: compact, and only inside an opened unit. */
+.words-grid { display: grid; gap: var(--s2); grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); }
+.word-row {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3); border-radius: var(--r-sm);
+  background: var(--surface); border: 1px solid var(--line);
+}
+.word-row .en { flex: 1; min-width: 0; font-size: var(--fs-small); font-weight: 600; }
+.word-row[data-learned='true'] { border-color: var(--ok); background: var(--ok-soft); }
+/* Read, heard, checked — three marks, each labelled for a screen reader. */
+.wdots { display: flex; gap: 3px; flex: none; }
+.wdot {
+  width: 1.05rem; height: 1.05rem; border-radius: 4px; display: grid; place-items: center;
+  background: var(--ground-2); color: var(--ink-3);
+  font-size: .6rem; font-weight: 800;
+}
+.wdot[data-on='true'] { background: var(--ok-ink); color: var(--on-brand); }
+
+/* Papers she has finished. */
+.papers { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.paper {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  padding: var(--s3) var(--s4); border-radius: var(--r-sm);
+  background: var(--surface); border: 1px solid var(--line);
+}
+.paper .what { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.paper .score {
+  font-weight: 700; font-variant-numeric: tabular-nums; flex: none;
+  font-size: var(--fs-base);
+}
+
+@media (max-width: 47.99rem) {
+  /* The action was taking half the row and squeezing the description into a
+     column three words wide. Stacked, each part gets the width it needs. */
+  .paper { flex-direction: column; align-items: stretch; gap: var(--s2); }
+  .paper .score { font-size: var(--fs-lead); }
+  .paper button { width: 100%; }
+  .unit-open { flex-wrap: wrap; row-gap: var(--s2); }
+  .unit-open .title { flex: 1 1 auto; }
+  .unit-open .meter { flex: 1 1 100%; order: 5; }
+  .steps { flex: 1 1 100%; order: 6; }
+  .pupil-facts { gap: var(--s4); }
+}
+
 /* An empty dashboard is a beginning, not a fault. */
 .blank {
   display: grid; gap: var(--s3); justify-items: center; text-align: center;

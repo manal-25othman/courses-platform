@@ -30,6 +30,28 @@ export class ProgressService {
     return actor.schoolId;
   }
 
+  /**
+   * A student's course figure, from the units that count towards it.
+   *
+   * Welcome and Grammar Review are preliminary and revision material and must
+   * not affect course completion (client, 2026-08-31). This is the only place
+   * that rule is applied, so the class view and a student's own page can never
+   * disagree about how far she has got.
+   */
+  private summarise(perUnit: { countsTowardCompletion: boolean; overallPercent: number; isComplete: boolean }[]) {
+    const counted = perUnit.filter((u) => u.countsTowardCompletion);
+    return {
+      // No counting units means no course figure to report, which is 0 rather
+      // than a division by zero.
+      overallPercent:
+        counted.length === 0
+          ? 0
+          : Math.round(counted.reduce((sum, u) => sum + u.overallPercent, 0) / counted.length),
+      unitsComplete: counted.filter((u) => u.isComplete).length,
+      unitsCounted: counted.length,
+    };
+  }
+
   /** Students this teacher is responsible for. Admins see the school's. */
   private scopeFor(actor: CurrentUser): Prisma.UserWhereInput {
     const scope: Prisma.UserWhereInput = {
@@ -96,24 +118,11 @@ export class ProgressService {
         return results;
       });
 
-      // Only the units that count towards the course. A student with no such
-      // units has no course figure to report, which is 0 rather than a
-      // division by zero.
-      const counted = perUnit.filter((u) => u.countsTowardCompletion);
-
-      const overall =
-        counted.length === 0
-          ? 0
-          : Math.round(counted.reduce((sum, u) => sum + u.overallPercent, 0) / counted.length);
-
       rows.push({
         studentId: student.id,
         fullName: student.studentProfile?.fullName ?? student.username,
         username: student.username,
-        overallPercent: overall,
-        /** How many of the counting units she has actually finished. */
-        unitsComplete: counted.filter((u) => u.isComplete).length,
-        unitsCounted: counted.length,
+        ...this.summarise(perUnit),
         lastActivityAt: await this.lastActivity(schoolId, student.id),
         unreadFromStudent: await this.unreadForTeacher(schoolId, actor.userId, student.id),
         units: perUnit,
@@ -213,6 +222,9 @@ export class ProgressService {
       username: student.username,
       lastLoginAt: student.lastLoginAt,
       lastActivityAt: await this.lastActivity(schoolId, studentId),
+      // The same summary the class list shows, from the same helper, so her
+      // own page cannot disagree with the row she was opened from.
+      ...this.summarise(perUnit.map((u) => u.progress)),
       units: perUnit,
     };
   }

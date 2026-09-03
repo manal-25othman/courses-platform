@@ -532,6 +532,10 @@ export interface StudentWordProgress {
 }
 
 export interface StudentDetail {
+  /** The same course figure the class list shows, from the same server rule. */
+  overallPercent: number;
+  unitsComplete: number;
+  unitsCounted: number;
   studentId: string;
   fullName: string;
   username: string;

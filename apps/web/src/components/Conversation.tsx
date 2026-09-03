@@ -16,12 +16,18 @@ export function Conversation({
   readPath,
   placeholder,
   emptyText,
+  bare = false,
 }: {
   loadPath: string;
   sendPath: string;
   readPath: string;
   placeholder: string;
   emptyText: string;
+  /**
+   * True where the caller already frames this in a titled panel, so the
+   * component's own heading and card would be a second one around it.
+   */
+  bare?: boolean;
 }) {
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [draft, setDraft] = useState('');
@@ -49,7 +55,13 @@ export function Conversation({
   }, [load]);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'nearest' });
+    // Scroll the thread, not the page. `scrollIntoView` walks up to the
+    // nearest scrollable ancestor, and where the thread is short enough not to
+    // scroll on its own that ancestor is the document — which landed a teacher
+    // part-way down the student's page on every load.
+    const end = bottom.current;
+    const thread = end?.parentElement;
+    if (thread) thread.scrollTop = thread.scrollHeight;
   }, [messages]);
 
   async function send() {
@@ -70,8 +82,8 @@ export function Conversation({
   }
 
   return (
-    <div className="card stack" data-testid="conversation">
-      <h2 style={{ margin: 0 }}>Messages</h2>
+    <div className={bare ? 'stack' : 'card stack'} data-testid="conversation">
+      {!bare && <h2 style={{ margin: 0 }}>Messages</h2>}
 
       {error && (
         <p className="alert error" role="alert">
