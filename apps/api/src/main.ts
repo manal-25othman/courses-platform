@@ -1,13 +1,24 @@
 import 'reflect-metadata';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { AppModule } from './app.module';
 import { RlsDenialFilter } from './common/rls-denial.filter';
+import { trustedProxyHops } from './common/trusted-proxy';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Who the caller is, when somebody else is holding the socket. Every hosted
+  // deployment puts a TLS terminator in front of this process, and until
+  // Express is told how far to look, it reads that proxy's address as the
+  // caller's — the same address for every girl in the school. The sign-in
+  // limit is counted per address, so the whole platform would share ten
+  // attempts a minute. See common/trusted-proxy.ts for why this is a count
+  // and not a boolean.
+  app.set('trust proxy', trustedProxyHops(process.env.TRUSTED_PROXY_HOPS));
 
   // All routes live under /api/v1 so a future mobile app can pin to a version
   // while the web app moves on (ARCHITECTURE 13.1, SRS 43).
