@@ -70,16 +70,55 @@ const record = (name, ok, detail) => {
  * screenshot or paste, so the password never appears in any output.
  */
 function describe(url) {
+  const value = url.trim();
+
+  // Checked before parsing, not after. `new URL` happily reads
+  // "postgres.abc:pass@host/db" as the scheme "postgres.abc:" and puts the
+  // password in the path, which this function would then have printed.
+  if (/^psql\s/i.test(value)) {
+    throw new Error(
+      'That is the psql command line, not a connection URL. In Supabase\'s Connect ' +
+        'panel, switch the format from "psql" to "URI" — it is the one that starts ' +
+        'postgresql:// — and copy that instead.',
+    );
+  }
+
+  if (!/^postgres(ql)?:\/\//i.test(value)) {
+    throw new Error(
+      'The connection string does not begin with postgresql:// . Copy the URI form ' +
+        'from Supabase\'s Connect panel rather than a snippet for a language or tool.',
+    );
+  }
+
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(value);
+
+    // Parses, but Supabase's placeholder is still in it. Worth catching here
+    // rather than as a puzzling authentication failure later.
+    if (/[[\]]/.test(parsed.username) || /%5B|%5D/i.test(parsed.password)) {
+      throw new Error(
+        'The connection string still contains Supabase\'s [YOUR-PASSWORD] placeholder. ' +
+          'Replace those brackets and the text between them with the database password.',
+      );
+    }
+
     return {
       host: parsed.hostname,
       port: parsed.port || '5432',
       database: parsed.pathname.replace(/^\//, '') || '(default)',
       user: parsed.username || '(unset)',
     };
-  } catch {
-    throw new Error('DIRECT_URL is not a valid connection URL. Check for an unencoded character in the password: @ becomes %40, # becomes %23.');
+  } catch (caught) {
+    if (caught instanceof Error && caught.message.startsWith('The connection string')) {
+      throw caught;
+    }
+
+    // The shape is already known good, so a parse failure leaves one cause.
+    throw new Error(
+      'The password contains a # or a / , which have to be percent-encoded before a ' +
+        'connection URL can be read: # becomes %23 and / becomes %2F. Encode those two ' +
+        '(and @ as %40, : as %3A if present) and save the secret again.',
+    );
   }
 }
 
