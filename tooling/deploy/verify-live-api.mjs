@@ -45,6 +45,15 @@ async function get(path, init = {}) {
   return { status: response.status, headers: response.headers, text };
 }
 
+/** One sign-in attempt on an account that does not exist. */
+function attempt(password, headers = {}) {
+  return get('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ username: 'nobody-at-all', password }),
+  });
+}
+
 async function main() {
   console.log(`\nChecking the live API at ${BASE}\n`);
   console.log('Waking the service if it is asleep — a free instance can take a minute.\n');
@@ -103,11 +112,7 @@ async function main() {
   record('No record fields appear in any refusal', !looksLikeData);
 
   // --- Sign-in tells a stranger nothing ----------------------------------
-  const unknown = await get('/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'nobody-at-all', password: 'not-the-password' }),
-  });
+  const unknown = await attempt('not-the-password');
   const message = (() => {
     try {
       return JSON.parse(unknown.text).message ?? '';
@@ -142,46 +147,72 @@ async function main() {
     `allow-origin: ${allow ?? '(absent)'}`,
   );
 
-  // --- One client cannot guess passwords freely --------------------------
-  // Also the only way from outside to see that the proxy hop count is right:
-  // the limit has to attach to the caller rather than to whatever sits in
-  // front of the service.
-  //
-  // The counter is read as well as the refusal, because the two failures look
-  // identical from outside and have opposite causes. A limit that never fires
-  // while the counter climbs is a limit set too high; a limit that never fires
-  // while the counter stays where it started means each request was filed
-  // under a different caller, and the address being counted is not the
-  // caller's.
-  let blockedAt = 0;
-  const counter = [];
+  // --- The limit attaches to the caller, not to a header -----------------
+  // Before asking whether the limit fires, ask what it is counting. If the
+  // address being counted came out of the request's own headers, a caller
+  // could hand over a new one each time and never be limited at all. The
+  // counter says which: a fresh caller starts at the full allowance, so if
+  // six invented addresses in a row each read the full allowance, the header
+  // is choosing the identity.
+  const limitHeader = 'x-ratelimit-limit-auth';
+  const leftHeader = 'x-ratelimit-remaining-auth';
 
-  for (let attempt = 1; attempt <= 14 && blockedAt === 0; attempt += 1) {
-    const r = await get('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'nobody-at-all', password: `guess-${attempt}` }),
-    });
-    counter.push(r.headers.get('x-ratelimit-remaining-auth') ?? '-');
-    if (r.status === 429) blockedAt = attempt;
+  const forged = [];
+  for (let i = 1; i <= 6; i += 1) {
+    const r = await attempt(`forged-${i}`, { 'X-Forwarded-For': `203.0.113.${i}` });
+    forged.push({ left: r.headers.get(leftHeader), limit: r.headers.get(limitHeader) });
   }
 
-  const stuck = counter.length > 1 && counter.every((v) => v === counter[0]);
+  const everyOneFresh =
+    forged.length > 0 &&
+    forged.every((f) => f.limit !== null && f.left === String(Number(f.limit) - 1));
+
+  record(
+    'A forged address does not buy a fresh allowance',
+    !everyOneFresh,
+    `attempts remaining read ${forged.map((f) => f.left ?? '-').join(', ')}`,
+  );
+
+  // --- One caller cannot guess passwords freely --------------------------
+  // Sent in small waves rather than one at a time, so all of them land inside
+  // the one-minute window the limit is measured over — sequentially, a slow
+  // round trip lets the earliest attempts expire before the last arrives, and
+  // a limit that works looks like one that does not.
+  //
+  // The allowance is ten. This spends far more than ten, because a prober is
+  // not always one address to the service: cloud egress can leave by more than
+  // one, and each address is counted separately and legitimately so. Enough
+  // attempts for several addresses to each exhaust their own allowance keeps a
+  // pass meaningful and a failure honest.
+  const seen = [];
+  let blockedAt = 0;
+
+  for (let wave = 0; wave < 8 && blockedAt === 0; wave += 1) {
+    const batch = await Promise.all(
+      [0, 1, 2, 3].map((n) => attempt(`guess-${wave}-${n}`)),
+    );
+
+    for (const [n, r] of batch.entries()) {
+      seen.push(r.headers.get(leftHeader) ?? '-');
+      if (r.status === 429 && blockedAt === 0) blockedAt = wave * 4 + n + 1;
+    }
+  }
 
   record(
     'Repeated sign-in attempts are rate limited',
     blockedAt > 0,
     blockedAt > 0
-      ? `blocked at attempt ${blockedAt}`
-      : `never blocked in 14 attempts; attempts remaining read ${counter.join(', ')}`,
+      ? `blocked at attempt ${blockedAt} of ${seen.length}`
+      : `never blocked in ${seen.length} attempts; attempts remaining read ${seen.join(', ')}`,
   );
 
-  if (blockedAt === 0 && stuck) {
+  if (blockedAt === 0) {
     console.log('');
-    console.log('  The counter never moved, so every attempt was filed under a different');
-    console.log('  caller. The address being counted is not the one the request came from —');
-    console.log('  it is an address belonging to the proxy layer, which differs per request.');
-    console.log('  TRUSTED_PROXY_HOPS is counting too few hops for this host.');
+    console.log('  Read the allowances above. Several counts running down side by side');
+    console.log('  means each attempt was filed under a different caller, and the address');
+    console.log('  being counted belongs to the proxy layer rather than to whoever sent');
+    console.log('  the request — TRUSTED_PROXY_HOPS is looking too few hops back. One');
+    console.log('  count that never reaches zero means the allowance itself is too large.');
   }
 
   const failed = results.filter((r) => !r.ok);
