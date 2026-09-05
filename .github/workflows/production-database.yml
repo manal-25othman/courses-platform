@@ -1,0 +1,83 @@
+# Brings the production database up to the current migration, from anywhere.
+#
+# This exists because the work has to happen somewhere that can both reach the
+# database and hold the credential safely. A laptop can, but not everyone has a
+# clone on one; the assistant's sandbox cannot reach Supabase at all. A runner
+# can do both: GitHub keeps the connection string encrypted, hands it to one
+# job, and masks it in the logs.
+#
+# Started by hand only. There is no push or schedule trigger, because nothing
+# should ever migrate the client's database as a side effect of a commit.
+name: Production database
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'check = read only, report what is pending. apply = run the migrations.'
+        required: true
+        default: check
+        type: choice
+        options: [check, apply]
+      confirm:
+        description: 'For apply only: type APPLY to confirm. Ignored for check.'
+        required: false
+        default: ''
+        type: string
+
+# One at a time. Two runs migrating the same database at once is the one race
+# Prisma's advisory lock would have to sort out, and it is avoidable here.
+concurrency:
+  group: production-database
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    # Scopes the credential to this one workflow, and gives somewhere to add a
+    # required reviewer if an approval gate is wanted before an apply.
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Refuse an unconfirmed apply
+        if: inputs.mode == 'apply' && inputs.confirm != 'APPLY'
+        run: |
+          echo "::error::Applying migrations needs the confirm box set to APPLY."
+          echo "Re-run the workflow with mode=apply and confirm=APPLY."
+          exit 1
+
+      - name: Check the credential is present
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: |
+          if [ -z "$DIRECT_URL" ]; then
+            echo "::error::The PRODUCTION_DIRECT_URL secret is not set on the production environment."
+            echo "Add it under Settings -> Environments -> production -> Environment secrets."
+            exit 1
+          fi
+          echo "Secret is present. Its value is never printed by this workflow."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the database client
+        run: npm run db:generate
+
+      # The script does the guarding and the checking. It refuses a local or
+      # development database, never prints the connection string, and makes
+      # fifteen assertions about the result rather than reporting success.
+      - name: ${{ inputs.mode == 'apply' && 'Apply migrations and verify' || 'Read-only check' }}
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          # Through the environment rather than interpolated into the command,
+          # so the input is data and never becomes shell.
+          MODE: ${{ inputs.mode }}
+        run: node tooling/deploy/production-database.mjs "$MODE"

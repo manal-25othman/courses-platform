@@ -1,7 +1,23 @@
 # Production database setup
 
-One command brings a new production database to the current migration and then
+One run brings a new production database to the current migration and then
 proves it landed correctly.
+
+## From GitHub, with no clone (the usual way)
+
+Actions -> **Production database** -> Run workflow, with `mode: check` first and
+`mode: apply` + `confirm: APPLY` once the check looks right.
+
+The connection string lives as the `PRODUCTION_DIRECT_URL` secret on the
+`production` environment, so it is encrypted at rest, handed to one job, and
+masked in the logs. It is never typed into a terminal, a file, or a message.
+Add a required reviewer to that environment if an apply should need approval.
+
+Note the sandbox an assistant runs in cannot do this: its egress policy allows
+HTTPS through a proxy and nothing else, so PostgreSQL on 5432 and 6543 simply
+times out. A runner has ordinary network access; that is why this lives here.
+
+## From a machine with a clone
 
 ```powershell
 # Windows
