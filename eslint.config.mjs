@@ -64,6 +64,10 @@ export default tseslint.config(
         process: 'readonly',
         Buffer: 'readonly',
         URL: 'readonly',
+        // Node has had these since 18; they are how a script asks the network
+        // a question without a dependency.
+        fetch: 'readonly',
+        AbortSignal: 'readonly',
       },
     },
     rules: {

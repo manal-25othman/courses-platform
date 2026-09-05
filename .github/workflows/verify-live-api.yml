@@ -1,0 +1,43 @@
+# Asks what the internet can see of the deployed API.
+#
+# Everything it does is an unauthenticated request to a public address, so this
+# workflow needs no secret and no environment. That is also why it has to run
+# here rather than in an assistant's sandbox: that sandbox's egress policy
+# refuses the service outright, and a check that cannot reach the thing it is
+# checking is not a check.
+#
+# Started by hand, against whichever deployment is being asked about.
+name: Verify the live API
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'Service root, without /api/v1.'
+        required: true
+        default: 'https://smart-shift-api.onrender.com'
+        type: string
+
+concurrency:
+  group: verify-live-api
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No install step: the script uses nothing but Node's own fetch. Fewer
+      # moving parts between the question and the answer.
+      - name: Probe the deployment
+        env:
+          # Through the environment, so the input is data and never becomes
+          # shell.
+          API_BASE_URL: ${{ inputs.api_url }}
+        run: node tooling/deploy/verify-live-api.mjs

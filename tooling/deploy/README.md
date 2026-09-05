@@ -139,3 +139,28 @@ the install.
 The alternative — moving `@nestjs/cli` into dependencies — would ship a compiler
 to production to work around an install flag, and installing the CLI globally
 would make the build depend on something outside the repository.
+
+### Checking the deployment from outside
+
+Actions -> **Verify the live API** -> Run workflow, with the service root
+(`https://smart-shift-api.onrender.com`, no `/api/v1`). It needs no secret,
+because every request it makes is one a stranger could make.
+
+Twelve checks: health answers and says the database is reachable and discloses
+nothing about the connection; twelve data routes all refuse an unauthenticated
+caller, and no record field appears in any refusal; an unknown account is
+refused without revealing whether it exists; an unknown address is a 404 rather
+than an error; no stack trace, path or driver detail appears anywhere; a foreign
+origin is not echoed back; and repeated sign-in attempts are rate limited, which
+from outside is the only way to see that the proxy hop count is right — the
+limit has to attach to the caller and not to Render's router.
+
+Two results arrive without a request of their own. The service answering at all
+means `DATABASE_URL` holds a role that row-level security applies to, because
+the startup check reads `pg_roles` and refuses to bind a port otherwise; and it
+means a JWT secret of real length is set, because the auth module refuses to
+construct without one. A migration credential pasted into the runtime slot would
+not produce a service to talk to.
+
+The first request pays for waking a sleeping free instance, so the script allows
+90 seconds for it.
