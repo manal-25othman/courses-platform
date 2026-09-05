@@ -146,14 +146,14 @@ Actions -> **Verify the live API** -> Run workflow, with the service root
 (`https://smart-shift-api.onrender.com`, no `/api/v1`). It needs no secret,
 because every request it makes is one a stranger could make.
 
-Twelve checks: health answers and says the database is reachable and discloses
-nothing about the connection; twelve data routes all refuse an unauthenticated
-caller, and no record field appears in any refusal; an unknown account is
-refused without revealing whether it exists; an unknown address is a 404 rather
-than an error; no stack trace, path or driver detail appears anywhere; a foreign
-origin is not echoed back; and repeated sign-in attempts are rate limited, which
-from outside is the only way to see that the proxy hop count is right — the
-limit has to attach to the caller and not to Render's router.
+Thirteen checks: health answers and says the database is reachable and
+discloses nothing about the connection; twelve data routes all refuse an
+unauthenticated caller, and no record field appears in any refusal; an unknown
+account is refused without revealing whether it exists; an unknown address is a
+404 rather than an error; no stack trace, path or driver detail appears
+anywhere; a foreign origin is not echoed back; a forged `X-Forwarded-For` does
+not buy a fresh sign-in allowance; and repeated sign-in attempts are rate
+limited.
 
 Two results arrive without a request of their own. The service answering at all
 means `DATABASE_URL` holds a role that row-level security applies to, because
@@ -164,3 +164,79 @@ not produce a service to talk to.
 
 The first request pays for waking a sleeping free instance, so the script allows
 90 seconds for it.
+
+#### Why the sign-in limit is checked twice
+
+The limit's two ways of being wrong look identical from outside, and only one of
+them is about the limit. It can count the wrong address — one belonging to the
+proxy layer, which changes per request, so nobody ever exhausts an allowance —
+or it can count an address out of the request's own headers, where a caller can
+put a new one each time. `TRUSTED_PROXY_HOPS` decides which, and either mistake
+leaves a limit that is only the appearance of one.
+
+So the forged-address check runs first and reads the counter rather than the
+refusal: a caller the service has not seen starts at the full allowance, and six
+invented addresses that each start there mean the header is choosing.
+
+The second check spends enough attempts for several addresses to exhaust their
+own allowance, in waves so they land inside the minute the limit is measured
+over. That is not over-testing. The first live run failed on fourteen sequential
+attempts, and the counter came back `9, 8, 8, 7, 7, 6, 5, 4, 6, 3, 5, 4, 3, 2` —
+two allowances running down side by side. The cause was the prober, not the
+service: a GitHub runner leaves by more than one address, each counted
+separately and correctly. Sixteen attempts in waves blocked at the thirteenth,
+and the forged addresses bought nothing. One hop is right for Render.
+
+## Deploying the website to Vercel
+
+There is no configuration file for this one, and that is deliberate: the web app
+is an ordinary Next.js app in a workspace, and Vercel reads both without being
+told. Four settings in the New Project form are the whole deployment.
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| Root directory | `apps/web` | Vercel installs from the repository root when it sees the workspaces, and builds here |
+| Framework | Next.js (detected) | Nothing to override |
+| Production branch | the repository's default branch | Already the branch this work lives on |
+| `NEXT_PUBLIC_API_URL` | `https://smart-shift-api.onrender.com/api/v1` | Where the browser sends every request |
+
+`NEXT_PUBLIC_API_URL` has to exist **before the first build**, not after it.
+`next.config.ts` reads it at build time and writes the value into the JavaScript
+the browser downloads, so a build that ran without it ships a bundle pointing at
+`http://localhost:3001` — which fails in a way that looks like the API being
+down rather than the website being built wrong.
+
+Every page carries `use client` and nothing fetches on the server, so Vercel is
+serving files and the browser does all the talking. That keeps the deployment
+within the Hobby plan's shape, and it is why the API's own host is the only
+place that needs a database.
+
+### Two things on Render change once the domain exists
+
+`CORS_ORIGIN` is `https://placeholder.invalid` today, which is doing its job:
+until the website has an address, no origin should be allowed. It becomes the
+Vercel domain. `WEB_BASE_URL` becomes the same value — it is what a password
+reset link points at.
+
+### Signing in needs both halves on one domain
+
+The API sets its tokens as `SameSite=Lax` cookies and the website sends them
+with `credentials: 'include'`. A browser will not store a `Lax` cookie that
+arrives from a different site, and `x.vercel.app` and `y.onrender.com` are
+different sites — different registrable domains, not merely different hosts.
+
+So on the two free domains, signing in returns 200, sets nothing, and every
+screen after it behaves as though nobody signed in. Nothing in the response says
+so; the browser drops the cookie silently. This is not a bug in either service
+and no amount of CORS configuration reaches it — `SameSite` is a separate rule
+from the cross-origin one, and both have to be satisfied.
+
+Two ways to satisfy it, and the choice belongs to whoever owns the pilot:
+
+- **One domain, two hosts.** `app.<domain>` on Vercel, `api.<domain>` on Render,
+  both free to attach. The cookie is then same-site, and nothing in the code
+  changes. It needs a domain name.
+- **One host, one origin.** The website proxies `/api/v1/*` through to Render,
+  so the browser only ever talks to the Vercel domain. The cookie is first-party
+  and CORS stops applying at all. It needs no domain and no purchase, and costs
+  a hop on every request.
