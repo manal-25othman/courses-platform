@@ -110,7 +110,15 @@ export class TokenService {
       throw new UnauthorizedException('Session expired. Please sign in again.');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: stored.userId } });
+    // Through the same function the other account lookups use, and for the
+    // same reason: `users` is under row-level policies, and renewing a session
+    // happens before any school is established, so there is no scope to read
+    // it under. Read directly, the row comes back empty however valid the
+    // token is — and the branch below reads an empty result as a stolen token,
+    // revokes the whole family, and signs the girl out fifteen minutes into
+    // her lesson. It only shows up where the policies are actually enforced,
+    // which is production and not a test run as the owner.
+    const user = await this.prisma.findUserForAuthentication(stored.userId);
 
     if (!user || user.deletedAt !== null || user.status !== 'ACTIVE') {
       await this.revokeFamily(stored.familyId);

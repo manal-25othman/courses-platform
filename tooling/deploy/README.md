@@ -191,52 +191,83 @@ and the forged addresses bought nothing. One hop is right for Render.
 
 There is no configuration file for this one, and that is deliberate: the web app
 is an ordinary Next.js app in a workspace, and Vercel reads both without being
-told. Four settings in the New Project form are the whole deployment.
+told. Five settings in the New Project form are the whole deployment.
 
 | Setting | Value | Why |
 | --- | --- | --- |
 | Root directory | `apps/web` | Vercel installs from the repository root when it sees the workspaces, and builds here |
 | Framework | Next.js (detected) | Nothing to override |
 | Production branch | the repository's default branch | Already the branch this work lives on |
-| `NEXT_PUBLIC_API_URL` | `https://smart-shift-api.onrender.com/api/v1` | Where the browser sends every request |
+| `NEXT_PUBLIC_API_URL` | `/api/v1` | A path, not an address: the browser asks the website it is already on |
+| `API_ORIGIN` | `https://smart-shift-api.onrender.com` | Where the website forwards those requests. No trailing slash, no `/api/v1` |
 
-`NEXT_PUBLIC_API_URL` has to exist **before the first build**, not after it.
-`next.config.ts` reads it at build time and writes the value into the JavaScript
-the browser downloads, so a build that ran without it ships a bundle pointing at
-`http://localhost:3001` — which fails in a way that looks like the API being
-down rather than the website being built wrong.
+Both variables have to exist **before the first build**, not after it. Next.js
+writes `NEXT_PUBLIC_API_URL` into the JavaScript the browser downloads, and it
+compiles the rewrite destination into the routing manifest — a build that ran
+without them ships a bundle pointing at `http://localhost:3001` and no proxy at
+all, which fails in a way that looks like the API being down rather than the
+website being built wrong.
 
 Every page carries `use client` and nothing fetches on the server, so Vercel is
-serving files and the browser does all the talking. That keeps the deployment
-within the Hobby plan's shape, and it is why the API's own host is the only
-place that needs a database.
+serving files and the browser does all the talking. Verified from a clean
+install with devDependencies omitted, which is the harshest thing a host does:
+the build needs no `--include=dev`, unlike the API's.
 
-### Two things on Render change once the domain exists
+### Why the website carries the API's address
+
+The API's tokens are `SameSite=Lax` cookies and the website sends them with
+`credentials: 'include'`. A browser will not store a `Lax` cookie that arrives
+from a different site, and `x.vercel.app` and `y.onrender.com` are different
+sites — different registrable domains, not merely different hosts. Signing in
+would return 200, set nothing, and leave every screen behaving as though nobody
+had signed in. Nothing in the response says so; the browser drops the cookie
+silently, and no amount of CORS configuration reaches it, because `SameSite` is
+a separate rule from the cross-origin one.
+
+So `next.config.ts` rewrites `/api/v1/*` to `API_ORIGIN`, and the browser only
+ever talks to the website's own address. The cookie comes back from the origin
+the browser is already on, and it stays `Lax` — which is the point of doing it
+this way rather than sending `SameSite=None`, which would give up the
+cross-site protection `Lax` exists for.
+
+Measured through a real production build rather than assumed: `Set-Cookie`
+passes through the rewrite untouched and lands on the website's host; a stored
+JPEG comes back byte for byte with its own content type; a request for another
+school's file still answers 404; and sign-in, an authenticated read, renewal at
+the fifteen-minute mark, replay refusal, and sign-out all behave as they do
+without the proxy.
+
+### What it costs, and what was done about it
+
+Behind the proxy the API sees one address for the whole school, because that is
+what a proxy is. An address-counted sign-in limit would then be ten attempts a
+minute shared by everyone, and a class signing in together would lock itself
+out on the eleventh girl.
+
+So the limit counts attempts **against the account** they are aimed at, which is
+what guessing a password actually means, with a coarse per-address limit of a
+hundred a minute underneath it. Measured through the proxy: twelve guesses at
+one account, each carrying a different invented `X-Forwarded-For`, were refused
+from the eleventh onwards, and a classmate signing in at that same moment from
+that same address was let straight through.
+
+That also removes this limit's dependence on `TRUSTED_PROXY_HOPS` being right,
+which is a property of the hosting rather than of the code and changes silently
+whenever something is put in front of the API.
+
+### Attaching a domain later
+
+Nothing here has to be undone. Attach `app.<domain>` to Vercel and
+`api.<domain>` to Render, then remove `API_ORIGIN` and set
+`NEXT_PUBLIC_API_URL` to `https://api.<domain>/api/v1`. The rewrite disappears
+when `API_ORIGIN` is unset, the browser talks to the API directly again, and the
+cookie is same-site because the two hosts share a registrable domain.
+
+### Two things on Render change once the website has an address
 
 `CORS_ORIGIN` is `https://placeholder.invalid` today, which is doing its job:
-until the website has an address, no origin should be allowed. It becomes the
-Vercel domain. `WEB_BASE_URL` becomes the same value — it is what a password
-reset link points at.
-
-### Signing in needs both halves on one domain
-
-The API sets its tokens as `SameSite=Lax` cookies and the website sends them
-with `credentials: 'include'`. A browser will not store a `Lax` cookie that
-arrives from a different site, and `x.vercel.app` and `y.onrender.com` are
-different sites — different registrable domains, not merely different hosts.
-
-So on the two free domains, signing in returns 200, sets nothing, and every
-screen after it behaves as though nobody signed in. Nothing in the response says
-so; the browser drops the cookie silently. This is not a bug in either service
-and no amount of CORS configuration reaches it — `SameSite` is a separate rule
-from the cross-origin one, and both have to be satisfied.
-
-Two ways to satisfy it, and the choice belongs to whoever owns the pilot:
-
-- **One domain, two hosts.** `app.<domain>` on Vercel, `api.<domain>` on Render,
-  both free to attach. The cookie is then same-site, and nothing in the code
-  changes. It needs a domain name.
-- **One host, one origin.** The website proxies `/api/v1/*` through to Render,
-  so the browser only ever talks to the Vercel domain. The cookie is first-party
-  and CORS stops applying at all. It needs no domain and no purchase, and costs
-  a hop on every request.
+until the website has an address, no origin should be allowed. Behind the proxy
+the browser makes no cross-origin request at all, so nothing depends on it — but
+it should still name the Vercel address rather than a placeholder. `WEB_BASE_URL`
+becomes the same value; it is what a password reset link points at, and that one
+does matter immediately.

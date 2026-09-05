@@ -1339,6 +1339,28 @@ by a paid developer for a client is commercial. This is a licensing question,
 not a technical one, and it is recorded here as open rather than closed — see
 T-27c. Render's free tier carries no equivalent restriction.
 
+**The website carries the API's address, until the two share a domain.** The
+API's session cookies are `SameSite=Lax` (§8.2), and a browser will not keep a
+`Lax` cookie that arrives from a different registrable domain. A Vercel address
+and a Render address are different domains, so signing in would answer 200,
+store nothing, and leave every screen behaving as though nobody had signed in.
+CORS does not reach this: `SameSite` is a separate rule.
+
+So while the pilot runs on the two free addresses, the web app rewrites
+`/api/v1/*` to the API (`API_ORIGIN`, read at build time) and the browser talks
+only to the website's own origin. The cookies stay `Lax` — the alternative,
+`SameSite=None`, would give up the cross-site protection they exist for. Nothing
+is designed around the proxy: when `app.<domain>` and `api.<domain>` are
+attached, `API_ORIGIN` is dropped, `NEXT_PUBLIC_API_URL` points at the API
+again, and the browser goes back to talking to it directly.
+
+One consequence is recorded because it is not obvious: behind the proxy every
+girl reaches the API from the same address, so an address-counted sign-in limit
+would be ten attempts a minute for the whole school. The limit therefore counts
+attempts **against an account** rather than from an address (§8.4), with a
+coarse per-address limit underneath it. That holds whichever way the two halves
+are hosted, and it does not depend on the proxy hop count being right.
+
 **Supabase is used as the database only.** Supabase Auth is **not** used — authentication remains the custom implementation in §8, because §27/§28 require username-first login with an optional email, which does not fit an email-centric auth provider.
 
 ⚠️ **Open risk:** none of these providers host data in Saudi Arabia. A pilot with 90 real students *is* real student data, so the residency check must complete **before the pilot begins**, not before a later production date.
