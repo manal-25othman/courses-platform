@@ -63,13 +63,26 @@ function describe(url) {
   // whatever landed there is usually part of the password. Catch it before a
   // connection attempt, and before it reaches a log.
   if (!/^[a-z0-9.-]+$/i.test(parsed.hostname) || !parsed.hostname.includes('.')) {
+    // Two very different causes look identical here, and it is worth saying
+    // which. Searching for the pooler's own hostname is safe: it is public,
+    // and the answer separates "wrong string" from "password broke the parse".
+    const mentionsPooler = /pooler\.supabase\.com/i.test(value);
+
     throw new Error(
       'The host in DATABASE_URL is not a hostname, so the string is not the shape a ' +
         'connection URL takes. It should read:\n\n' +
         '  postgresql://app_user.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true\n\n' +
-        'The usual cause is a character in the password that has to be percent-encoded — ' +
-        '@ as %40, : as %3A, / as %2F, # as %23, ? as %3F — because an unencoded one ends ' +
-        'the password early and the rest of it is read as the host.',
+        (mentionsPooler
+          ? 'The string DOES contain pooler.supabase.com, so the host is present but the ' +
+            'parser never reaches it. That means a character in the password is ending ' +
+            'the password early: @ must be %40, : must be %3A, / must be %2F, # must be ' +
+            '%23, ? must be %3F, and a literal % must be %25.\n\n' +
+            'The reliable fix is to stop encoding altogether — set the app_user password ' +
+            'to letters and digits only, which needs no escaping anywhere:\n\n' +
+            "  ALTER ROLE app_user WITH PASSWORD '<32 random letters and digits>';"
+          : 'The string does NOT contain pooler.supabase.com anywhere, so this is not the ' +
+            'pooled connection URI. Copy it again from Supabase: Connect -> Connection ' +
+            'String -> Transaction pooler, in the URI format.'),
     );
   }
 
