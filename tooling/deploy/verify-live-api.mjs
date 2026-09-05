@@ -46,17 +46,34 @@ async function get(path, init = {}) {
 }
 
 /** One sign-in attempt on an account that does not exist. */
-function attempt(password, headers = {}) {
+function attempt(password, headers = {}, username = 'nobody-at-all') {
   return get('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify({ username: 'nobody-at-all', password }),
+    body: JSON.stringify({ username, password }),
   });
 }
 
 async function main() {
-  console.log(`\nChecking the live API at ${BASE}\n`);
+  console.log(`\nChecking what the internet can see at ${BASE}\n`);
   console.log('Waking the service if it is asleep — a free instance can take a minute.\n');
+
+  // --- Is there a website here, or the API on its own? --------------------
+  // The same script serves both, because the whole point of the proxy is that
+  // the website answers for the API. Where a website is in front, that it
+  // answers at all is the first thing worth knowing, and everything below it
+  // then travels the route a girl's browser actually takes.
+  const front = await fetch(`${BASE}/login`, { signal: AbortSignal.timeout(90_000) })
+    .then(async (r) => ({ status: r.status, text: await r.text() }))
+    .catch(() => ({ status: 0, text: '' }));
+
+  const website = front.status === 200 && /TOP GOAL/.test(front.text);
+
+  if (website) {
+    record('The website answers, and it is the one carrying the API', true, 'sign-in page served');
+  } else {
+    console.log('  No website at this address — probing the API on its own.\n');
+  }
 
   // --- It is up, and it can reach the database ---------------------------
   const health = await get('/health');
@@ -147,6 +164,9 @@ async function main() {
     `allow-origin: ${allow ?? '(absent)'}`,
   );
 
+  const limitHeader = 'x-ratelimit-limit-auth';
+  const leftHeader = 'x-ratelimit-remaining-auth';
+
   // --- The limit attaches to the caller, not to a header -----------------
   // Before asking whether the limit fires, ask what it is counting. If the
   // address being counted came out of the request's own headers, a caller
@@ -154,8 +174,18 @@ async function main() {
   // counter says which: a fresh caller starts at the full allowance, so if
   // six invented addresses in a row each read the full allowance, the header
   // is choosing the identity.
-  const limitHeader = 'x-ratelimit-limit-auth';
-  const leftHeader = 'x-ratelimit-remaining-auth';
+  // Which limits the running build actually has, which is also the one thing
+  // visible from outside about *which* build is running: the second counter
+  // arrived with the account-keyed limit and is absent from anything older.
+  const shape = await attempt('what-limits-are-there');
+  const perAccount = shape.headers.get(limitHeader);
+  const perAddress = shape.headers.get('x-ratelimit-limit-address');
+
+  record(
+    'The running build counts per account and per address',
+    perAccount !== null && perAddress !== null,
+    `per account ${perAccount ?? 'absent'}, per address ${perAddress ?? 'absent'}`,
+  );
 
   const forged = [];
   for (let i = 1; i <= 6; i += 1) {
@@ -205,6 +235,22 @@ async function main() {
       ? `blocked at attempt ${blockedAt} of ${seen.length}`
       : `never blocked in ${seen.length} attempts; attempts remaining read ${seen.join(', ')}`,
   );
+
+  // The property the proxy makes load-bearing. Behind it every girl reaches
+  // the API from one address, so a limit counted by address would refuse a
+  // classmate the moment one account had spent its allowance — and a class
+  // signing in together would lock itself out. This asks a second account,
+  // from this same address, in the window the first one is blocked in.
+  if (blockedAt > 0) {
+    const classmate = await attempt('a-different-girls-password', {}, 'somebody-else');
+    record(
+      'One blocked account does not block anybody else',
+      classmate.status !== 429,
+      `a second account got ${classmate.status}, not 429`,
+    );
+  } else {
+    record('One blocked account does not block anybody else', false, 'nothing was blocked to test with');
+  }
 
   if (blockedAt === 0) {
     console.log('');
