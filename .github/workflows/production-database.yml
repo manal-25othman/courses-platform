@@ -14,11 +14,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'check = read only, report what is pending. apply = run the migrations.'
+        description: 'check = what is pending. runtime = prove the API can connect. apply = run the migrations.'
         required: true
         default: check
         type: choice
-        options: [check, apply]
+        options: [check, runtime, apply]
       confirm:
         description: 'For apply only: type APPLY to confirm. Ignored for check.'
         required: false
@@ -57,8 +57,16 @@ jobs:
       - name: Check the credential is present
         env:
           DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          MODE: ${{ inputs.mode }}
         run: |
-          if [ -z "$DIRECT_URL" ]; then
+          if [ "$MODE" = "runtime" ]; then
+            if [ -z "$DATABASE_URL" ]; then
+              echo "::error::The PRODUCTION_DATABASE_URL secret is not set on the production environment."
+              echo "It holds the connection the running API uses: the app_user role, through the pooler."
+              exit 1
+            fi
+          elif [ -z "$DIRECT_URL" ]; then
             echo "::error::The PRODUCTION_DIRECT_URL secret is not set on the production environment."
             echo "Add it under Settings -> Environments -> production -> Environment secrets."
             exit 1
@@ -71,10 +79,20 @@ jobs:
       - name: Generate the database client
         run: npm run db:generate
 
+      # Proves the connection the API itself will use, which applying the
+      # migrations does not exercise: a different role, a different string, and
+      # through Supabase a different route.
+      - name: Prove the API can connect
+        if: inputs.mode == 'runtime'
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: node tooling/deploy/runtime-connection.mjs
+
       # The script does the guarding and the checking. It refuses a local or
       # development database, never prints the connection string, and makes
       # fifteen assertions about the result rather than reporting success.
       - name: ${{ inputs.mode == 'apply' && 'Apply migrations and verify' || 'Read-only check' }}
+        if: inputs.mode != 'runtime'
         env:
           DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
           # Through the environment rather than interpolated into the command,
