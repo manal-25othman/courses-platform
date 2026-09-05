@@ -59,6 +59,28 @@ function describe(url) {
     );
   }
 
+  // A host that is not a hostname means the string came apart somewhere, and
+  // whatever landed there is usually part of the password. Catch it before a
+  // connection attempt, and before it reaches a log.
+  if (!/^[a-z0-9.-]+$/i.test(parsed.hostname) || !parsed.hostname.includes('.')) {
+    throw new Error(
+      'The host in DATABASE_URL is not a hostname, so the string is not the shape a ' +
+        'connection URL takes. It should read:\n\n' +
+        '  postgresql://app_user.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true\n\n' +
+        'The usual cause is a character in the password that has to be percent-encoded — ' +
+        '@ as %40, : as %3A, / as %2F, # as %23, ? as %3F — because an unencoded one ends ' +
+        'the password early and the rest of it is read as the host.',
+    );
+  }
+
+  if (!/\.supabase\.(com|co)$/i.test(parsed.hostname)) {
+    throw new Error(
+      `The host is "${parsed.hostname}", which is not a Supabase address. The pooled ` +
+        'host ends in .pooler.supabase.com — copy the URI from Connect -> Session pooler ' +
+        'or Transaction pooler rather than editing one by hand.',
+    );
+  }
+
   return {
     url: value,
     host: parsed.hostname,
