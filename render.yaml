@@ -24,7 +24,17 @@ services:
     # Not apps/api. npm ci must run where the workspaces are declared.
     rootDir: .
 
-    buildCommand: npm ci && npm run build -w @courses/api
+    # --include=dev is not optional here. NODE_ENV below is set for the running
+    # service, and Render applies it to the build too, which makes `npm ci`
+    # omit devDependencies — including @nestjs/cli, so `nest build` is not
+    # installed and the build dies with "nest: not found". The flag says
+    # explicitly that a build needs its build tools, whatever NODE_ENV says.
+    #
+    # It failed asymmetrically, which is what made it puzzling: the lockfile
+    # marks prisma and typescript as production dependencies because something
+    # non-dev pulls them in, so `prisma generate` ran and only `nest build` was
+    # missing.
+    buildCommand: npm ci --include=dev && npm run build -w @courses/api
     startCommand: node apps/api/dist/main.js
 
     # The API answers here without a token, and says nothing about the data.

@@ -102,7 +102,7 @@ service on a separate host, so it is deliberately not built here.
 | Setting | Value | Why |
 | --- | --- | --- |
 | Root directory | `.` | The workspaces are declared at the root |
-| Build | `npm ci && npm run build -w @courses/api` | Builds only the API; `npm run build` would also build Next.js and throw it away |
+| Build | `npm ci --include=dev && npm run build -w @courses/api` | `--include=dev` because Render applies `NODE_ENV=production` to the build, which would otherwise omit `@nestjs/cli`; builds only the API, since `npm run build` would also build Next.js and throw it away |
 | Start | `node apps/api/dist/main.js` | Resolves the Prisma client from `apps/api/node_modules` |
 | Health check | `/api/v1/health` | Public, and says nothing about the data |
 | Node | 22, from `.node-version` | Without the pin, Render picks its own default |
@@ -122,3 +122,20 @@ refuses to boot, which is the point of it.
 
 Never set `ALLOW_UNRESTRICTED_DB` on a deployed service. It exists for a local
 database and it turns that check off.
+
+### Why the build needs `--include=dev`
+
+Render applies the service's `NODE_ENV` to the build as well as the run, and
+`npm ci` under `NODE_ENV=production` omits devDependencies. `@nestjs/cli` is one,
+so `nest build` is not installed and the build stops with `nest: not found`.
+
+It fails asymmetrically, which is what makes it confusing to read: the lockfile
+marks `prisma` and `typescript` as production dependencies, because something
+outside devDependencies pulls them in. So `prisma generate` succeeds and only
+`nest build` is missing, which looks like a problem with Nest rather than with
+the install.
+
+`--include=dev` says that a build needs its build tools regardless of NODE_ENV.
+The alternative — moving `@nestjs/cli` into dependencies — would ship a compiler
+to production to work around an install flag, and installing the CLI globally
+would make the build depend on something outside the repository.
