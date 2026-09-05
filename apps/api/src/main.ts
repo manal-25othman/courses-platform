@@ -52,10 +52,18 @@ async function bootstrap(): Promise<void> {
   const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:3000';
   app.enableCors({ origin: corsOrigin, credentials: true });
 
-  const port = Number(process.env.API_PORT ?? 3001);
-  await app.listen(port);
+  // PORT first, because that is the one a host assigns. Render, Railway, Fly
+  // and Heroku all pick a port, put it there, and route to it; a service that
+  // ignores it binds somewhere nothing is listening and the deploy fails its
+  // health check for reasons that look nothing like the cause. API_PORT stays
+  // for local use, where it is the developer who chooses.
+  const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001);
 
-  new Logger('Bootstrap').log(`API listening on http://localhost:${port}/api/v1`);
+  // Every interface, not just loopback: a container's health check and its
+  // router both arrive from outside the process.
+  await app.listen(port, '0.0.0.0');
+
+  new Logger('Bootstrap').log(`API listening on port ${port}, under /api/v1`);
 }
 
 void bootstrap();

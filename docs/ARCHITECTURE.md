@@ -81,6 +81,7 @@ Decisions approved by the client during architecture review. Each is now **[C] C
 | 2026-08-30 | §13.1 | Games do **not** affect unit completion, assessment scoring or progress — resolves the §16 vs §56 conflict |
 | 2026-08-30 | §37.7 | Content import: client supplies TOP GOAL Word files; developer converts and imports without inventing, changing or adding curriculum material; client reviews and approves before students use it |
 | 2026-08-30 | §37.2 | Shared content library. Master TOP GOAL content owned and controlled by the client; other schools may use it but not modify it; school-specific customisation via a separate copy that leaves the master untouched |
+| 2026-09-05 | §34 | Hosting **superseded**: **Render** (NestJS API, Free for the pilot), **Vercel** (Next.js web), Supabase and Resend unchanged. Render replaces Railway on predictable cost; Vercel's Hobby commercial-use terms remain open as T-27c |
 | 2026-08-30 | §34 | Hosting: **Railway** (Next.js + NestJS API), **Supabase** (PostgreSQL), **Resend** (password-reset email). Supabase **Free** during development with test data; plan, backups and Saudi data requirements to be reviewed and upgraded if necessary **before** the pilot with real student data |
 
 ---
@@ -1299,14 +1300,44 @@ Client decision (2026-08-30): fully managed services, no server administration.
 
 | Component | Provider | Plan |
 |---|---|---|
-| Web (Next.js) | **Railway** | Hobby |
-| API (NestJS) | **Railway** | Hobby (same project) |
+| Web (Next.js) | **Vercel** | Hobby — see the open question below |
+| API (NestJS) | **Render** | **Free** for the pilot/testing stage |
 | Database (PostgreSQL) | **Supabase** | **Free during development/testing with fake data** |
 | Password-reset email | **Resend** | Free tier |
 
-**Approved staging of cost:** development and testing run on Supabase Free (~$5/month total, Railway only). **Before the pilot with real student data**, the client will review the Supabase plan, backup requirements and applicable **Saudi data/privacy requirements**, and upgrade if necessary (Supabase Pro is ~$25/month and adds daily backups with 7-day retention and no project pausing).
+**Superseded (2026-09-05, client decision):** Railway was the confirmed host on
+2026-08-30. The API now goes to **Render** and the web app to **Vercel**. Render
+was chosen over Railway on predictable cost: a flat plan rather than metered
+usage, which a school budget can be told in advance. Render's Frankfurt region
+was chosen to sit beside the Supabase project in `eu-central-1`, because the
+chatty traffic is API-to-database rather than browser-to-API. Neither Render nor
+Vercel has a region in Saudi Arabia; nor did Railway.
 
-**Rationale recorded:** Supabase was chosen over Neon because the client already knows it, and its Row-Level-Security-first design directly serves §12 tenant isolation and §37 database-level protection. Vercel was excluded on two grounds: its Hobby tier prohibits commercial use (which covers a paid developer writing the code), and it is a poor host for the separate NestJS API confirmed in §37.8.
+**What Render Free means, stated plainly.** A free service sleeps after about
+fifteen minutes without traffic and takes 30–60 seconds to wake. The first girl
+to open the app after a quiet period waits through that, and so does the teacher
+opening it before a lesson. It is acceptable while the platform is being tested
+and nothing depends on it; it is not acceptable during a lesson with a class
+waiting. Moving to Render Starter is a plan change, not a migration — no
+redeploy, no configuration, and it can be done the day before the pilot.
+
+**Approved staging of cost:** development and testing run on Supabase Free and
+Render Free (no monthly cost). **Before the pilot with real student data**, the
+client will review the Supabase plan, backup requirements and applicable **Saudi
+data/privacy requirements**, and upgrade if necessary (Supabase Pro is ~$25/month
+and adds daily backups with 7-day retention and no project pausing; Render
+Starter is ~$7/month and removes the sleep).
+
+**Rationale recorded:** Supabase was chosen over Neon because the client already knows it, and its Row-Level-Security-first design directly serves §12 tenant isolation and §37 database-level protection.
+
+**Vercel, and the reason it was once excluded.** The 2026-08-30 record excluded
+Vercel on two grounds. The second no longer applies: Vercel now hosts only the
+Next.js web app, and the NestJS API confirmed in §37.8 is a separate service on
+Render, which is what §37.8 asked for. **The first ground still stands and is
+unresolved:** Vercel's Hobby tier prohibits commercial use, and a platform built
+by a paid developer for a client is commercial. This is a licensing question,
+not a technical one, and it is recorded here as open rather than closed — see
+T-27c. Render's free tier carries no equivalent restriction.
 
 **Supabase is used as the database only.** Supabase Auth is **not** used — authentication remains the custom implementation in §8, because §27/§28 require username-first login with an optional email, which does not fit an email-centric auth provider.
 
@@ -1469,7 +1500,8 @@ The TOP GOAL content has not yet been supplied. It is required before Phase 4.
 | T-29 | Email delivery service/provider | §28.1, §28.5 | **RESOLVED — Resend, client-confirmed (§34)** |
 | T-30 | **Saudi data/privacy requirements + Supabase plan review** | §34, §29.3 | **Open — must complete BEFORE the pilot with real student data** |
 | T-27 | Technology stack (Option A) | — | **RESOLVED — client-approved, see §2 / §37.8** |
-| T-27b | Hosting provider | §34 | **RESOLVED — Railway + Supabase + Resend, client-confirmed (§34)** |
+| T-27b | Hosting provider | §34 | **RESOLVED — superseded 2026-09-05: Render (API) + Vercel (web) + Supabase + Resend (§34)** |
+| T-27c | Vercel Hobby commercial-use terms | §34 | **Open — Hobby prohibits commercial use; confirm eligibility or budget for Vercel Pro before the pilot** |
 | T-28 | Data retention/deletion policy for minors | §29.3 | Not specified in SRS |
 
 ---
@@ -1550,4 +1582,4 @@ Points and stars formulas · push notification provider, permission flow and set
 ### Awaited from the client
 
 - TOP GOAL curriculum Word files, with answer keys and accepted alternative answers (needed by Phase 4).
-- Railway, Supabase and Resend account access when Phase 0 reaches deployment.
+- Render, Vercel, Supabase and Resend account access when Phase 0 reaches deployment.

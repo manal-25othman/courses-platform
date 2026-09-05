@@ -84,3 +84,41 @@ mode holds a dedicated connection, so DDL and Prisma's advisory lock both work.
 Do not use the **Transaction pooler** on 6543 for migrations: it hands the
 connection back between statements, which breaks that lock. Port 6543 is for the
 running API.
+
+
+## Deploying the API to Render
+
+`render.yaml` at the repository root declares the service, so Render builds it
+from the repository rather than from a form. In Render: **New -> Blueprint**,
+point it at this repository, and fill in the values it asks for. Everything
+else — plan, region, build and start commands, health check path — is already
+in the file.
+
+Two things about this monorepo decide those commands. It is one npm workspace,
+so `npm ci` has to run at the root even though the service lives in `apps/api`;
+a build rooted at `apps/api` resolves nothing. And the web app is a separate
+service on a separate host, so it is deliberately not built here.
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| Root directory | `.` | The workspaces are declared at the root |
+| Build | `npm ci && npm run build -w @courses/api` | Builds only the API; `npm run build` would also build Next.js and throw it away |
+| Start | `node apps/api/dist/main.js` | Resolves the Prisma client from `apps/api/node_modules` |
+| Health check | `/api/v1/health` | Public, and says nothing about the data |
+| Node | 22, from `.node-version` | Without the pin, Render picks its own default |
+| Region | Frankfurt | Beside the Supabase project; the chatty traffic is API-to-database |
+
+`PORT` is assigned by Render and read first by `main.ts`. `API_PORT` remains for
+local use. A service that ignores `PORT` binds where nothing is listening, and
+the deploy fails its health check for reasons that look nothing like the cause.
+
+### The two roles, on the host
+
+`DATABASE_URL` is `app_user` through the **transaction pooler** on 6543 with
+`?pgbouncer=true`. `DIRECT_URL` is the owner through the **session pooler** on
+5432, and the running API never uses it — Prisma reads it only for migrations.
+Pointing `DATABASE_URL` at the owner does not quietly work: the startup check
+refuses to boot, which is the point of it.
+
+Never set `ALLOW_UNRESTRICTED_DB` on a deployed service. It exists for a local
+database and it turns that check off.

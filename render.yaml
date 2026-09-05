@@ -1,0 +1,79 @@
+# The API service, declared so Render builds it from the repository rather than
+# from a form somebody fills in by hand.
+#
+# Two things about this monorepo shape the commands below. It is one npm
+# workspace, so the install has to happen at the root even though the service
+# being built lives in apps/api — a build rooted at apps/api would resolve
+# nothing. And the web app is a separate service on a separate host, so it is
+# deliberately not built here: on the free plan build minutes are finite and
+# building Next.js to throw it away wastes them.
+services:
+  - type: web
+    name: smart-shift-api
+    runtime: node
+    plan: free
+    region: frankfurt
+
+    # Beside the database, which is in eu-central-1. The traffic that matters is
+    # API-to-database — one page view is a few HTTP calls but many queries — so
+    # these two being in the same place matters more than either being close to
+    # Riyadh.
+
+    branch: claude/edu-platform-architecture-lkbado
+
+    # Not apps/api. npm ci must run where the workspaces are declared.
+    rootDir: .
+
+    buildCommand: npm ci && npm run build -w @courses/api
+    startCommand: node apps/api/dist/main.js
+
+    # The API answers here without a token, and says nothing about the data.
+    healthCheckPath: /api/v1/health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # One hop: Render terminates TLS in front of this process. Never `true` —
+      # that would trust a forged X-Forwarded-For and remove the sign-in limit.
+      - key: TRUSTED_PROXY_HOPS
+        value: 1
+
+      - key: ACCESS_TOKEN_TTL
+        value: 15m
+      - key: REFRESH_TOKEN_TTL_DAYS
+        value: 30
+      - key: PASSWORD_RESET_TTL_MINUTES
+        value: 60
+
+      # Everything below is entered in the Render dashboard, never in this file.
+      # sync: false means Render asks for the value and stores it encrypted.
+
+      # The app_user role through the transaction pooler. NOT the owner.
+      - key: DATABASE_URL
+        sync: false
+
+      # The owner, for migrations only. The running API never uses it — it is
+      # here so a migration can be run from the service shell if ever needed.
+      - key: DIRECT_URL
+        sync: false
+
+      # At least 32 characters. The API refuses to start without it.
+      - key: JWT_SECRET
+        sync: false
+
+      # The website's address. Set to a placeholder until Vercel exists, then
+      # corrected — an unset value silently defaults to localhost and blocks the
+      # real site.
+      - key: CORS_ORIGIN
+        sync: false
+
+      # Password recovery. The API starts without these and writes reset links
+      # to its own log instead, which is the intended behaviour before email is
+      # arranged.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: WEB_BASE_URL
+        sync: false
