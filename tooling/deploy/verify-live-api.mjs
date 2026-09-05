@@ -144,21 +144,45 @@ async function main() {
 
   // --- One client cannot guess passwords freely --------------------------
   // Also the only way from outside to see that the proxy hop count is right:
-  // the limit has to attach to the caller rather than to Render's router.
+  // the limit has to attach to the caller rather than to whatever sits in
+  // front of the service.
+  //
+  // The counter is read as well as the refusal, because the two failures look
+  // identical from outside and have opposite causes. A limit that never fires
+  // while the counter climbs is a limit set too high; a limit that never fires
+  // while the counter stays where it started means each request was filed
+  // under a different caller, and the address being counted is not the
+  // caller's.
   let blockedAt = 0;
+  const counter = [];
+
   for (let attempt = 1; attempt <= 14 && blockedAt === 0; attempt += 1) {
     const r = await get('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'nobody-at-all', password: `guess-${attempt}` }),
     });
+    counter.push(r.headers.get('x-ratelimit-remaining-auth') ?? '-');
     if (r.status === 429) blockedAt = attempt;
   }
+
+  const stuck = counter.length > 1 && counter.every((v) => v === counter[0]);
+
   record(
     'Repeated sign-in attempts are rate limited',
     blockedAt > 0,
-    blockedAt > 0 ? `blocked at attempt ${blockedAt}` : 'never blocked in 14 attempts',
+    blockedAt > 0
+      ? `blocked at attempt ${blockedAt}`
+      : `never blocked in 14 attempts; attempts remaining read ${counter.join(', ')}`,
   );
+
+  if (blockedAt === 0 && stuck) {
+    console.log('');
+    console.log('  The counter never moved, so every attempt was filed under a different');
+    console.log('  caller. The address being counted is not the one the request came from —');
+    console.log('  it is an address belonging to the proxy layer, which differs per request.');
+    console.log('  TRUSTED_PROXY_HOPS is counting too few hops for this host.');
+  }
 
   const failed = results.filter((r) => !r.ok);
   console.log('');
