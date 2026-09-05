@@ -261,10 +261,29 @@ async function main() {
 
   if (/P1001|Can't reach database server/.test(statusText)) {
     console.error('Cannot reach the database.\n');
-    console.error('If this is the Supabase direct connection, the cause is almost certainly that');
-    console.error('it resolves to IPv6 only and this network is IPv4. Use the Session pooler');
-    console.error('string instead (port 5432, host aws-0-….pooler.supabase.com). Do not use the');
-    console.error('Transaction pooler on 6543 — migrations need a session-level lock.');
+
+    // Worth naming exactly rather than hinting: the direct and pooled strings
+    // differ by two easily-missed characters, and Supabase's Connect panel
+    // opens on the direct one.
+    const direct = /^db\..+\.supabase\.co$/.test(where.host);
+
+    if (direct) {
+      const ref = where.host.split('.')[1];
+      console.error('This is the DIRECT connection string, which resolves to IPv6 only. This');
+      console.error('network is IPv4, and the IPv4 add-on is Pro-and-above, so it cannot work');
+      console.error('here. Use the SESSION POOLER string instead. In Supabase: Connect ->');
+      console.error('Connection String -> Session pooler. It differs in two places:\n');
+      console.error(`  user  postgres            ->  postgres.${ref}`);
+      console.error(`  host  ${where.host}  ->  aws-0-<region>.pooler.supabase.com\n`);
+      console.error('Not the Transaction pooler on 6543: it hands the connection back between');
+      console.error('statements, which breaks the session-level lock migrations take.');
+    } else {
+      console.error('Check the host and port are reachable from here. For Supabase, the string');
+      console.error('that works from an IPv4 network is the Session pooler on port 5432, host');
+      console.error('aws-0-<region>.pooler.supabase.com, user postgres.<project-ref>. Not the');
+      console.error('Transaction pooler on 6543 — migrations need a session-level lock.');
+    }
+
     process.exit(1);
   }
 
