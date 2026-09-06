@@ -1,0 +1,161 @@
+# Creates the first three things in a production database: the platform
+# operator, the school, and the school's first teacher.
+#
+# It lives here for the same reason the migrations do — this is the one place
+# that can both reach the database and hold a credential safely. The passwords
+# come from the production environment's secrets, are handed to one job, and
+# are masked in the logs. Nobody types them anywhere, and nothing writes them
+# down.
+#
+# Started by hand, once. The scripts it runs refuse to overwrite an operator or
+# a teacher that already exists, so a second run changes nothing.
+name: Production bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'inspect = look and change nothing. create = create what is missing.'
+        required: true
+        default: inspect
+        type: choice
+        options: [inspect, create]
+      school_name:
+        description: 'The school to create.'
+        required: true
+        default: 'Al Noor School'
+        type: string
+      teacher_name:
+        description: "The teacher's name, as her students will see it."
+        required: true
+        default: 'Manal'
+        type: string
+      platform_admin_username:
+        description: 'Username for the platform operator.'
+        required: true
+        default: 'operator'
+        type: string
+      teacher_username:
+        description: 'Username for the first teacher.'
+        required: true
+        default: 'teacher'
+        type: string
+      confirm:
+        description: 'For create only: type CREATE to confirm. Ignored for inspect.'
+        required: true
+        default: ''
+        type: string
+
+concurrency:
+  group: production-database
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Refuse an unconfirmed run
+        if: inputs.mode == 'create' && inputs.confirm != 'CREATE'
+        run: |
+          echo "::error::Creating production accounts needs the confirm box set to CREATE."
+          exit 1
+
+      - name: Check every credential is present
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          OPERATOR_EMAIL: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_EMAIL }}
+          OPERATOR_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
+          TEACHER_EMAIL: ${{ secrets.PRODUCTION_TEACHER_EMAIL }}
+          TEACHER_PASSWORD: ${{ secrets.PRODUCTION_TEACHER_PASSWORD }}
+        run: |
+          needed="DIRECT_URL"
+          [ "${{ inputs.mode }}" = "create" ] && needed="DIRECT_URL OPERATOR_EMAIL OPERATOR_PASSWORD TEACHER_EMAIL TEACHER_PASSWORD"
+          missing=""
+          for name in $needed; do
+            [ -z "${!name}" ] && missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing from the production environment:$missing"
+            exit 1
+          fi
+          echo "Everything this mode needs is present. No value is printed by this workflow."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the database client
+        run: npm run db:generate
+
+      # Always, and first. After an interrupted run the honest answer to "did
+      # it finish?" is that nobody knows, and every script below refuses to
+      # overwrite what it finds — so the risk is not damage but a wrong
+      # assumption. This removes the guess, and writes nothing.
+      - name: Look at what is there
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: node tooling/deploy/production-state.mjs
+
+      # The confirmed configuration values — passing score, attempt caps, retry
+      # rules. They live in the database rather than the code so they can be
+      # changed without a rebuild, which means an empty database has none of
+      # them. Idempotent: a value somebody has since changed is left alone.
+      - name: Seed the confirmed settings
+        if: inputs.mode == 'create'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: npm run db:seed -w @courses/api
+
+      # Somebody has to be first. Schools and their administrators are made
+      # from the platform screens, but the person who makes them cannot make
+      # herself.
+      - name: Create the platform operator
+        if: inputs.mode == 'create'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          PLATFORM_ADMIN_USERNAME: ${{ inputs.platform_admin_username }}
+          PLATFORM_ADMIN_EMAIL: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_EMAIL }}
+          PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
+        run: npm run db:platform-admin -w @courses/api
+
+      # And the school with its first teacher, who cannot be created by a
+      # teacher because there is not one yet.
+      - name: Create the school and its first teacher
+        if: inputs.mode == 'create'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          SCHOOL_NAME: ${{ inputs.school_name }}
+          TEACHER_USERNAME: ${{ inputs.teacher_username }}
+          TEACHER_EMAIL: ${{ secrets.PRODUCTION_TEACHER_EMAIL }}
+          TEACHER_NAME: ${{ inputs.teacher_name }}
+          TEACHER_PASSWORD: ${{ secrets.PRODUCTION_TEACHER_PASSWORD }}
+        run: npm run db:bootstrap -w @courses/api
+
+      # If an earlier, interrupted run created the teacher under a different
+      # name, this corrects that one row rather than making a second teacher.
+      # It refuses unless the account it finds is the one holding the address
+      # this run was given.
+      - name: Make sure the teacher is shown by the right name
+        if: inputs.mode == 'create'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          TEACHER_EMAIL: ${{ secrets.PRODUCTION_TEACHER_EMAIL }}
+          TEACHER_NAME: ${{ inputs.teacher_name }}
+        run: node tooling/deploy/set-teacher-name.mjs
+
+      # Neither script says whether the result is the shape production should
+      # be in. This does, and it names no credential.
+      - name: Check what was created, and what was not
+        if: inputs.mode == 'create'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          SCHOOL_NAME: ${{ inputs.school_name }}
+        run: node tooling/deploy/verify-bootstrap.mjs
