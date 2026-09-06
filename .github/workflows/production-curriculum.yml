@@ -28,7 +28,7 @@ on:
       source_repo:
         description: 'The private repository holding the verified source document.'
         required: true
-        default: 'manal-25othman/courses-platform-source'
+        default: 'manal-25othman/-courses-platform-source-'
         type: string
       source_path:
         description: 'The file inside that repository.'
@@ -138,15 +138,32 @@ jobs:
               fi
 
               login=$(echo "$who" | sed '$d' | grep -o '"login":"[^"]*"' | head -1 | cut -d'"' -f4)
-              echo "::error::The token is valid — it belongs to $login — but it cannot see"
-              echo "${{ inputs.source_repo }} (HTTP $code)."
+              echo "The token is valid — it belongs to $login — but $code on"
+              echo "${{ inputs.source_repo }}."
               echo ""
-              echo "So the repository was not granted to it. On the token's page, under"
-              echo "Repository access, \"Only select repositories\" has to have"
-              echo "courses-platform-source actually added to the list underneath it —"
-              echo "choosing the option without picking the repository grants nothing."
-              echo "GitHub answers 404 rather than 403 here on purpose: it will not confirm"
-              echo "that a repository exists to something not allowed to see it."
+
+              # Still two causes, and they are indistinguishable by that 404
+              # alone: the repository may not have been granted to the token,
+              # or it may not exist under that name. GitHub answers the same
+              # for both on purpose, because confirming a repository exists is
+              # itself a disclosure. So ask the token what it CAN reach — the
+              # answer names the repository, and a name is where this goes
+              # wrong: a stray hyphen reads as a permissions problem forever.
+              echo "What this token can reach:"
+              api -H "Accept: application/vnd.github+json" \
+                  "https://api.github.com/user/repos?per_page=100" \
+                | sed '$d' \
+                | grep -o '"full_name":"[^"]*"' \
+                | cut -d'"' -f4 \
+                | sed 's/^/  /' \
+                || echo "  (could not list)"
+
+              echo ""
+              echo "::error::Cannot read ${{ inputs.source_repo }}."
+              echo "If it is listed above, the name in source_repo is wrong — re-run with the"
+              echo "name exactly as listed. If it is not listed, the repository was never added"
+              echo "to the token: on the token's page, \"Only select repositories\" has to have"
+              echo "it in the list underneath, not merely the option chosen."
               exit 1
             fi
 
