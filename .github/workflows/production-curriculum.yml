@@ -1,0 +1,207 @@
+# Imports the approved curriculum into production, from the verified source.
+#
+# The source is a 24 MB Word document that is deliberately not in this
+# repository — a textbook does not belong in git history — so the workflow
+# fetches it from a private release attached to this repo, checks it is the
+# exact file the import chain was built against, and refuses if it is not.
+#
+# Nothing here invents, completes or corrects curriculum. A question whose
+# answer the source does not state is stored unanswered and marked for the
+# teacher. Everything arrives as a draft: no girl sees any of it until her
+# teacher publishes it from her own screens.
+#
+# Started by hand. Every step is safe to run twice — each importer recognises
+# its own work by the paragraph each row came from.
+name: Production curriculum
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry = show what would be written. import = write it.'
+        required: true
+        default: dry
+        type: choice
+        options: [dry, import]
+      release_tag:
+        description: 'The release holding the verified source document.'
+        required: true
+        default: 'curriculum-source'
+        type: string
+      asset_name:
+        description: 'The file attached to that release.'
+        required: true
+        default: 'Top_Goal_3_Term_1_answers.docx'
+        type: string
+      school_name:
+        description: 'Whose curriculum this is.'
+        required: true
+        default: 'Al Noor School'
+        type: string
+      confirm:
+        description: 'For import only: type IMPORT to confirm. Ignored for dry.'
+        required: true
+        default: ''
+        type: string
+
+concurrency:
+  group: production-database
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Recorded in tooling/content-import/grammar-scans.json when the mapping of
+  # scans to units was made. Every source reference in the import chain is a
+  # position in this exact file: a different edition would put the same
+  # references on different questions.
+  EXPECTED_MD5: 176ad3f307072d4ca28fb9d77a617c67
+  SRC: content-source/source.docx
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Refuse an unconfirmed import
+        if: inputs.mode == 'import' && inputs.confirm != 'IMPORT'
+        run: |
+          echo "::error::Importing needs the confirm box set to IMPORT."
+          exit 1
+
+      - name: Fetch the verified source from its release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p content-source
+          if ! gh release download "${{ inputs.release_tag }}" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern "${{ inputs.asset_name }}" \
+                --output "$SRC" --clobber; then
+            echo "::error::No asset \"${{ inputs.asset_name }}\" on release \"${{ inputs.release_tag }}\"."
+            echo "Attach the verified document to that release and run this again."
+            exit 1
+          fi
+          echo "Downloaded $(du -h "$SRC" | cut -f1)."
+
+      # Before anything reads it. Every source reference the importers write is
+      # a paragraph position in this file, so the wrong edition would not fail —
+      # it would file the right questions under the wrong units, silently.
+      - name: Check it is the verified document
+        run: |
+          actual=$(md5sum "$SRC" | cut -d' ' -f1)
+          if [ "$actual" != "$EXPECTED_MD5" ]; then
+            echo "::error::This is not the verified source document."
+            echo "  expected $EXPECTED_MD5"
+            echo "  got      $actual"
+            echo "The import chain is built against one exact file. Nothing was run."
+            exit 1
+          fi
+          echo "Checksum matches the document the import chain was built against."
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the database client
+        run: npm run db:generate
+
+      # The grammar sheets are re-encoded below the platform's picture limit.
+      - name: Install the image library the grammar sheets need
+        run: python3 -m pip install --quiet Pillow
+
+      - name: Read the source
+        run: |
+          node tooling/content-import/extract.mjs "$SRC" > questions.json
+          node tooling/content-import/extract-vocabulary.mjs "$SRC" > vocabulary.json
+          node tooling/content-import/extract-activities.mjs "$SRC" > activities.json
+          echo "Extracted."
+
+      # Against the real question engine, not a schema: an activity that the
+      # engine could not present is a problem to find here, not in a lesson.
+      - name: Check every activity against the engine that will present it
+        working-directory: apps/api
+        run: npx ts-node prisma/validate-extracted.ts ../../activities.json
+
+      - name: What would be written
+        if: inputs.mode == 'dry'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          SCHOOL_NAME: ${{ inputs.school_name }}
+          DRY: '1'
+        run: |
+          node tooling/content-import/create-course-units.mjs
+          node tooling/content-import/import-vocabulary.mjs vocabulary.json
+          node tooling/content-import/import-activities.mjs activities.json "$SRC"
+          node tooling/content-import/import-grammar-scans.mjs "$SRC"
+
+      # The six bands the importers file into. They refuse to create a unit,
+      # because inventing curriculum structure is what none of them may do.
+      - name: Create the course and its six units
+        if: inputs.mode == 'import'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          SCHOOL_NAME: ${{ inputs.school_name }}
+        run: node tooling/content-import/create-course-units.mjs
+
+      - name: Import the questions the source states in plain text
+        if: inputs.mode == 'import'
+        working-directory: apps/api
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: npx ts-node prisma/import-questions.ts ../../questions.json
+
+      - name: Put back anything the first pass missed, and file it correctly
+        if: inputs.mode == 'import'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: |
+          node tooling/content-import/restore-missing.mjs questions.json
+          node tooling/content-import/refile-questions.mjs questions.json
+
+      - name: Import the bilingual vocabulary
+        if: inputs.mode == 'import'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: node tooling/content-import/import-vocabulary.mjs vocabulary.json
+
+      - name: Import the exercises, with the pictures they need
+        if: inputs.mode == 'import'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: node tooling/content-import/import-activities.mjs activities.json "$SRC"
+
+      - name: Import the grammar teaching sheets
+        if: inputs.mode == 'import'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: node tooling/content-import/import-grammar-scans.mjs "$SRC"
+
+      # The teacher's own answers to what the source left open, recorded
+      # verbatim on 2026-09-02. Each is checked against the state it assumes
+      # before anything changes.
+      - name: Apply the teacher's recorded decisions
+        if: inputs.mode == 'import'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+        run: node tooling/content-import/apply-teacher-decisions.mjs activities.json "$SRC"
+
+      - name: Check the result against the source
+        if: inputs.mode == 'import'
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          SCHOOL_NAME: ${{ inputs.school_name }}
+        run: node tooling/deploy/verify-curriculum.mjs
+
+      # It is 24 MB of somebody's textbook. It came for one job.
+      - name: Remove the source document from the runner
+        if: always()
+        run: rm -rf content-source

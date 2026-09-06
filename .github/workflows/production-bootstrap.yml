@@ -89,6 +89,23 @@ jobs:
           fi
           echo "Everything this mode needs is present. No value is printed by this workflow."
 
+          # Both scripts insist on twelve characters, and each checks only its
+          # own. Checked together here, before either runs, because failing on
+          # the second would leave an operator created and no school — a half
+          # bootstrap, which is the one outcome worth engineering against. Only
+          # the verdict is printed, never a length and never a value.
+          if [ "${{ inputs.mode }}" = "create" ]; then
+            short=""
+            [ "${#OPERATOR_PASSWORD}" -lt 12 ] && short="$short PRODUCTION_PLATFORM_ADMIN_PASSWORD"
+            [ "${#TEACHER_PASSWORD}" -lt 12 ] && short="$short PRODUCTION_TEACHER_PASSWORD"
+            if [ -n "$short" ]; then
+              echo "::error::Too short, minimum twelve characters:$short"
+              echo "Nothing was created. Update the secret and run this again."
+              exit 1
+            fi
+            echo "Both passwords are long enough."
+          fi
+
       - name: Install dependencies
         run: npm ci
 

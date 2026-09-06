@@ -13,6 +13,7 @@
  *   node extract.mjs <file.docx> > questions.json
  */
 import { execFileSync } from 'node:child_process';
+import { UNIT_TITLES } from './units.mjs';
 
 const HIGHLIGHT = 'yellow';
 
@@ -120,7 +121,9 @@ const body = paragraphs.filter((p, i, all) => {
   return !(previous && previous.text === p.text);
 });
 
-const UNIT_TITLES = ['Welcome', 'Living Things', 'Lifestyles', 'Interests', 'Professions', 'Grammar Review'];
+// The bands themselves live in units.mjs: creating them in the database
+// needs the same list, and importing this file would run it.
+
 
 /**
  * Where each unit's content starts, measured against inline body landmarks.
