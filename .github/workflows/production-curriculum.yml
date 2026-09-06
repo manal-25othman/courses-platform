@@ -1,9 +1,11 @@
 # Imports the approved curriculum into production, from the verified source.
 #
 # The source is a 24 MB Word document that is deliberately not in this
-# repository — a textbook does not belong in git history — so the workflow
-# fetches it from a private release attached to this repo, checks it is the
-# exact file the import chain was built against, and refuses if it is not.
+# repository. This repository is public, so a textbook here would be a
+# textbook published; it lives in a private repository of its own instead,
+# and is read with a token that may do nothing but read that one repository.
+# The workflow checks the file is the exact one the import chain was built
+# against, and refuses if it is not.
 #
 # Nothing here invents, completes or corrects curriculum. A question whose
 # answer the source does not state is stored unanswered and marked for the
@@ -23,13 +25,13 @@ on:
         default: dry
         type: choice
         options: [dry, import]
-      release_tag:
-        description: 'The release holding the verified source document.'
+      source_repo:
+        description: 'The private repository holding the verified source document.'
         required: true
-        default: 'curriculum-source'
+        default: 'manal-25othman/courses-platform-source'
         type: string
-      asset_name:
-        description: 'The file attached to that release.'
+      source_path:
+        description: 'The file inside that repository.'
         required: true
         default: 'Top_Goal_3_Term_1_answers.docx'
         type: string
@@ -78,20 +80,32 @@ jobs:
           echo "::error::Importing needs the confirm box set to IMPORT."
           exit 1
 
-      - name: Fetch the verified source from its release
+      # Read with the fine-grained token, which can do nothing but read the
+      # contents of that one repository. The token travels in a header, never
+      # in the URL, and GitHub masks it in the log either way.
+      - name: Fetch the verified source from its own private repository
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_TOKEN: ${{ secrets.CURRICULUM_SOURCE_TOKEN }}
         run: |
-          mkdir -p content-source
-          if ! gh release download "${{ inputs.release_tag }}" \
-                --repo "$GITHUB_REPOSITORY" \
-                --pattern "${{ inputs.asset_name }}" \
-                --output "$SRC" --clobber; then
-            echo "::error::No asset \"${{ inputs.asset_name }}\" on release \"${{ inputs.release_tag }}\"."
-            echo "Attach the verified document to that release and run this again."
+          if [ -z "$SOURCE_TOKEN" ]; then
+            echo "::error::CURRICULUM_SOURCE_TOKEN is not set on the production environment."
             exit 1
           fi
-          echo "Downloaded $(du -h "$SRC" | cut -f1)."
+
+          mkdir -p content-source
+
+          if ! curl -fsSL \
+                -H "Authorization: Bearer $SOURCE_TOKEN" \
+                -H "Accept: application/vnd.github.raw" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/${{ inputs.source_repo }}/contents/${{ inputs.source_path }}" \
+                -o "$SRC"; then
+            echo "::error::Could not read ${{ inputs.source_path }} from ${{ inputs.source_repo }}."
+            echo "Check the token still has Contents: Read on that repository and has not expired."
+            exit 1
+          fi
+
+          echo "Read $(du -h "$SRC" | cut -f1) from the private repository."
 
       # Before anything reads it. Every source reference the importers write is
       # a paragraph position in this file, so the wrong edition would not fail —
