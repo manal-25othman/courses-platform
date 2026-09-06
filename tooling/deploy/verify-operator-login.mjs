@@ -23,7 +23,11 @@ const argon2 = require('argon2');
 const url = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 const site = (process.env.SITE_URL ?? '').replace(/\/+$/, '');
 const email = process.env.PLATFORM_ADMIN_EMAIL?.trim();
-const password = process.env.PLATFORM_ADMIN_PASSWORD;
+// Trimmed, because this check stands in for somebody at a keyboard and a
+// keyboard cannot produce the newline a pasted secret can carry. A secret
+// holding one is a real fault — operator-password.mjs is what finds it — but
+// it is not this check's to reproduce.
+const password = process.env.PLATFORM_ADMIN_PASSWORD?.trim();
 
 if (!url || !site || !email || !password) {
   console.error('DIRECT_URL, SITE_URL, PLATFORM_ADMIN_EMAIL and PLATFORM_ADMIN_PASSWORD are all required.');

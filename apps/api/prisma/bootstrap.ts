@@ -29,6 +29,19 @@ const prisma = new PrismaClient({
 
 const MIN_PASSWORD_LENGTH = 12;
 
+/**
+ * A password with whitespace around it is a password nobody can type.
+ *
+ * The value usually arrives pasted — from a secret store, a manager, a note —
+ * and a newline comes with it more often than anyone notices. Hashed as-is, it
+ * verifies perfectly from every script that reads the same variable, and is
+ * refused every time a person types the characters they can see. Trimming here
+ * costs nothing real: no password is meant to begin or end in a space.
+ */
+function passwordOf(name: string): string {
+  return required(name).trim();
+}
+
 function required(name: string): string {
   const value = process.env[name];
 
@@ -47,7 +60,7 @@ async function main(): Promise<void> {
   // password and self-service recovery is her only route back in (SRS 28.5).
   const email = required('TEACHER_EMAIL');
   const displayName = required('TEACHER_NAME');
-  const password = required('TEACHER_PASSWORD');
+  const password = passwordOf('TEACHER_PASSWORD');
 
   if (password.length < MIN_PASSWORD_LENGTH) {
     console.error(`TEACHER_PASSWORD must be at least ${MIN_PASSWORD_LENGTH} characters.`);
