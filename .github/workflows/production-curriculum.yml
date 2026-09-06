@@ -145,6 +145,11 @@ jobs:
         working-directory: apps/api
         run: npx ts-node prisma/validate-extracted.ts ../../activities.json
 
+      # What the course and its units would be, asked of the database, and what
+      # would go into them, read from the extraction. The importers themselves
+      # cannot be asked this yet: they refuse to run before the units exist,
+      # because creating one would mean inventing curriculum structure. Their
+      # behaviour is settled by the rehearsal on a clean database, not here.
       - name: What would be written
         if: inputs.mode == 'dry'
         env:
@@ -153,9 +158,7 @@ jobs:
           DRY: '1'
         run: |
           node tooling/content-import/create-course-units.mjs
-          node tooling/content-import/import-vocabulary.mjs vocabulary.json
-          node tooling/content-import/import-activities.mjs activities.json "$SRC"
-          node tooling/content-import/import-grammar-scans.mjs "$SRC"
+          node tooling/content-import/report-extraction.mjs questions.json vocabulary.json activities.json
 
       # The six bands the importers file into. They refuse to create a unit,
       # because inventing curriculum structure is what none of them may do.
