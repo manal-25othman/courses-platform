@@ -121,10 +121,32 @@ jobs:
             code=$(echo "$repo" | tail -1)
 
             if [ "$code" != "200" ]; then
-              echo "::error::The token cannot see ${{ inputs.source_repo }} (HTTP $code)."
-              echo "Either the repository is not selected on the token, or Contents is not"
-              echo "set to Read, or the token has expired. The repository itself is fine:"
-              echo "this says nothing about it, only about what the token may reach."
+              # Two more things this could still be, and they have different
+              # fixes: a token that is not a valid token at all — truncated on
+              # the way into the secret, or since revoked — or a perfectly good
+              # token that was simply never given this repository. Asking who
+              # the token is separates them. It needs no permission, and it
+              # prints a username, not a credential.
+              who=$(api "https://api.github.com/user")
+              whocode=$(echo "$who" | tail -1)
+
+              if [ "$whocode" != "200" ]; then
+                echo "::error::The token itself is not valid (HTTP $whocode on a request that any"
+                echo "valid token can make). It was probably truncated on the way into the secret,"
+                echo "or has been revoked. Generate a new one and paste it again, whole."
+                exit 1
+              fi
+
+              login=$(echo "$who" | sed '$d' | grep -o '"login":"[^"]*"' | head -1 | cut -d'"' -f4)
+              echo "::error::The token is valid — it belongs to $login — but it cannot see"
+              echo "${{ inputs.source_repo }} (HTTP $code)."
+              echo ""
+              echo "So the repository was not granted to it. On the token's page, under"
+              echo "Repository access, \"Only select repositories\" has to have"
+              echo "courses-platform-source actually added to the list underneath it —"
+              echo "choosing the option without picking the repository grants nothing."
+              echo "GitHub answers 404 rather than 403 here on purpose: it will not confirm"
+              echo "that a repository exists to something not allowed to see it."
               exit 1
             fi
 
