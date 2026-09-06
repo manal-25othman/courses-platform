@@ -1,0 +1,52 @@
+# Asks why a sign-in was refused, from inside.
+#
+# The API answers every failed sign-in with one sentence — "Incorrect username
+# or password" — whether the account does not exist, the password is wrong, or
+# the name was typed in the wrong shape. That is deliberate: anything more
+# would let a stranger discover which usernames are real. It also means the
+# person staring at the message cannot tell which of the three happened.
+#
+# With the credentials the deployment was given, all three can be told apart.
+# This does, and reports only which one it is: no password, no address, no
+# hash, no token is ever printed.
+name: Verify the production sign-in
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: 'The website, which carries the API.'
+        required: true
+        default: 'https://courses-platform-web.vercel.app'
+        type: string
+
+concurrency:
+  group: production-database
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the database client
+        run: npm run db:generate
+
+      - name: Find out why, and check the live path end to end
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          SITE_URL: ${{ inputs.site_url }}
+          PLATFORM_ADMIN_EMAIL: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_EMAIL }}
+          PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
+        run: node tooling/deploy/verify-operator-login.mjs

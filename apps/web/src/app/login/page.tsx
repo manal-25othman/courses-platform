@@ -24,7 +24,22 @@ function LoginForm() {
       // Role and account state decide where they land.
       router.push(homeFor(result.user));
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'Could not sign in.');
+      // The API answers every failed sign-in with the same sentence, so that
+      // nobody can discover which usernames are real — which also means it
+      // cannot tell somebody they have typed the wrong *kind* of thing. An
+      // address in this box matches nobody, and "incorrect username or
+      // password" sends her to check a password that was never the problem.
+      // Saying so reveals nothing: it is about what was typed here, not about
+      // any account.
+      const looksLikeAnAddress = username.includes('@');
+
+      setError(
+        looksLikeAnAddress
+          ? 'That looks like an email address. Sign in with your username — your email is only used to send you a reset link.'
+          : caught instanceof ApiError
+            ? caught.message
+            : 'Could not sign in.',
+      );
       setBusy(false);
     }
   }
