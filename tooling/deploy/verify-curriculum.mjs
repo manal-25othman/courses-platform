@@ -27,6 +27,13 @@ if (!url || !schoolName) {
  */
 const EXPECTED = {
   questions: 171,
+  picturesOnQuestions: 53,
+  /**
+   * The five the teacher's recorded decisions do not answer: one true/false
+   * exercise in Welcome that the source states without marking which is which.
+   * Named rather than counted, so a different five would not pass quietly.
+   */
+  stillUnanswered: ['p107-circle-1', 'p107-circle-2', 'p107-circle-3', 'p107-circle-4', 'p107-circle-5'],
   vocabulary: { Welcome: 18, 'Living Things': 26, Lifestyles: 36, Interests: 26, Professions: 26 },
   grammarSections: 8,
   preliminary: new Set(['Welcome', 'Grammar Review']),
@@ -90,11 +97,40 @@ async function main() {
     `${total}, expected ${EXPECTED.questions}`,
   );
 
+  // Two rows from the same paragraph would mean an importer ran twice and did
+  // not recognise its own work — the one way this chain could double content.
+  const [{ n: distinctRefs }] = await db.$queryRaw`
+    SELECT count(DISTINCT source_ref)::int AS n FROM questions
+  `;
+  record(
+    'No two questions came from the same paragraph',
+    distinctRefs === total,
+    `${distinctRefs} distinct references across ${total} questions`,
+  );
+
   const drafts = await db.question.count({ where: { status: 'DRAFT' } });
   record('Every question is still a draft', drafts === total, `${drafts} of ${total}`);
 
-  const flagged = await db.question.count({ where: { needsReview: true } });
-  console.log(`        (${flagged} are marked for the teacher: the source states them but not their answer)`);
+  // What the teacher still has to decide, named rather than counted: the point
+  // is that these five were left alone, not that five of something were.
+  const waiting = await db.question.findMany({
+    where: { needsReview: true },
+    select: { sourceRef: true, answerKey: true },
+    orderBy: { sourceRef: 'asc' },
+  });
+  const flagged = waiting.length;
+  const waitingRefs = waiting.map((q) => q.sourceRef).sort();
+
+  record(
+    'The questions still waiting for an answer are the five expected ones',
+    JSON.stringify(waitingRefs) === JSON.stringify([...EXPECTED.stillUnanswered].sort()),
+    waitingRefs.join(', ') || 'none',
+  );
+  record(
+    'And none of them was given an answer anyway',
+    waiting.every((q) => q.answerKey === null || Object.keys(q.answerKey ?? {}).length === 0),
+    'no answer key on any of them',
+  );
 
   // --- Vocabulary, unit by unit -------------------------------------------
   const units = course?.units ?? [];
@@ -125,7 +161,18 @@ async function main() {
 
   // --- A question with a picture is answerable -----------------------------
   const withPictures = await db.mediaAsset.count({ where: { questionId: { not: null } } });
-  record('The pictures questions need came with them', withPictures > 0, `${withPictures} pictures on questions`);
+  record(
+    'The pictures questions need came with them',
+    withPictures === EXPECTED.picturesOnQuestions,
+    `${withPictures} on questions, expected ${EXPECTED.picturesOnQuestions}`,
+  );
+
+  const allMedia = await db.mediaAsset.count();
+  record(
+    'And nothing was stored twice',
+    allMedia === EXPECTED.picturesOnQuestions + EXPECTED.grammarSections,
+    `${allMedia} pictures in total, expected ${EXPECTED.picturesOnQuestions + EXPECTED.grammarSections}`,
+  );
 
   // --- And nothing that should not be here --------------------------------
   const strangers = {
