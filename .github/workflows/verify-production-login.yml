@@ -19,6 +19,11 @@ on:
         required: true
         default: 'https://courses-platform-web.vercel.app'
         type: string
+      repair_operator_password:
+        description: 'Reset the operator password from the current secret, if and only if it does not already match.'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: production-database
@@ -42,6 +47,22 @@ jobs:
 
       - name: Generate the database client
         run: npm run db:generate
+
+      # Runs first, because it changes what the check below is checking. It
+      # only writes when the stored password does not already match the secret
+      # with its surrounding whitespace removed — the one shape of mismatch a
+      # person can hit and a script cannot: a value pasted with a newline is
+      # hashed faithfully, sent faithfully by every script since, and cannot be
+      # reproduced on a keyboard. When the stored password is already typeable
+      # it reports that and changes nothing.
+      - name: Compare the operator's password with the current secret
+        if: inputs.repair_operator_password
+        env:
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          SITE_URL: ${{ inputs.site_url }}
+          PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
+          APPLY: '1'
+        run: node tooling/deploy/operator-password.mjs
 
       - name: Find out why, and check the live path end to end
         env:
