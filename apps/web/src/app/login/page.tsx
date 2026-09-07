@@ -54,7 +54,7 @@ function LoginForm() {
       </div>
       <div className="card raised">
         <h1>Sign in</h1>
-        <p className="muted">TOP GOAL</p>
+        <p className="muted">Use the username you were given, not an email address.</p>
 
         {justChanged && (
           <p className="alert ok" style={{ marginTop: '1rem' }} role="status">

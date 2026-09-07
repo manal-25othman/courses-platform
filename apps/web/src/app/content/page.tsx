@@ -354,10 +354,11 @@ function UnitRow({
       </div>
 
       {todo.length > 0 && (
-        <p className="unitrow-todo">
-          <span className="todo-label">Still to do</span>
-          <span>{todo.join(' · ')}</span>
-        </p>
+        <ul className="unitrow-todo" aria-label="Still to do">
+          {todo.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
       )}
 
       <div className="unitrow-do">

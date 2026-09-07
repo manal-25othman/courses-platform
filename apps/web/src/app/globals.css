@@ -725,6 +725,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   font-family: var(--font-display); font-variation-settings: var(--wonk);
   font-size: 1.5rem; font-weight: 700; color: var(--brand); line-height: 1;
 }
+/* Nothing recorded yet: said as a fact, not as a score of nought. */
+.station-quiet { flex: none; font-size: var(--fs-small); font-weight: 600; color: var(--ink-3); }
 /* Finished is the one place mint appears on this screen, so it needs no
    other decoration to be read. */
 .finished-mark {
@@ -1949,18 +1951,23 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
    would make every unit look urgent and none look finished. */
 .parts { display: flex; gap: var(--s2); flex-wrap: wrap; min-width: 0; }
 .unitrow-do { grid-area: do; display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
+/* What is unfinished, one item each, with the amber mark the row's edge
+   already carries — a list she can work through, never a sentence joined
+   by dots. */
 .unitrow-todo {
-  grid-area: todo; margin: 0;
-  display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap;
+  grid-area: todo; margin: 0; padding: 0; list-style: none;
+  display: flex; align-items: baseline; gap: var(--s2) var(--s4); flex-wrap: wrap;
   font-size: var(--fs-small); color: var(--ink-2);
 }
-/* The state is named, not only coloured. */
-.todo-label {
-  flex: none; font-size: var(--fs-micro); font-weight: 700; text-transform: none;
-  color: var(--warn-ink); background: var(--warn-soft);
-  padding: .1rem .45rem; border-radius: var(--r-sm);
+.unitrow-todo li { display: inline-flex; align-items: center; gap: var(--s2); }
+.unitrow-todo li::before {
+  content: ''; width: .45rem; height: .45rem; border-radius: 50%; flex: none;
+  background: var(--warn);
 }
-.flag[data-tone='hidden'] { background: var(--warn-soft); color: var(--warn-ink); }
+/* Hidden is said by the rail down the row's edge, so the chip itself stays
+   quiet; on the unit editor, where there is no rail, it carries the amber. */
+.flag[data-tone='hidden'] { background: var(--ground-2); color: var(--ink-2); }
+.unithead .flag[data-tone='hidden'] { background: var(--warn-soft); color: var(--warn-ink); }
 
 @media (max-width: 640px) {
   /* Actions belong under the unit on a narrow screen, not squeezed beside it. */

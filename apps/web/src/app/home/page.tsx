@@ -332,6 +332,8 @@ export default function StudentHomePage() {
                           <Icon name="tick" size={14} />
                           Finished
                         </span>
+                      ) : p.overallPercent === 0 ? (
+                        <span className="station-quiet">Not started</span>
                       ) : (
                         <strong className="station-pct num">{p.overallPercent}%</strong>
                       )}
