@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react';
 import { api, ApiError, homeFor, LearnUnitSummary, Me } from '@/lib/api';
 import { Avatar, StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
+import { Scene, Glyph } from '@/components/world/Scene';
+import { WorldGround } from '@/components/world/WorldGround';
+import { themeFor, themeVars } from '@/lib/world';
 
 /**
  * Where a student starts: her course, drawn as the run of units it is.
@@ -141,6 +144,14 @@ function nextAction(unit: LearnUnitSummary, steps: Step[]) {
   return { ...wording[current.kind], kind: current.kind, step: current };
 }
 
+/** The line on the ticket, per kind of work: each phrase where it is true. */
+const ASK: Record<Step['kind'], string> = {
+  vocabulary: 'Ready for more words?',
+  grammar: 'Ready for the next challenge?',
+  activity: 'Time to play!',
+  assessment: 'One more step!',
+};
+
 export default function StudentHomePage() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
@@ -212,7 +223,8 @@ export default function StudentHomePage() {
         }
       />
 
-      <main className="page has-navbar home-grid">
+      <WorldGround />
+      <main className="page has-navbar home-grid world">
         <div className="home-aside">
         <header className="greeting">
           <h1>Hello, {me.displayName.split(' ')[0]}</h1>
@@ -237,46 +249,51 @@ export default function StudentHomePage() {
           </p>
         )}
 
-        {/* The one thing she should do next, said once and said plainly. */}
+        {/* The one thing she should do next, said once and said plainly —
+            on a ticket drawn in the place her unit lives. */}
         {current && action && (
           <button
-            className="next-up"
+            className="today"
             data-kind={action.kind}
+            style={themeVars(themeFor(current.title, true, core.indexOf(current)))}
             onClick={() => router.push(`/learn/${current.id}`)}
             data-testid="next-action"
           >
-            <span className="badge-icon" aria-hidden="true">
-              <Icon
-                name={
-                  action.kind === 'assessment'
-                    ? 'assessment'
-                    : action.kind === 'grammar'
-                      ? 'grammar'
-                      : action.kind === 'activity'
-                        ? 'activity'
-                        : 'words'
-                }
-                size={22}
-              />
+            <span className="today-scene">
+              <span className="today-ask">{ASK[action.kind]}</span>
+              <Scene kind={themeFor(current.title, true, core.indexOf(current)).scene} />
             </span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              {/* Her unit, then the thing to do in it, then her standing —
-                  three facts on three lines, not a string joined by dots. */}
-              <span className="lead-in">{current.title}</span>
-              <span className="what">{action.what}</span>
-              <span className="why" style={{ display: 'block' }}>
-                {action.why}
+            <span className="today-body">
+              <span className="badge-icon" aria-hidden="true">
+                <Icon
+                  name={
+                    action.kind === 'assessment'
+                      ? 'assessment'
+                      : action.kind === 'grammar'
+                        ? 'grammar'
+                        : action.kind === 'activity'
+                          ? 'activity'
+                          : 'words'
+                  }
+                  size={22}
+                />
               </span>
-              {action.kind === 'vocabulary' && current.progress.vocabulary.total > 0 && (
-                <span className="tally" aria-hidden="true">
-                  {Array.from({ length: current.progress.vocabulary.total }, (_, n) => (
-                    <i key={n} data-on={n < current.progress.vocabulary.done} />
-                  ))}
-                </span>
-              )}
-            </span>
-            <span className="go" aria-hidden="true">
-              <Icon name="play" size={16} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="today-what">{action.what}</span>
+                <span className="today-why">{current.title}</span>
+                <span className="today-why">{action.why}</span>
+                {action.kind === 'vocabulary' && current.progress.vocabulary.total > 0 && (
+                  <span className="tally" aria-hidden="true">
+                    {Array.from({ length: current.progress.vocabulary.total }, (_, n) => (
+                      <i key={n} data-on={n < current.progress.vocabulary.done} />
+                    ))}
+                  </span>
+                )}
+              </span>
+              <span className="today-go" aria-hidden="true">
+                <Icon name="play" size={16} />
+                Let&rsquo;s go
+              </span>
             </span>
           </button>
         )}
@@ -305,12 +322,18 @@ export default function StudentHomePage() {
               const p = unit.progress;
               const state = p.isComplete ? 'done' : unit.id === currentId ? 'current' : 'todo';
               const steps = stepsOf(unit);
+              const theme = themeFor(unit.title, true, i);
               return (
-                <div className="station" data-state={state} key={unit.id}>
-                  {/* The station on the rail: her unit's number, or a tick
-                      once it is behind her. The card beside it says the rest. */}
-                  <span className="station-node" aria-hidden="true">
-                    {p.isComplete ? <Icon name="tick" size={16} /> : i + 1}
+                <div
+                  className="station"
+                  data-state={state}
+                  key={unit.id}
+                  style={themeVars(theme)}
+                >
+                  {/* The station on the rail: the mark of the place this
+                      unit lives in, or a tick once it is behind her. */}
+                  <span className="station-badge" aria-hidden="true">
+                    {p.isComplete ? <Icon name="tick" size={18} /> : <Glyph kind={theme.scene} />}
                   </span>
                   <button
                     className="station-card"
@@ -321,20 +344,25 @@ export default function StudentHomePage() {
                       <div style={{ minWidth: 0 }}>
                         <span className="row" style={{ gap: '.5rem' }}>
                           <span className="station-no">Unit {i + 1}</span>
-                          {state === 'current' && <span className="station-now">Up next</span>}
+                          {/* Where she stands, in her words. */}
+                          {p.isComplete ? (
+                            <span className="station-word" data-tone="done">
+                              <Icon name="star" size={11} />
+                              Unit complete!
+                            </span>
+                          ) : state === 'current' ? (
+                            <span className="station-word" data-tone="here">You are here</span>
+                          ) : (
+                            <span className="station-word" data-tone="soon">Coming up</span>
+                          )}
                         </span>
                         <span className="station-title" style={{ display: 'block' }}>
                           {unit.title}
                         </span>
                       </div>
-                      {p.isComplete ? (
-                        <span className="finished-mark">
-                          <Icon name="tick" size={14} />
-                          Finished
-                        </span>
-                      ) : p.overallPercent === 0 ? (
-                        <span className="station-quiet">Not started</span>
-                      ) : (
+                      {/* The chip beside the unit's number already says
+                          "complete"; the figure is for a unit still going. */}
+                      {!p.isComplete && p.overallPercent > 0 && (
                         <strong className="station-pct num">{p.overallPercent}%</strong>
                       )}
                     </div>
@@ -394,10 +422,11 @@ export default function StudentHomePage() {
             key={unit.id}
             className="aside-card"
             data-kind="grammar"
+            style={themeVars(themeFor(unit.title, false))}
             onClick={() => router.push(`/learn/${unit.id}`)}
           >
             <span className="aside-icon" aria-hidden="true">
-              <Icon name="grammar" size={20} />
+              <Glyph kind={themeFor(unit.title, false).scene} size={20} />
             </span>
             <span style={{ flex: 1, minWidth: 0, display: 'grid', gap: '.2rem' }}>
               <span className="row" style={{ gap: '.5rem' }}>

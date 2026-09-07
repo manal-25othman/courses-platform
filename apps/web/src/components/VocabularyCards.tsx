@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { api, ApiError, apiUrl, CheckAnswerResult, LearnWord, VocabularyCheck } from '@/lib/api';
 import { englishSpeechStatus, pronounce, stopPronouncing, type SpokenBy } from '@/lib/pronounce';
 import { Icon } from './Icon';
+import { Scene } from './world/Scene';
+import type { SceneKind } from '@/lib/world';
 
 /**
  * The word list.
@@ -19,9 +21,12 @@ import { Icon } from './Icon';
 export function VocabularyCards({
   words,
   onChanged,
+  scene,
 }: {
   words: LearnWord[];
   onChanged: () => Promise<void> | void;
+  /** Where this unit lives, drawn faintly behind the word. */
+  scene?: SceneKind;
 }) {
   /**
    * What the pronunciation control is doing, for the word it is doing it to.
@@ -351,6 +356,7 @@ export function VocabularyCards({
           on this card — the picture, the meaning, the example, the three
           steps — is support for it.
         */}
+        {scene && <Scene kind={scene} className="scene-mark" />}
         <span className="word-en">{word.wordEn}</span>
 
         {word.partOfSpeech && <span className="word-pos">{word.partOfSpeech}</span>}
@@ -431,9 +437,9 @@ export function VocabularyCards({
         </div>
 
         {word.learned ? (
-          <span className="finished-mark" data-testid="word-learned">
-            <Icon name="tick" size={14} />
-            Learned
+          <span className="cheer" data-testid="word-learned">
+            <Icon name="star" />
+            Great job! Learned.
           </span>
         ) : (
           /* What to do next on this word, in one sentence. */

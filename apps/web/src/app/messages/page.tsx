@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api, homeFor, Me, MyTeacher } from '@/lib/api';
 import { StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
+import { WorldGround } from '@/components/world/WorldGround';
 import { Conversation } from '@/components/Conversation';
 
 /**
@@ -53,7 +54,8 @@ export default function MessagesPage() {
   return (
     <>
       <TopBar nav />
-      <main className="page has-navbar stack">
+      <WorldGround />
+      <main className="page has-navbar stack world">
         <h1>Your teacher</h1>
 
         {teacher?.whatsappUrl && (

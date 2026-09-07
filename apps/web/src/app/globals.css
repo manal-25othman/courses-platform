@@ -2316,3 +2316,198 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
   }
   .estate-needs { justify-content: flex-start; }
 }
+
+/* ==========================================================================
+   THE STUDENT'S WORLD
+   Her screens stand on a soft sky with a few paper shapes in the corners,
+   and every unit lives somewhere: a meadow, a town, the sky, a city, or the
+   journal the extras are written in. The place is drawn once — on the
+   station, the card, the banner and behind the word — in the unit's own
+   three tints (`--w1` deep, `--w2` mid, `--w3` light), so "butterfly" is
+   met in a meadow and "job" in a city. The teacher's screens never carry
+   any of this: her ground stays plain on purpose.
+   ========================================================================== */
+.world { --w1: var(--brand); --w2: #C4B5FD; --w3: var(--brand-soft); position: relative; z-index: 1; }
+.world h1, .world h2, .world .station-title, .world .today-what, .world .word-en {
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+}
+
+/* --- the ground --------------------------------------------------------- */
+body:has(.world) { background: #F2EDFF; }
+.world-ground {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  background: linear-gradient(180deg, #FFFBF3 0%, var(--ground) 42%, #F2EDFF 100%);
+}
+.wg { position: absolute; color: #fff; }
+.wg-cloud  { width: 15rem; left: -3rem; top: 4.5rem; opacity: .9; }
+.wg-cloud2 { width: 9rem; right: -2rem; top: 46%; opacity: .75; }
+.wg-star   { width: 2.4rem; right: 11%; top: 6.5rem; color: #F7B500; opacity: .4; }
+.wg-leaf   { width: 5.5rem; left: 3%; bottom: 9%; color: #7ADBB9; opacity: .5; }
+.wg-ring   { width: 4rem; right: 5%; bottom: 13%; color: #FFB59E; opacity: .55; }
+@media (max-width: 48rem) {
+  .wg-cloud { width: 9rem; left: -2.5rem; top: 3.5rem; }
+  .wg-leaf { display: none; }
+  .wg-ring { width: 2.75rem; bottom: 6.5rem; }
+}
+.world-ground ~ .topbar { background: rgba(255, 252, 247, .9); }
+
+/* --- the next thing to do: a ticket with the place drawn on it ---------- */
+.today {
+  position: relative; overflow: hidden; width: 100%; text-align: left;
+  display: grid; padding: 0; border: 0; min-height: 0;
+  /* The generic button centres its content; a ticket fills its width. */
+  justify-content: stretch; justify-items: stretch; align-items: stretch;
+  background: var(--surface); color: var(--ink);
+  border-radius: var(--r-xl); box-shadow: var(--e3);
+  transition: transform var(--t-state) var(--pop), box-shadow var(--t-state) var(--ease);
+}
+.today:hover:not(:disabled) { background: var(--surface); transform: translateY(-2px); }
+.today:active:not(:disabled) { transform: translateY(1px) scale(.995); box-shadow: var(--e2); }
+.today-scene {
+  position: relative; display: block; width: 100%; height: 9.5rem; overflow: hidden;
+  background: linear-gradient(180deg, var(--w3) 0%, color-mix(in srgb, var(--w3) 55%, white) 100%);
+}
+.today-scene .scene { position: absolute; right: -.5rem; bottom: -.25rem; height: 100%; width: auto; }
+.today-ask {
+  position: absolute; left: var(--s5); top: var(--s4); max-width: 46%;
+  font-family: var(--font-display); font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  font-size: 1.15rem; font-weight: 700; line-height: 1.15; color: var(--w1);
+  text-wrap: balance;
+}
+.today-body { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) var(--s5) var(--s5); }
+.today-what { display: block; font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; line-height: 1.1; letter-spacing: -.005em; }
+.today-why { display: block; color: var(--ink-3); font-size: var(--fs-body); font-weight: 500; margin-top: 2px; }
+.today .tally { margin-top: var(--s3); }
+.today .tally i { width: .9rem; height: .4rem; background: var(--w3); }
+.today .tally i[data-on='true'] { background: var(--w1); }
+.today .badge-icon {
+  width: 3.25rem; height: 3.25rem; border-radius: var(--r-md); flex: none;
+  display: grid; place-items: center; background: var(--kind-soft, var(--brand-soft)); color: var(--kind, var(--brand));
+}
+.today-go {
+  flex: none; display: inline-flex; align-items: center; gap: var(--s2);
+  padding: .65rem 1.1rem; border-radius: var(--r-chip);
+  background: var(--brand); color: var(--on-brand); font-weight: 800; font-size: var(--fs-body);
+  box-shadow: 0 3px 0 var(--brand-ink);
+}
+@media (max-width: 40rem) {
+  .today-body { flex-wrap: wrap; }
+  .today-go { width: 100%; justify-content: center; }
+  .today-ask { max-width: 55%; font-size: 1.05rem; }
+}
+
+/* --- the trail ---------------------------------------------------------- */
+.world .journey { padding-left: 3.9rem; }
+.world .journey::before { left: 1.55rem; width: 0; background: none; border-left: 3px dashed var(--line-2); top: 2rem; }
+.station-badge {
+  position: absolute; left: -3.9rem; top: .9rem; z-index: 1;
+  width: 3.2rem; height: 3.2rem; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--w3); color: var(--w1);
+  border: 3px solid var(--surface); box-shadow: var(--e2);
+  transition: transform var(--t-state) var(--pop), background var(--t-state) var(--ease);
+}
+.station[data-state='current'] .station-badge {
+  background: var(--w1); color: var(--on-brand); transform: scale(1.1);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--w1) 22%, transparent), var(--e2);
+}
+.station[data-state='done'] .station-badge { background: var(--ok); color: var(--on-brand); }
+.world .station[data-state='done']::after { left: -2.2rem; top: 3.4rem; background: var(--ok); }
+.world .station-card { border: 0; border-top: 5px solid var(--w2); box-shadow: var(--e1); }
+.world .station[data-state='current'] .station-card { border-top-color: var(--w1); box-shadow: 0 0 0 3px var(--w3), var(--e2); }
+.world .station[data-state='done'] .station-card { border-top-color: var(--ok); }
+.world .station[data-state='locked'] .station-card { border-top-color: var(--line-2); }
+/* Where she stands, in her words: here, done, or coming up. */
+.station-word {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: .01em;
+  padding: .15rem .6rem; border-radius: var(--r-chip);
+}
+.station-word[data-tone='here'] { background: var(--w3); color: var(--w1); }
+.station-word[data-tone='done'] { background: var(--ok-soft); color: var(--ok-ink); }
+.station-word[data-tone='soon'] { background: var(--ground-2); color: var(--ink-3); }
+.world .station-pct { color: var(--w1); }
+.world .aside-card { border-left-color: var(--w1); }
+.world .aside-icon { background: var(--w3); color: var(--w1); }
+.world .aside-tag { background: var(--w3); color: var(--w1); }
+
+/* --- the unit's banner: its place, its name, how far along ------------- */
+.unit-banner {
+  position: relative; overflow: hidden;
+  display: grid; gap: var(--s3); align-content: center;
+  min-height: 10rem; padding: var(--s5);
+  border-radius: var(--r-xl);
+  background: linear-gradient(120deg, var(--w3) 0%, var(--surface) 68%);
+  border: 1px solid color-mix(in srgb, var(--w2) 55%, white);
+  box-shadow: var(--e2);
+}
+.unit-banner .scene { position: absolute; right: -1.5rem; bottom: -.75rem; height: 115%; width: auto; }
+.unit-banner > * { position: relative; max-width: 58%; }
+.unit-banner h1 { font-size: var(--fs-display); line-height: 1.05; }
+.unit-place {
+  display: inline-flex; align-items: center; gap: .4rem;
+  font-size: var(--fs-small); font-weight: 700; color: var(--w1);
+}
+.unit-banner .meter { max-width: 22rem; height: .6rem; background: color-mix(in srgb, var(--w2) 35%, white); }
+.unit-banner .meter > span { background: var(--w1); }
+.unit-banner .meter[data-done='true'] > span { background: var(--ok); }
+.unit-banner .finished-ribbon { max-width: max-content; }
+@media (max-width: 40rem) {
+  /* Behind a word on a phone the place is a hint, not a picture. */
+  .world .word-card .scene-mark { width: 10rem; right: -3rem; top: -2rem; opacity: .3; }
+  .unit-banner { min-height: 9rem; padding: var(--s4); }
+  .unit-banner .scene { height: 62%; right: -2rem; opacity: .7; }
+  .unit-banner > * { max-width: 100%; }
+}
+
+/* --- the word: a sticker on the page of its place ---------------------- */
+.world .word-card {
+  border: 0; overflow: hidden;
+  box-shadow: 0 0 0 6px var(--w3), var(--e2);
+}
+.world .word-card::before {
+  content: ''; position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(180deg, var(--w3) 0%, var(--surface) 46%);
+}
+.world .word-card { position: relative; }
+.world .word-card > * { position: relative; z-index: 1; }
+.world .word-card .scene-mark {
+  position: absolute; right: -2.5rem; top: -1.5rem; z-index: 0;
+  width: 15rem; height: auto; opacity: .5; pointer-events: none;
+}
+.world .word-card[data-learned='true'] { box-shadow: 0 0 0 6px var(--ok-soft), var(--e2); }
+.world .word-picture {
+  max-height: 13rem; border-radius: var(--r-lg);
+  background: var(--surface); border: 5px solid var(--surface); box-shadow: var(--e2);
+}
+.world .word-pip[data-learned='true'] { background: var(--ok); border-color: var(--ok); color: var(--on-brand); }
+.world .word-pip[aria-current='true'] { background: var(--w1); border-color: var(--w1); }
+.world .speak-btn { background: var(--w1); box-shadow: 0 6px 16px color-mix(in srgb, var(--w1) 40%, transparent); }
+.world .speak-btn:hover:not(:disabled), .world .speak-btn:disabled { background: var(--w1); }
+.world .word-pos { background: var(--w3); color: var(--w1); }
+/* "Great job!" — said once, on the word, the moment it is hers. */
+.cheer {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  font-family: var(--font-display); font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  font-size: 1.1rem; font-weight: 700; color: var(--ok-ink);
+  background: var(--ok-soft); border: 1px solid var(--ok-edge);
+  padding: .35rem .9rem; border-radius: var(--r-chip);
+  animation: popIn var(--t-party) var(--pop) both;
+}
+.cheer .ico { width: 1rem; height: 1rem; }
+
+/* --- lessons, questions and results take the unit's tint --------------- */
+.world .lesson-head { background: var(--w3); }
+.world .lesson-topic { color: var(--w1); }
+.world .example .to { box-shadow: inset 0 -.45em 0 var(--w3); }
+.world .q-card:not([data-marked]) { box-shadow: 0 0 0 5px var(--w3), var(--e2); border-color: transparent; }
+.world .result-line { font-size: 1.9rem; font-variation-settings: 'SOFT' 100, 'WONK' 1; }
+.world .exam-rule { background: var(--w3); }
+.world .exam-rule b { color: var(--w1); }
+.world .locked-note { background: var(--surface); border-color: var(--w2); }
+.world .locked-note .ico { color: var(--w1); }
+
+/* --- games: the shelf takes each unit's place --------------------------- */
+.world .game-card::before { background: var(--w3); }
+.world .game-icon { background: var(--w1); }
+.world .game-card .game-name { color: var(--ink); }

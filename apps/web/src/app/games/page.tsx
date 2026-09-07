@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { api, BonusGame, LearnUnitSummary, Me, homeFor } from '@/lib/api';
 import { StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
+import { Glyph } from '@/components/world/Scene';
+import { WorldGround } from '@/components/world/WorldGround';
+import { themeFor, themeVars } from '@/lib/world';
 import { BonusGames } from '@/components/BonusGames';
 
 /**
@@ -71,7 +74,12 @@ export default function GamesPage() {
     return (
       <>
         <TopBar nav />
-        <main className="page has-navbar stack" data-kind="games">
+        <WorldGround />
+        <main
+          className="page has-navbar stack world"
+          data-kind="games"
+          style={unit ? themeVars(themeFor(unit.title, unit.progress.countsTowardCompletion, units.indexOf(unit))) : undefined}
+        >
           <button className="ghost small" onClick={() => setOpenUnit(null)} data-testid="all-units">
             <Icon name="back" />
             All units
@@ -101,7 +109,8 @@ export default function GamesPage() {
   return (
     <>
       <TopBar nav />
-      <main className="page has-navbar stack" data-kind="games">
+      <WorldGround />
+      <main className="page has-navbar stack world" data-kind="games">
         <header className="greeting">
           <h1>Games</h1>
           <p className="greeting-line">
@@ -130,11 +139,12 @@ export default function GamesPage() {
                   key={unit.id}
                   className="game-card"
                   data-kind="games"
+                  style={themeVars(themeFor(unit.title, unit.progress.countsTowardCompletion, units.indexOf(unit)))}
                   onClick={() => setOpenUnit(unit.id)}
                   data-testid="games-unit"
                 >
                   <span className="game-icon" aria-hidden="true">
-                    <Icon name="games" size={22} />
+                    <Glyph kind={themeFor(unit.title, unit.progress.countsTowardCompletion, units.indexOf(unit)).scene} />
                   </span>
                   <span className="game-name">{unit.title}</span>
                   {/* Named, not counted: "2 games ready" says less than

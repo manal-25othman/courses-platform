@@ -17,6 +17,9 @@ import { BonusGames } from '@/components/BonusGames';
 import { StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
 import { UnitJourney } from '@/components/UnitJourney';
+import { Scene, Glyph } from '@/components/world/Scene';
+import { WorldGround } from '@/components/world/WorldGround';
+import { themeFor, themeVars } from '@/lib/world';
 
 type Tab = 'vocabulary' | 'grammar' | 'activity' | 'assessment' | 'games';
 
@@ -145,6 +148,19 @@ export default function LearnUnitPage() {
     assessment: 'assessment', games: 'games',
   };
 
+  // Where this unit lives, from its title; the extras live in the journal.
+  const theme = themeFor(unit.title, progress?.countsTowardCompletion ?? true);
+  const PLACE: Record<typeof theme.scene, string> = {
+    meadow: 'In the meadow', town: 'Around town', sky: 'Up in the sky',
+    city: 'In the city', journal: 'From your journal',
+  };
+  // How many of the four parts are behind her, for "One more step!".
+  const partsDone = progress
+    ? [progress.vocabulary, progress.grammar, progress.activity].filter(
+        (part) => !part.empty && part.percent === 100,
+      ).length + (progress.assessmentState.passed ? 1 : 0)
+    : 0;
+
   return (
     <>
       <TopBar
@@ -157,32 +173,44 @@ export default function LearnUnitPage() {
         }
       />
 
-      <main className="page has-navbar stack" data-kind={kindOf[activeTab]}>
-        <div>
+      <WorldGround />
+      <main
+        className="page has-navbar stack world"
+        data-kind={kindOf[activeTab]}
+        style={themeVars(theme)}
+      >
+        {/* The unit's banner: its place, its name, and how far along she is. */}
+        <header className="unit-banner">
+          <Scene kind={theme.scene} />
+          <span className="unit-place">
+            <Glyph kind={theme.scene} size={16} />
+            {PLACE[theme.scene]}
+          </span>
           <h1>{unit.title}</h1>
           {progress && (
             <p
               className={progress.assessmentState.passed ? 'finished-ribbon' : 'muted'}
               data-testid="unit-progress"
-              style={{ marginTop: '.25rem' }}
+              style={{ margin: 0 }}
             >
               {progress.assessmentState.passed && <Icon name="star" size={14} />}
               {progress.assessmentState.passed
-                ? 'Finished — you passed the test'
-                : `${progress.overallPercent}% of this unit done`}
+                ? 'Unit complete! You passed the test.'
+                : partsDone === 3
+                  ? `One more step! ${progress.overallPercent}% done.`
+                  : `${progress.overallPercent}% of this unit done`}
             </p>
           )}
-        </div>
-
-        {progress && (
-          <div
-            className="meter"
-            data-done={progress.overallPercent === 100}
-            aria-label={`${progress.overallPercent} percent done`}
-          >
-            <span style={{ width: `${progress.overallPercent}%` }} />
-          </div>
-        )}
+          {progress && (
+            <div
+              className="meter"
+              data-done={progress.overallPercent === 100}
+              aria-label={`${progress.overallPercent} percent done`}
+            >
+              <span style={{ width: `${progress.overallPercent}%` }} />
+            </div>
+          )}
+        </header>
 
         {progress && !progress.countsTowardCompletion && (
           <p className="muted" style={{ margin: 0 }} data-testid="not-counted-unit">
@@ -241,7 +269,7 @@ export default function LearnUnitPage() {
         </div>
 
         {activeTab === 'vocabulary' && (
-          <VocabularyCards words={unit.vocabulary} onChanged={load} />
+          <VocabularyCards words={unit.vocabulary} onChanged={load} scene={theme.scene} />
         )}
 
         {activeTab === 'grammar' && (

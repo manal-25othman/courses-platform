@@ -274,12 +274,18 @@ export function ActivityRunner({
 
           <ScoreRing percent={attempt.scorePercent ?? 0} passed={attempt.passed} />
 
+          {/* Said in her words, from the marks alone: the verdict is the
+              server's, the cheer is ours. */}
           <p className="result-line">
             {attempt.passed === true
-              ? 'You passed.'
+              ? 'You did it!'
               : attempt.passed === false
-                ? 'Not passed this time.'
-                : `${attempt.correctCount ?? 0} of ${total} right.`}
+                ? 'Not this time.'
+                : (attempt.correctCount ?? 0) === total
+                  ? 'Great job! Every one right.'
+                  : (attempt.correctCount ?? 0) * 2 >= total
+                    ? `Nice work! ${attempt.correctCount ?? 0} of ${total} right.`
+                    : `Keep going! ${attempt.correctCount ?? 0} of ${total} right.`}
           </p>
 
           {attempt.passed !== null && attempt.passed !== undefined && (
