@@ -173,7 +173,7 @@ export default function UnitPage() {
   return (
     <>
       <TeacherHeader me={me} />
-      <main className="page stack">
+      <main className="page teacher-page stack">
         <button className="crumb" onClick={() => router.push('/content')}>
           <Icon name="back" />
           Curriculum
@@ -840,10 +840,15 @@ function VocabularyList({
   }
 
   return (
-    <div className="card">
-      <h2>Vocabulary ({unit.vocabularyItems.length})</h2>
+    <section className="panel">
+      <div className="panel-head">
+        <h2 className="panel-title">Vocabulary</h2>
+        <span className="panel-note">
+          {unit.vocabularyItems.length} {unit.vocabularyItems.length === 1 ? 'word' : 'words'}
+        </span>
+      </div>
 
-      <form onSubmit={add} className="row" style={{ alignItems: 'flex-end', gap: '.5rem' }}>
+      <form onSubmit={add} className="row add-word" style={{ alignItems: 'flex-end', gap: '.5rem' }}>
         <div style={{ flex: '1 1 10rem' }}>
           <label htmlFor="wordEn">English word</label>
           <input id="wordEn" value={word} onChange={(e) => setWord(e.target.value)} required />
@@ -866,7 +871,7 @@ function VocabularyList({
       </form>
 
       {unit.vocabularyItems.length > 0 && (
-        <div className="table-wrap" style={{ marginTop: '1rem' }}>
+        <div className="table-wrap">
           <table className="vocab-table">
             <thead>
               <tr>
@@ -965,7 +970,7 @@ function VocabularyList({
           </table>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 

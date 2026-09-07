@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react';
 import { api, ApiError, AssignableStudent, homeFor, Me, Student, Teacher } from '@/lib/api';
 import { TeacherHeader } from '@/components/TeacherShell';
+import { EmptyState } from '@/components/EmptyState';
 import { Icon } from '@/components/Icon';
 
 /** How long a signed-in student keeps working after her account is turned off. */
@@ -215,7 +216,7 @@ export default function StudentsPage() {
   return (
     <>
       <TeacherHeader me={me} />
-      <main className="page stack">
+      <main className="page teacher-page stack">
         <div className="pagehead">
           {/* An administrator has no class of her own: these are the
               school's students, not hers. Same screen, same rules — only the
@@ -285,12 +286,10 @@ export default function StudentsPage() {
 
         {students && counts.all === 0 && !loading ? (
           <section className="panel">
-            <div className="panel-body stack">
-              <p className="note-line">
-                You have no students yet. Add the first one and give her the username and password
-                you choose — she picks her own password the first time she signs in.
-              </p>
-            </div>
+            <EmptyState icons={['teacher', 'words', 'message']} title="No students yet">
+              Add the first one and give her the username and password you choose — she picks
+              her own password the first time she signs in.
+            </EmptyState>
           </section>
         ) : (
           <>

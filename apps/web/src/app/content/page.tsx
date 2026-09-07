@@ -12,6 +12,7 @@ import {
 } from '@/lib/api';
 import { TeacherHeader } from '@/components/TeacherShell';
 import { Icon } from '@/components/Icon';
+import { Facts } from '@/components/Facts';
 
 /**
  * The curriculum, as the teacher manages it.
@@ -116,11 +117,16 @@ export default function ContentPage() {
   const counting = overview?.units.filter((u) => u.countsTowardCompletion) ?? [];
   const extra = overview?.units.filter((u) => !u.countsTowardCompletion) ?? [];
   const open = counting.filter((u) => u.status === 'PUBLISHED').length;
+  const words = (overview?.units ?? []).reduce((sum, u) => sum + u.vocabulary.total, 0);
+  const questions = (overview?.units ?? []).reduce(
+    (sum, u) => sum + u.activity.total + u.assessment.total,
+    0,
+  );
 
   return (
     <>
       <TeacherHeader me={me} />
-      <main className="page stack">
+      <main className="page teacher-page stack">
         <div className="pagehead">
           <h1>{overview?.course.title ?? 'Curriculum'}</h1>
           <p className="muted">
@@ -128,6 +134,21 @@ export default function ContentPage() {
               ? `${counting.length} course ${counting.length === 1 ? 'unit' : 'units'}, ${open} open to students`
               : 'Loading…'}
           </p>
+          {/* The course in figures, from the same counts the rows show. */}
+          {overview && overview.units.length > 0 && (
+            <Facts
+              items={[
+                { value: counting.length, label: counting.length === 1 ? 'course unit' : 'course units' },
+                {
+                  value: open,
+                  label: 'open to students',
+                  tone: open === 0 ? 'warn' : open === counting.length ? 'ok' : undefined,
+                },
+                { value: words, label: 'words' },
+                { value: questions, label: 'questions' },
+              ]}
+            />
+          )}
         </div>
 
         {error && (
@@ -311,7 +332,7 @@ function UnitRow({
   ];
 
   return (
-    <li className="unitrow">
+    <li className="unitrow" data-live={live}>
       <div className="unitrow-main">
         <div className="unitrow-id">
           <button className="unitrow-open" onClick={onOpen}>

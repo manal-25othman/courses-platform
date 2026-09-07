@@ -260,17 +260,15 @@ export default function StudentHomePage() {
               />
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
+              {/* Her unit, then the thing to do in it, then her standing —
+                  three facts on three lines, not a string joined by dots. */}
+              <span className="lead-in">{current.title}</span>
               <span className="what">{action.what}</span>
-              {/* Her unit, then her standing in it — as two facts on two
-                  lines, not a string of them joined by dots. */}
-              <span className="why" style={{ display: 'block' }}>
-                {current.title}
-              </span>
               <span className="why" style={{ display: 'block' }}>
                 {action.why}
               </span>
               {action.kind === 'vocabulary' && current.progress.vocabulary.total > 0 && (
-                <span className="tally" aria-hidden="true" style={{ marginTop: '.5rem' }}>
+                <span className="tally" aria-hidden="true">
                   {Array.from({ length: current.progress.vocabulary.total }, (_, n) => (
                     <i key={n} data-on={n < current.progress.vocabulary.done} />
                   ))}
@@ -309,6 +307,11 @@ export default function StudentHomePage() {
               const steps = stepsOf(unit);
               return (
                 <div className="station" data-state={state} key={unit.id}>
+                  {/* The station on the rail: her unit's number, or a tick
+                      once it is behind her. The card beside it says the rest. */}
+                  <span className="station-node" aria-hidden="true">
+                    {p.isComplete ? <Icon name="tick" size={16} /> : i + 1}
+                  </span>
                   <button
                     className="station-card"
                     data-testid="unit-card"
@@ -316,7 +319,10 @@ export default function StudentHomePage() {
                   >
                     <div className="between" style={{ gap: '.75rem' }}>
                       <div style={{ minWidth: 0 }}>
-                        <span className="station-no">Unit {i + 1}</span>
+                        <span className="row" style={{ gap: '.5rem' }}>
+                          <span className="station-no">Unit {i + 1}</span>
+                          {state === 'current' && <span className="station-now">Up next</span>}
+                        </span>
                         <span className="station-title" style={{ display: 'block' }}>
                           {unit.title}
                         </span>

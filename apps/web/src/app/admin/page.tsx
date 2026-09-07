@@ -144,7 +144,7 @@ export default function AdminPage() {
                 <h2 className="panel-title">Across the platform</h2>
               </div>
               <div className="panel-body">
-                <dl className="tally">
+                <dl className="totals">
                   <Tally label="Schools" value={totals.schools} />
                   <Tally label="Teachers" value={totals.teachers} />
                   <Tally label="Students" value={totals.students} />

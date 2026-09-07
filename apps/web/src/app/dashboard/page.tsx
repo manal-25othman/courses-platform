@@ -14,6 +14,7 @@ import {
 } from '@/lib/api';
 import { TeacherShell } from '@/components/TeacherShell';
 import { Icon } from '@/components/Icon';
+import { EmptyState } from '@/components/EmptyState';
 
 /**
  * Where a teacher starts.
@@ -248,19 +249,18 @@ export default function TeacherDashboardPage() {
         </div>
       ) : rows.length === 0 ? (
         <div className="panel">
-          <div className="blank">
-            <span className="mark" aria-hidden="true">
-              <Icon name="teacher" size={22} />
-            </span>
-            <strong>Your class list is empty</strong>
-            <p>
-              Add your students and their progress will appear here as they work through the
-              course.
-            </p>
-            <button className="primary" onClick={() => router.push('/students')}>
-              Add students
-            </button>
-          </div>
+          <EmptyState
+            icons={['teacher', 'words', 'progress']}
+            title="Your class list is empty"
+            action={
+              <button className="primary" onClick={() => router.push('/students')}>
+                Add students
+              </button>
+            }
+          >
+            Add your students and their progress will appear here as they work through the
+            course.
+          </EmptyState>
         </div>
       ) : (
         <div className="dash">

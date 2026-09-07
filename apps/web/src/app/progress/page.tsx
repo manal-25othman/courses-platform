@@ -15,6 +15,7 @@ import {
 } from '@/lib/api';
 import { TeacherShell } from '@/components/TeacherShell';
 import { Icon, type IconName } from '@/components/Icon';
+import { EmptyState } from '@/components/EmptyState';
 
 /**
  * How the whole class is getting on.
@@ -299,16 +300,17 @@ export default function ClassProgressPage() {
         </div>
       ) : overview === null ? null : rows.length === 0 ? (
         <div className="panel">
-          <div className="blank">
-            <span className="mark" aria-hidden="true">
-              <Icon name="teacher" size={22} />
-            </span>
-            <strong>No students yet</strong>
-            <p>Once your students are on the list, their progress appears here unit by unit.</p>
-            <button className="primary" onClick={() => router.push('/students')}>
-              Add students
-            </button>
-          </div>
+          <EmptyState
+            icons={['teacher', 'progress', 'assessment']}
+            title="No students yet"
+            action={
+              <button className="primary" onClick={() => router.push('/students')}>
+                Add students
+              </button>
+            }
+          >
+            Once your students are on the list, their progress appears here unit by unit.
+          </EmptyState>
         </div>
       ) : (
         <div className="panel">

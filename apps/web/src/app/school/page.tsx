@@ -169,7 +169,7 @@ export default function SchoolPage() {
                 <h2 className="panel-title">The school</h2>
               </div>
               <div className="panel-body">
-                <dl className="tally">
+                <dl className="totals">
                   <Tally label="Teachers" value={school.teachers} />
                   <Tally
                     label="Have signed in"

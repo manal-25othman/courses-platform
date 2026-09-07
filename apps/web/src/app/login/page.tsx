@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, FormEvent } from 'react';
 import { api, ApiError, homeFor, Me } from '@/lib/api';
+import { Brandmark } from '@/components/Shell';
 
 function LoginForm() {
   const router = useRouter();
@@ -45,8 +46,13 @@ function LoginForm() {
   }
 
   return (
-    <main className="center">
-      <div className="card">
+    <main className="center auth">
+      {/* The front door carries the mark, so the first screen anyone sees is
+          recognisably the same product as every screen after it. */}
+      <div className="auth-mark">
+        <Brandmark />
+      </div>
+      <div className="card raised">
         <h1>Sign in</h1>
         <p className="muted">TOP GOAL</p>
 

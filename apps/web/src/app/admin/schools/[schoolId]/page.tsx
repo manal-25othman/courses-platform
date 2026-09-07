@@ -181,7 +181,7 @@ export default function SchoolPage() {
                 <span className="panel-note">Counts only — no personal data</span>
               </div>
               <div className="panel-body stack">
-                <dl className="tally">
+                <dl className="totals">
                   <Tally label="Teachers" value={school.teachers} />
                   <Tally label="Students" value={school.students} />
                   <Tally label="Administrators" value={school.schoolAdmins} />

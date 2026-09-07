@@ -179,6 +179,16 @@ h3 { font-size: 1rem; }
    ========================================================================== */
 .page { max-width: var(--page-max); margin: 0 auto; padding: var(--s5) var(--s4) var(--s8); }
 .center { max-width: 25rem; margin: 0 auto; padding: var(--s4); }
+/* Signing in, and the three screens around it. One card, lifted, on the
+   product's own ground, with room above it so it sits rather than clings. */
+.auth { padding-top: clamp(var(--s6), 10vh, var(--s8)); }
+.auth-mark { display: flex; justify-content: center; margin-bottom: var(--s5); }
+.auth-mark .brandmark .mark { width: 2.5rem; height: 2.5rem; border-radius: 12px; }
+.auth-mark .brandmark .mark svg { width: 24px; height: 24px; }
+.auth-mark .brandmark .name { font-size: 1.25rem; }
+.auth-mark .brandmark .sub { font-size: .8125rem; }
+.auth .card { padding: var(--s5); border-radius: var(--r-lg); }
+.auth .card h1 { font-size: var(--fs-display); }
 .row { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
 .between { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); flex-wrap: wrap; }
 .stack > * + * { margin-top: var(--s4); }
@@ -433,7 +443,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 
 /* A figure given against a total reads as a proportion, so the total is set
    quieter than the number it qualifies. */
-.tally dd small { font-size: var(--fs-small); font-weight: 600; color: var(--ink-2); }
+.totals dd small { font-size: var(--fs-small); font-weight: 600; color: var(--ink-2); }
 
 .avatar {
   width: 2rem; height: 2rem; border-radius: 50%; flex: none;
@@ -476,29 +486,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 .navbar a[aria-current='page'] .ico { transform: translateY(-1px) scale(1.08); }
 .navbar .ico { transition: transform var(--t-state) var(--pop); }
 .has-navbar { padding-bottom: 5.5rem; }
-@media (min-width: 48rem) { .avatar {
-  width: 2rem; height: 2rem; border-radius: 50%; flex: none;
-  display: grid; place-items: center;
-  background: var(--brand); color: var(--on-brand);
-  font-weight: 700; font-size: .875rem;
-}
-
-/* The desktop shape of the same three destinations. */
-.topnav { display: none; }
-@media (min-width: 48rem) {
-  .topnav { display: flex; gap: var(--s1); margin-left: var(--s5); }
-  .topnav a {
-    display: inline-flex; align-items: center; gap: var(--s2);
-    padding: var(--s2) var(--s3); border-radius: var(--r-chip);
-    font-size: var(--fs-body); font-weight: 600; color: var(--ink-2);
-    text-decoration: none;
-    transition: background var(--t-state) var(--ease), color var(--t-state) var(--ease);
-  }
-  .topnav a:hover { background: var(--ground-2); color: var(--ink); }
-  .topnav a[aria-current='page'] { background: var(--brand-soft); color: var(--brand-ink); }
-}
-
-.navbar { display: none; } .has-navbar { padding-bottom: var(--s8); } }
+@media (min-width: 48rem) { .navbar { display: none; } .has-navbar { padding-bottom: var(--s8); } }
 
 .ico { width: 1.25rem; height: 1.25rem; flex: none; }
 .ico-lg { width: 1.75rem; height: 1.75rem; }
@@ -510,22 +498,40 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
    A route line with a station per unit. The line is the spine of the screen:
    it is what makes four units read as one course rather than four cards.
    ========================================================================== */
-.journey { position: relative; padding-left: 2.75rem; }
+.journey { position: relative; padding-left: 3.25rem; }
 .journey::before {
-  content: ''; position: absolute; left: 1.1rem; top: .5rem; bottom: 2rem;
+  content: ''; position: absolute; left: 1.3rem; top: 1.5rem; bottom: 2rem;
   width: 3px; border-radius: 2px;
-  background: linear-gradient(var(--line-2), var(--line-2));
+  background: var(--line-2);
 }
 .station { position: relative; margin-bottom: var(--s4); }
-.station::before {
-  content: ''; position: absolute; left: -2.1rem; top: 1.4rem;
-  width: 1rem; height: 1rem; border-radius: 50%;
-  background: var(--surface); border: 3px solid var(--line-2);
-  z-index: 1; transition: background var(--t-state) var(--ease), border-color var(--t-state) var(--ease);
+/* The station itself: the unit's number on the rail, big enough to be read
+   as "Unit 2" from across the room. It turns into a tick when the unit is
+   finished and takes the pink when it is the one she is on, so the rail alone
+   tells the story of the course before a single card is read. */
+.station-node {
+  position: absolute; left: -3.25rem; top: 1rem; z-index: 1;
+  width: 2.6rem; height: 2.6rem; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--surface); border: 3px solid var(--line-2); color: var(--ink-3);
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 1.05rem; font-weight: 800; line-height: 1;
+  box-shadow: 0 0 0 4px var(--ground);
+  transition: background var(--t-state) var(--ease), border-color var(--t-state) var(--ease),
+              color var(--t-state) var(--ease), transform var(--t-state) var(--pop);
 }
-.station[data-state='current']::before { border-color: var(--signal); background: var(--signal); box-shadow: 0 0 0 6px var(--signal-soft); }
-.station[data-state='done']::before    { border-color: var(--ok); background: var(--ok); }
-.station[data-state='locked']::before  { border-color: var(--line-2); background: var(--ground-2); }
+.station[data-state='current'] .station-node {
+  border-color: var(--signal); background: var(--signal); color: var(--on-brand);
+  box-shadow: 0 0 0 4px var(--ground), 0 0 0 8px var(--signal-soft);
+  transform: scale(1.08);
+}
+.station[data-state='done'] .station-node { border-color: var(--ok); background: var(--ok); color: var(--on-brand); }
+.station[data-state='locked'] .station-node { border-color: var(--line-2); background: var(--ground-2); }
+/* Below a finished unit the rail is inked in: the pen has been along it. */
+.station[data-state='done']::after {
+  content: ''; position: absolute; left: -2.05rem; top: 2.5rem; bottom: calc(-1 * var(--s4));
+  width: 3px; border-radius: 2px; background: var(--ok);
+}
 
 .station-card {
   background: var(--surface);
@@ -540,20 +546,22 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 .station-card:active:not(:disabled) { transform: translateY(0) scale(.995); }
 .station[data-state='current'] .station-card {
   background: var(--surface); border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft), var(--e2); }
+.station[data-state='done'] .station-card { border-color: var(--ok-edge); }
 .station[data-state='locked'] .station-card {
   background: var(--surface); background: var(--ground-2); border-style: dashed; box-shadow: none; }
+/* "Up next" on the unit she is standing on: the card says what the rail says. */
+.station-now {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: .01em;
+  color: var(--signal-ink); background: var(--signal-soft);
+  padding: .15rem .55rem; border-radius: var(--r-chip);
+}
 
 .station-no { font-size: .75rem; font-weight: 700; color: var(--ink-3); }
 .station-title {
   font-family: var(--font-display); font-variation-settings: var(--wonk);
   font-size: 1.35rem; font-weight: 700; letter-spacing: -.005em; line-height: 1.15;
 }
-
-/* The four parts of a unit, as a compact readout rather than a table. */
-.parts { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); margin: 0; }
-.parts > div { text-align: center; padding: var(--s2) var(--s1); border-radius: var(--r-sm); background: var(--ground); }
-.parts dt { font-size: .75rem; font-weight: 500; color: var(--ink-3); margin: 0; }
-.parts dd { margin: 2px 0 0; font-size: .8125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* ==========================================================================
    THE STEP TRACK — the four parts of a unit, as the sequence they are
@@ -630,14 +638,26 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 
 /* "What do I do now?" — one clear next action, never a guess. */
 .next-up {
+  position: relative; overflow: hidden; width: 100%;
   display: flex; align-items: center; gap: var(--s4); text-align: left;
   /* The only gradient in the product. It is here because this is the one
      card she is meant to press, and nothing else may compete with it. */
   background: var(--hero-grad); color: var(--on-brand);
-  border-radius: var(--r-xl); padding: var(--s5);
+  border: 0; border-radius: var(--r-xl); padding: var(--s5);
   box-shadow: var(--e3);
   transition: transform var(--t-tap) var(--ease), box-shadow var(--t-state) var(--ease);
 }
+/* Two soft rings bled off the corners: depth without a second gradient. */
+.next-up::before, .next-up::after {
+  content: ''; position: absolute; border-radius: 50%; pointer-events: none;
+  background: rgba(255, 255, 255, .12);
+}
+.next-up::before { width: 13rem; height: 13rem; right: -5rem; top: -6rem; }
+.next-up::after  { width: 7rem; height: 7rem; left: -2.5rem; bottom: -3.5rem; background: rgba(255, 255, 255, .08); }
+.next-up > * { position: relative; }
+.next-up .tally { margin-top: var(--s3); }
+.next-up .tally i { width: .9rem; height: .35rem; }
+.next-up:hover:not(:disabled) { background: var(--hero-grad); box-shadow: var(--e3), 0 0 0 4px var(--signal-soft); }
 .next-up:active { transform: translateY(2px) scale(.995); box-shadow: var(--e2); }
 .next-up .what {
   font-family: var(--font-display); font-variation-settings: var(--wonk);
@@ -653,8 +673,13 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   background: rgba(255, 255, 255, .18); color: var(--on-brand);
 }
 .next-up .badge-icon {
-  width: 3rem; height: 3rem; border-radius: 50%; flex: none;
+  width: 3.25rem; height: 3.25rem; border-radius: var(--r-md); flex: none;
   display: grid; place-items: center; background: var(--on-brand); color: var(--kind, var(--brand));
+  box-shadow: var(--e2);
+}
+.next-up .lead-in {
+  display: block; font-size: var(--fs-caption); font-weight: 700; letter-spacing: .01em;
+  color: rgba(255, 255, 255, .8); margin-bottom: 2px;
 }
 
 /* --- Learning surfaces on a wide screen --------------------------------
@@ -720,7 +745,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   box-shadow: var(--e1);
   transition: transform var(--t-state) var(--ease), box-shadow var(--t-state) var(--ease);
 }
-.aside-card:hover { transform: translateY(-2px); box-shadow: var(--e2); }
+.aside-card:hover:not(:disabled) { background: var(--surface); transform: translateY(-2px); box-shadow: var(--e2); }
 .aside-card:active { transform: none; box-shadow: var(--e1); }
 .aside-tag {
   font-size: var(--fs-micro); font-weight: 700; color: var(--kind-ink, var(--grammar-ink));
@@ -735,6 +760,66 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 .aside-title {
   display: block; font-family: var(--font-display); font-variation-settings: var(--wonk);
   font-size: 1.05rem; font-weight: 700; color: var(--ink);
+}
+
+/* ==========================================================================
+   THE UNIT JOURNEY — the step track as the unit's own navigation
+   The same track Home draws, with each node a tab. A node is coloured for the
+   kind of work it holds, ticked when finished, locked only when the server
+   says so, and underlined — the pen mark — when it is the one open. The road
+   ends at a star that lights only when the test is passed.
+   ========================================================================== */
+.unit-journey {
+  display: flex; align-items: flex-start; gap: var(--s3); flex-wrap: wrap;
+  padding: var(--s4) var(--s3) var(--s3);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--e1);
+}
+.unit-track { flex: 1 1 20rem; min-width: 0; }
+.unit-track .track-step::before, .unit-track .track-step::after { top: 1.25rem; }
+.track-tab {
+  width: 100%; min-height: 0; padding: 0 0 .45rem; border: 0; background: none;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s2);
+  border-radius: var(--r-sm); font: inherit;
+}
+.track-tab:hover:not(:disabled) { background: none; }
+.track-tab:hover:not(:disabled) .track-node { transform: scale(1.06); }
+.track-tab:disabled { opacity: 1; cursor: not-allowed; }
+.unit-track .track-node { width: 2.5rem; height: 2.5rem; }
+/* Open but not finished: the kind's own colour, softly, so the road reads as
+   four coloured stones rather than four grey rings. */
+.unit-track .track-step[data-state='todo'] .track-node {
+  background: var(--kind-soft); border-color: var(--kind-soft); color: var(--kind);
+}
+.unit-track .track-tab[aria-selected='true'] .track-node {
+  background: var(--kind); border-color: var(--kind); color: var(--on-brand);
+  box-shadow: 0 0 0 5px var(--kind-soft);
+}
+.unit-track .track-tab[aria-selected='true'] .track-label { color: var(--kind-ink); }
+.unit-track .track-label { font-size: var(--fs-caption); }
+.unit-track .track-label .num { font-weight: 600; opacity: .7; }
+.unit-track .track-label.stroke::after { bottom: -.3rem; }
+[data-kind='done'] { --kind: var(--ok); --kind-soft: var(--ok-soft); --kind-ink: var(--ok-ink); }
+.track-end { flex: 0 0 4rem; padding-top: 0; }
+.track-end .track-node { color: var(--ink-4); border-color: var(--line-2); border-style: dashed; }
+.track-end[data-state='done'] .track-node { border-style: solid; box-shadow: 0 0 0 5px var(--ok-soft); }
+.track-end[data-state='done'] .track-label { color: var(--ok-ink); font-weight: 700; }
+/* Games beside the road: the same chip the tab strip used, on its own. */
+.unit-extra { flex: none; padding-bottom: 0; overflow: visible; align-self: center; }
+@media (max-width: 40rem) {
+  .unit-journey { padding: var(--s3) var(--s2) var(--s2); }
+  .unit-track { flex-basis: 100%; }
+  .unit-extra { width: 100%; justify-content: center; border-top: 1px solid var(--line); padding-top: var(--s2); }
+  .track-end { flex: 1; }
+}
+
+/* Passed: said in mint, with the star the road ends on. */
+.finished-ribbon {
+  display: inline-flex; align-items: center; gap: var(--s2); margin: 0;
+  font-size: var(--fs-small); font-weight: 700; color: var(--ok-ink);
+  background: var(--ok-soft); border: 1px solid var(--ok-edge);
+  padding: .3rem .75rem; border-radius: var(--r-chip);
+  animation: popIn var(--t-party) var(--pop) both;
 }
 
 /* ==========================================================================
@@ -1148,7 +1233,7 @@ button.match-left.wrong, button.match-right.wrong { border-color: var(--bad); ba
   transition: transform var(--t-state) var(--pop), box-shadow var(--t-state) var(--ease);
 }
 /* One reaction, on the thing being offered — not on every card in the app. */
-.game-card:hover:not(:disabled) { transform: translateY(-3px); box-shadow: var(--e3); }
+.game-card:hover:not(:disabled) { background: var(--surface); transform: translateY(-3px); box-shadow: var(--e3); }
 .game-card:active:not(:disabled) { transform: translateY(0); box-shadow: var(--e1); }
 .game-card:disabled { box-shadow: none; background: var(--ground-2); border-style: dashed; }
 /* A wash of the game's own colour, bled off the top corner. */
@@ -1340,12 +1425,15 @@ button.memory-card.done::after { content: none; }
 .teachernav a[aria-current='page'] { background: var(--brand-soft); color: var(--brand-ink); }
 
 .teacher-page { max-width: 78rem; }
-.page-head {
+.teacher-bar ~ .page { max-width: 78rem; }
+.page-head, .pagehead {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: var(--s4); flex-wrap: wrap; margin-bottom: var(--s5);
 }
-.page-head h1 { font-size: clamp(1.4rem, 3.5vw, 1.9rem); }
-.page-lead { margin: var(--s2) 0 0; color: var(--ink-3); font-size: var(--fs-body); }
+.pagehead { display: grid; gap: var(--s1); margin-bottom: 0; }
+.page-head h1, .pagehead h1 { font-size: clamp(1.4rem, 3.5vw, 1.9rem); }
+.page-lead, .pagehead > .muted { margin: var(--s2) 0 0; color: var(--ink-3); font-size: var(--fs-body); }
+.pagehead > .muted { margin-top: 0; }
 
 /* --- the dashboard's shape ---------------------------------------------
    Attention first and widest, because an average hides the one child who is
@@ -1367,12 +1455,17 @@ button.memory-card.done::after { content: none; }
 
 .panel {
   background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r-lg); overflow: hidden;
+  border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--e1);
 }
 .panel-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
   padding: var(--s4) var(--s5); border-bottom: 1px solid var(--line); flex-wrap: wrap;
+  background: linear-gradient(to bottom, var(--ground), var(--surface));
 }
+/* A form or a table set straight into a panel keeps the panel's gutter. */
+.panel > .add-word { padding: var(--s3) var(--s5) var(--s4); }
+.panel > .add-word > div { flex: 1 1 12rem; }
+.panel > .table-wrap { border-top: 1px solid var(--line); }
 .panel-title { white-space: nowrap; }
 .panel-title {
   font-family: var(--font-display); font-variation-settings: var(--wonk);
@@ -1544,6 +1637,10 @@ th button.sortcol .dir { font-size: .7rem; color: var(--brand); }
   margin: 0; font-size: var(--fs-small); font-weight: 700; color: var(--ink);
 }
 .parts-line { display: flex; gap: var(--s2); flex-wrap: wrap; }
+/* One chip for one part of a unit, wherever a teacher meets it — a student's
+   detail, the curriculum, the unit editor, a school's gaps. Defined once, so
+   the states cannot drift: done and ready are quiet, a gap is amber, and a
+   part that does not exist yet is an outline. */
 .part {
   display: inline-flex; align-items: center; gap: var(--s1);
   font-size: var(--fs-caption); font-weight: 600;
@@ -1552,8 +1649,11 @@ th button.sortcol .dir { font-size: .7rem; color: var(--brand); }
 }
 .part b { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 .part[data-state='done']  { border-color: var(--ok);   background: var(--ok-soft);   color: var(--ok-ink); }
-.part[data-state='stuck'] { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }
-.part[data-state='none']  { border-style: dashed; color: var(--ink-3); }
+.part[data-state='ready'] { background: var(--ground-2); color: var(--ink-2); border-color: var(--line); }
+.part[data-state='stuck'],
+.part[data-state='gap']   { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }
+.part[data-state='none'],
+.part[data-state='empty'] { background: transparent; border-style: dashed; border-color: var(--line-2); color: var(--ink-3); }
 .part .ico { width: .8rem; height: .8rem; }
 
 /* The phone: one card per student, never a squeezed table. */
@@ -1616,6 +1716,17 @@ th button.sortcol .dir { font-size: .7rem; color: var(--brand); }
 .pupil { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
 .pupil .avatar { width: 3rem; height: 3rem; font-size: var(--fs-lead); }
 .pupil-facts { display: flex; gap: var(--s5); flex-wrap: wrap; }
+.facts {
+  display: flex; gap: var(--s5); flex-wrap: wrap; margin: var(--s3) 0 0; padding: 0;
+}
+.facts .fact dd {
+  margin: 0; font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-title); font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.facts .fact dt { font-size: var(--fs-caption); color: var(--ink-3); font-weight: 500; }
+.facts .fact[data-tone='ok'] dd { color: var(--ok-ink); }
+.facts .fact[data-tone='warn'] dd { color: var(--warn-ink); }
 .fact { display: grid; gap: 2px; }
 .fact b {
   font-family: var(--font-display); font-variation-settings: var(--wonk);
@@ -1711,6 +1822,16 @@ th button.sortcol .dir { font-size: .7rem; color: var(--brand); }
 }
 
 /* An empty dashboard is a beginning, not a fault. */
+.blank-art { display: flex; align-items: flex-end; justify-content: center; margin-bottom: var(--s2); }
+.blank-art > span {
+  width: 2.75rem; height: 2.75rem; border-radius: var(--r-md);
+  display: grid; place-items: center;
+  background: var(--kind-soft); color: var(--kind);
+  border: 2px solid var(--surface); box-shadow: var(--e2);
+}
+.blank-art > span:nth-child(1) { transform: rotate(-10deg) translate(.5rem, .35rem); }
+.blank-art > span:nth-child(2) { width: 3.25rem; height: 3.25rem; z-index: 1; background: var(--kind); color: var(--on-brand); }
+.blank-art > span:nth-child(3) { transform: rotate(10deg) translate(-.5rem, .35rem); }
 .blank {
   display: grid; gap: var(--s3); justify-items: center; text-align: center;
   padding: var(--s7) var(--s5); color: var(--ink-3);
@@ -1738,7 +1859,6 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
 
 @media (max-width: 40rem) {
   .hide-sm { display: none; }
-  .parts { grid-template-columns: repeat(2, 1fr); }
   .match-columns { gap: var(--s2); }
 }
 
@@ -1807,6 +1927,10 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
   border-top: 1px solid var(--line);
 }
 .unitlist li:first-child .unitrow { border-top: 0; }
+/* Hidden or open, read down the edge before a word is: amber is the state
+   the teacher still has to act on, mint is the state students can see. */
+.unitrow { box-shadow: inset 4px 0 0 var(--warn); }
+.unitrow[data-live='true'] { box-shadow: inset 4px 0 0 var(--ok); }
 .unitrow-main { grid-area: main; display: grid; gap: var(--s2); min-width: 0; }
 .unitrow-id { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
 .unitrow-open {
@@ -1824,14 +1948,6 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
 /* The parts of a unit. Ready is quiet on purpose: four green chips a row
    would make every unit look urgent and none look finished. */
 .parts { display: flex; gap: var(--s2); flex-wrap: wrap; min-width: 0; }
-.part {
-  display: inline-flex; align-items: center; gap: var(--s1);
-  font-size: var(--fs-caption); font-weight: 600;
-  padding: .2rem .55rem; border-radius: var(--r-sm);
-  background: var(--ground-2); color: var(--ink-2); border: 1px solid var(--line);
-}
-.part[data-state='gap']   { background: var(--warn-soft); color: var(--warn-ink); border-color: var(--warn); }
-.part[data-state='empty'] { background: transparent; color: var(--ink-3); border-style: dashed; border-color: var(--line-2); }
 .unitrow-do { grid-area: do; display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
 .unitrow-todo {
   grid-area: todo; margin: 0;
@@ -1913,6 +2029,21 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
   .todo-list li { padding-inline: var(--s4); }
 }
 
+/* The word list on a desk: the word set in the display face so the column
+   reads as words rather than as rows of a form, alternate rows tinted so the
+   eye can travel across, and the header held at the top while she scrolls. */
+.vocab-table th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.vocab-table th:first-child, .vocab-table td:first-child { padding-inline-start: var(--s5); }
+.vocab-table th:last-child,  .vocab-table td:last-child  { padding-inline-end: var(--s5); text-align: end; }
+.vocab-table td:last-child .row { justify-content: flex-end; flex-wrap: nowrap; }
+.vocab-table tbody > tr:nth-of-type(even) > td { background: var(--ground); }
+.vocab-table td { vertical-align: middle; }
+.vocab-table td.word-cell {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: var(--fs-base); font-weight: 600; color: var(--ink);
+}
+.vocab-table td[lang='ar'] { font-size: var(--fs-base); }
+
 /* ---------------------------------------------------------------------------
    The word list on a phone.
 
@@ -1939,6 +2070,8 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
   /* The Arabic cell reads right-to-left, which would carry its label across
      with it. The label belongs in the same column as every other label. */
   .vocab-table td[dir='rtl'] { flex-direction: row-reverse; }
+  /* Each word is its own card here, so the desk's alternate tint is dropped. */
+  .vocab-table tbody > tr:nth-of-type(even) > td { background: transparent; }
   /* The word itself is the heading of its own card, so it keeps no label. */
   .vocab-table td.word-cell {
     font-family: var(--font-display); font-variation-settings: var(--wonk);
@@ -2119,9 +2252,6 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
 .estate-counts span { font-size: var(--fs-small); color: var(--ink-2); white-space: nowrap; }
 .estate-counts b { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 700; }
 .estate-needs { display: flex; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
-/* A school with nothing outstanding says so quietly; a gap carries the warm
-   colour, so the eye lands on the school that wants something. */
-.part[data-state='ready'] { background: var(--ground-2); color: var(--ink-2); border-color: var(--line); }
 
 /* What a school still needs, on the line under its counts rather than as a
    chip adrift in the corner of the panel. */
@@ -2147,10 +2277,10 @@ code.temp { font-family: ui-monospace, monospace; background: var(--ground-2); p
 
 /* The totals. Supporting, so they are set as facts rather than as a hero
    row of big numbers — the schools above are what she came to read. */
-.tally { display: grid; gap: var(--s5); grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); margin: 0; }
-.tally div { display: grid; gap: var(--s1); }
-.tally dt { font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
-.tally dd {
+.totals { display: grid; gap: var(--s5); grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); margin: 0; }
+.totals div { display: grid; gap: var(--s1); }
+.totals dt { font-size: var(--fs-small); color: var(--ink-3); font-weight: 600; }
+.totals dd {
   margin: 0; font-family: var(--font-display); font-variation-settings: var(--wonk);
   font-size: var(--fs-title); font-weight: 600; color: var(--ink);
   line-height: 1; font-variant-numeric: tabular-nums;

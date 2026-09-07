@@ -16,6 +16,7 @@ import { ActivityRunner } from '@/components/ActivityRunner';
 import { BonusGames } from '@/components/BonusGames';
 import { StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
+import { UnitJourney } from '@/components/UnitJourney';
 
 type Tab = 'vocabulary' | 'grammar' | 'activity' | 'assessment' | 'games';
 
@@ -160,7 +161,12 @@ export default function LearnUnitPage() {
         <div>
           <h1>{unit.title}</h1>
           {progress && (
-            <p className="muted" data-testid="unit-progress" style={{ marginTop: '.25rem' }}>
+            <p
+              className={progress.assessmentState.passed ? 'finished-ribbon' : 'muted'}
+              data-testid="unit-progress"
+              style={{ marginTop: '.25rem' }}
+            >
+              {progress.assessmentState.passed && <Icon name="star" size={14} />}
               {progress.assessmentState.passed
                 ? 'Finished — you passed the test'
                 : `${progress.overallPercent}% of this unit done`}
@@ -204,63 +210,34 @@ export default function LearnUnitPage() {
           </p>
         )}
 
-        <div className="tabs-wrap">
-        <div className="tabs" role="tablist">
-          <button
-            role="tab"
-            aria-selected={activeTab === 'vocabulary'}
-            onClick={() => setTab('vocabulary')}
-            data-kind="vocabulary"
-            data-testid="tab-vocabulary"
-          >
-            <Icon name="words" size={16} />
-            Words {unit.vocabulary.length > 0 && <span className="num">{unit.vocabulary.length}</span>}
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'grammar'}
-            onClick={() => setTab('grammar')}
-            disabled={grammarLocked}
-            aria-disabled={grammarLocked}
-            data-kind="grammar"
-            data-testid="tab-grammar"
-          >
-            <Icon name={grammarLocked ? 'lock' : 'grammar'} size={16} />
-            Grammar {grammarSections.length > 0 && <span className="num">{grammarSections.length}</span>}
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'activity'}
-            onClick={() => setTab('activity')}
-            data-kind="activity"
-            data-testid="tab-activity"
-          >
-            <Icon name="activity" size={16} />
-            Activity
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'assessment'}
-            onClick={() => setTab('assessment')}
-            disabled={assessmentLocked}
-            aria-disabled={assessmentLocked}
-            data-kind="assessment"
-            data-testid="tab-assessment"
-          >
-            <Icon name={assessmentLocked ? 'lock' : unit.assessment.passed ? 'tick' : 'assessment'} size={16} />
-            Test
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'games'}
-            onClick={() => setTab('games')}
-            data-kind="games"
-            data-testid="tab-games"
-          >
-            <Icon name="games" size={16} />
-            Games
-          </button>
-        </div>
+        {/*
+          The road through the unit is the navigation. Games sit beside it,
+          not on it: a game is never a step and never locks anything.
+        */}
+        <div className="unit-journey">
+          <UnitJourney
+            active={activeTab}
+            progress={progress}
+            onPick={setTab}
+            stops={[
+              { key: 'vocabulary', label: 'Words', count: unit.vocabulary.length, locked: false },
+              { key: 'grammar', label: 'Grammar', count: grammarSections.length, locked: grammarLocked },
+              { key: 'activity', label: 'Activity', locked: false },
+              { key: 'assessment', label: 'Test', locked: assessmentLocked },
+            ]}
+          />
+          <div className="tabs unit-extra" role="tablist" aria-label="Extra">
+            <button
+              role="tab"
+              aria-selected={activeTab === 'games'}
+              onClick={() => setTab('games')}
+              data-kind="games"
+              data-testid="tab-games"
+            >
+              <Icon name="games" size={16} />
+              Games
+            </button>
+          </div>
         </div>
 
         {activeTab === 'vocabulary' && (
