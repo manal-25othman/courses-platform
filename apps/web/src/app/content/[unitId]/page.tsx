@@ -20,6 +20,15 @@ import {
 import { QuestionList } from '@/components/QuestionList';
 import { TeacherHeader } from '@/components/TeacherShell';
 import { Icon } from '@/components/Icon';
+import {
+  canChange,
+  canPublish,
+  DraftNote,
+  ItemControls,
+  ItemState,
+  ReviewAndPublish,
+  UnitState,
+} from '@/components/Lifecycle';
 import { unfinished } from '../page';
 
 type Tab = 'vocabulary' | 'grammar' | 'activities' | 'assessment';
@@ -48,6 +57,7 @@ export default function UnitPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>('vocabulary');
+  const [reviewing, setReviewing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -113,14 +123,11 @@ export default function UnitPage() {
     }
   }
 
-  async function setVisibility(open: boolean) {
+  async function hideUnit() {
     setBusy(true);
     await run(
-      () =>
-        open
-          ? api.post(`/content/units/${unitId}/publish`)
-          : api.post(`/content/units/${unitId}/status`, { status: 'DRAFT' }),
-      open ? 'This unit is now open to students.' : 'This unit is hidden from students again.',
+      () => api.post(`/content/units/${unitId}/status`, { status: 'DRAFT' }),
+      'This unit is hidden from students. Its published items stay published and reappear when you open it again.',
     );
     setBusy(false);
   }
@@ -182,16 +189,42 @@ export default function UnitPage() {
         <div className="unithead">
           <div className="unithead-id">
             <h1>{unit.title}</h1>
-            <span className="flag" data-tone={live ? 'quiet' : 'hidden'}>
-              <Icon name={live ? 'tick' : 'lock'} />
-              {live ? 'Open to students' : 'Hidden from students'}
-            </span>
+            <UnitState status={unit.status} />
             {unit.kind && <span className="muted">{unit.kind}</span>}
           </div>
-          <button disabled={busy} onClick={() => void setVisibility(!live)}>
-            {busy ? 'Working…' : live ? 'Hide from students' : 'Open to students'}
-          </button>
+          {canPublish(me) && (
+            <div className="row">
+              <button disabled={busy} onClick={() => setReviewing(true)} data-testid="review-unit">
+                {live ? 'Publish drafts…' : 'Review and publish…'}
+              </button>
+              {live && (
+                <button disabled={busy} onClick={() => void hideUnit()} data-testid="hide-unit">
+                  {busy ? 'Working…' : 'Hide from students'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
+
+        <DraftNote me={me} unitOpen={live} />
+
+        {reviewing && (
+          <ReviewAndPublish
+            me={me}
+            unitId={unit.id}
+            unitTitle={unit.title}
+            onCancel={() => setReviewing(false)}
+            onError={(message) => {
+              setError(message);
+              setReviewing(false);
+            }}
+            onDone={async (message) => {
+              setReviewing(false);
+              setNotice(message);
+              await load();
+            }}
+          />
+        )}
 
         {error && (
           <p className="alert error" role="alert">
@@ -204,10 +237,10 @@ export default function UnitPage() {
           </p>
         )}
 
-        {live && (
+        {live && canPublish(me) && (
           <p className="alert warn">
-            This unit is open. <strong>Every change you make here is live straight away</strong> —
-            there is no separate draft copy. To work on it privately, hide it first.
+            This unit is visible. <strong>A change to a published item is live straight away</strong>{' '}
+            — there is no separate draft copy. To work on it privately, hide the unit first.
           </p>
         )}
 
@@ -240,9 +273,9 @@ export default function UnitPage() {
           ))}
         </div>
 
-        {tab === 'vocabulary' && <VocabularyList unit={unit} onRun={run} />}
+        {tab === 'vocabulary' && <VocabularyList unit={unit} me={me} onRun={run} />}
 
-        {tab === 'grammar' && <SectionList unit={unit} types={types} onRun={run} />}
+        {tab === 'grammar' && <SectionList unit={unit} me={me} types={types} onRun={run} />}
 
         {/*
           The same editor serves both, filtered by what the question is for.
@@ -256,6 +289,8 @@ export default function UnitPage() {
             <QuestionList
               key="activities"
               unitId={unit.id}
+              me={me}
+              unitOpen={live}
               purpose="ACTIVITY"
               sections={unit.sections}
               onRun={run}
@@ -274,6 +309,8 @@ export default function UnitPage() {
             <QuestionList
               key="assessment"
               unitId={unit.id}
+              me={me}
+              unitOpen={live}
               purpose="ASSESSMENT"
               sections={unit.sections}
               onRun={run}
@@ -495,10 +532,12 @@ function PreviewChoices({ payload }: { payload: Record<string, unknown> }) {
 
 function SectionList({
   unit,
+  me,
   types,
   onRun,
 }: {
   unit: UnitDetail;
+  me: Me;
   types: SectionType[];
   onRun: (work: () => Promise<unknown>, message: string) => Promise<void>;
 }) {
@@ -530,7 +569,9 @@ function SectionList({
               setAdding('');
               void onRun(
                 () => api.post(`/content/units/${unit.id}/sections`, { typeKey: key }),
-                'Section added as a draft.',
+                canPublish(me)
+                  ? 'Section added as a draft. Students cannot see it until you publish it.'
+                  : 'Section saved as a draft. Students cannot see it; a teacher publishes it.',
               );
             }}
           >
@@ -566,20 +607,40 @@ function SectionList({
                 )}
               </div>
               <div className="row">
-                <span className={`badge ${section.status === 'PUBLISHED' ? 'active' : 'disabled'}`}>
-                  {section.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-                </span>
-                <button className="small" onClick={() => setEditing(editing?.id === section.id ? null : section)}>
-                  {editing?.id === section.id ? 'Close' : 'Edit'}
-                </button>
-                <button
-                  className="small danger"
-                  onClick={() =>
-                    onRun(() => api.del(`/content/sections/${section.id}`), 'Section removed.')
+                <ItemState item={section} unitOpen={unit.status === 'PUBLISHED'} testId="section-state" />
+                <ItemControls
+                  me={me}
+                  item={section}
+                  publish={() =>
+                    void onRun(
+                      () => api.post(`/content/sections/${section.id}/status`, { status: 'PUBLISHED' }),
+                      unit.status === 'PUBLISHED'
+                        ? 'Section published. Students can see it now.'
+                        : 'Section published. Students will see it once the unit is visible.',
+                    )
                   }
-                >
-                  Remove
-                </button>
+                  hide={() =>
+                    void onRun(
+                      () => api.post(`/content/sections/${section.id}/status`, { status: 'DRAFT' }),
+                      'Section hidden from students.',
+                    )
+                  }
+                />
+                {canChange(me, section) && (
+                  <>
+                    <button className="small" onClick={() => setEditing(editing?.id === section.id ? null : section)}>
+                      {editing?.id === section.id ? 'Close' : 'Edit'}
+                    </button>
+                    <button
+                      className="small danger"
+                      onClick={() =>
+                        onRun(() => api.del(`/content/sections/${section.id}`), 'Section removed.')
+                      }
+                    >
+                      Remove
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -813,9 +874,11 @@ function SectionEditor({
 
 function VocabularyList({
   unit,
+  me,
   onRun,
 }: {
   unit: UnitDetail;
+  me: Me;
   onRun: (work: () => Promise<unknown>, message: string) => Promise<void>;
 }) {
   const [word, setWord] = useState('');
@@ -832,7 +895,9 @@ function VocabularyList({
           wordEn: word,
           ...(meaning.trim() ? { meaningAr: meaning.trim() } : {}),
         }),
-      `"${word}" was added.`,
+      canPublish(me)
+        ? `"${word}" was saved as a draft. Students cannot see it until you publish it${unit.status === 'PUBLISHED' ? '.' : ' and the unit is visible.'}`
+        : `"${word}" was saved as a draft. Students cannot see it yet — a teacher reviews and publishes it.`,
     );
     setWord('');
     setMeaning('');
@@ -907,11 +972,11 @@ function VocabularyList({
                       )}
                     </td>
                     <td data-label="Status">
-                      <span
-                        className={`badge ${item.status === 'PUBLISHED' ? 'active' : 'disabled'}`}
-                      >
-                        {item.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-                      </span>
+                      <ItemState
+                        item={item}
+                        unitOpen={unit.status === 'PUBLISHED'}
+                        testId={`word-state-${item.wordEn}`}
+                      />
                       {item.needsReview && (
                         <span
                           className="badge warn"
@@ -925,6 +990,25 @@ function VocabularyList({
                     </td>
                     <td data-label="Actions">
                       <div className="row">
+                        <ItemControls
+                          me={me}
+                          item={item}
+                          publish={() =>
+                            void onRun(
+                              () => api.post(`/content/vocabulary/${item.id}/status`, { status: 'PUBLISHED' }),
+                              unit.status === 'PUBLISHED'
+                                ? `"${item.wordEn}" published. Students can see it now.`
+                                : `"${item.wordEn}" published. Students will see it once the unit is visible.`,
+                            )
+                          }
+                          hide={() =>
+                            void onRun(
+                              () => api.post(`/content/vocabulary/${item.id}/status`, { status: 'DRAFT' }),
+                              `"${item.wordEn}" hidden from students.`,
+                            )
+                          }
+                        />
+                        {canChange(me, item) && (
                         <button
                           className="small"
                           data-testid={`edit-word-${item.wordEn}`}
@@ -933,6 +1017,8 @@ function VocabularyList({
                         >
                           {editing === item.id ? 'Close' : 'Edit'}
                         </button>
+                        )}
+                        {canChange(me, item) && (
                         <button
                           className="small danger"
                           onClick={() =>
@@ -944,6 +1030,7 @@ function VocabularyList({
                         >
                           Remove
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -109,6 +109,13 @@ export class ContentController {
     return this.content.setUnitStatus(actor, id, dto.status);
   }
 
+  /** What publishing this unit would do: counts of ready, held-back and published items. */
+  @Roles(...TEACHER)
+  @Get('units/:id/review')
+  async unitReview(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.content.unitReview(actor, id);
+  }
+
   /** Approves a unit and everything inside it, after the teacher has reviewed it. */
   @Roles(...TEACHER)
   @Post('units/:id/publish')

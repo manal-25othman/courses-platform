@@ -5,12 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ContentStatus, SettingScope, UserRole } from '@prisma/client';
+import { ContentStatus, QuestionPurpose, SettingScope, UserRole } from '@prisma/client';
 import { SettingsService } from '../settings/settings.service';
 import { SETTING_KEYS } from '../settings/settings.types';
 import { readVideoUrl, UnsupportedVideoError } from './video';
 import { PrismaService, TenantClient } from '../prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
+import { assertMayChange, assertMayPublish } from './content.policy';
 import { CurrentUser } from '../auth/auth.types';
 import {
   CreateSectionDto,
@@ -405,7 +406,7 @@ export class ContentService {
     const schoolId = this.schoolOf(actor);
 
     const unit = await this.prisma.forSchool(schoolId, async (tx) => {
-      await this.mustFindUnit(tx, unitId);
+      assertMayChange(actor, await this.mustFindUnit(tx, unitId), 'This unit');
 
       if (dto.orderIndex !== undefined) {
         await this.shiftUnitOrder(tx, unitId, dto.orderIndex);
@@ -432,7 +433,15 @@ export class ContentService {
     return unit;
   }
 
+  /**
+   * Opens a unit to students, or hides it again.
+   *
+   * The unit's status is the gate on everything inside it: a published word
+   * in a hidden unit is invisible. Hiding leaves every item's own state
+   * alone, so opening the unit again shows exactly what it showed before.
+   */
   async setUnitStatus(actor: CurrentUser, unitId: string, status: ContentStatus) {
+    assertMayPublish(actor);
     const schoolId = this.schoolOf(actor);
 
     const unit = await this.prisma.forSchool(schoolId, async (tx) => {
@@ -458,7 +467,7 @@ export class ContentService {
     const schoolId = this.schoolOf(actor);
 
     await this.prisma.forSchool(schoolId, async (tx) => {
-      await this.mustFindUnit(tx, unitId);
+      assertMayChange(actor, await this.mustFindUnit(tx, unitId), 'This unit');
       await tx.unit.delete({ where: { id: unitId } });
     });
 
@@ -517,6 +526,7 @@ export class ContentService {
     return this.prisma.forSchool(schoolId, async (tx) => {
       const section = await tx.unitSection.findUnique({ where: { id: sectionId } });
       if (!section) throw new NotFoundException('Section not found.');
+      assertMayChange(actor, section, 'This grammar page');
 
       // Examples live in `config`, which is where a section keeps what one
       // kind needs and another does not — the alternative was a column that
@@ -571,18 +581,43 @@ export class ContentService {
   }
 
   async setSectionStatus(actor: CurrentUser, sectionId: string, status: ContentStatus) {
-    return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
-      const section = await tx.unitSection.findUnique({ where: { id: sectionId } });
-      if (!section) throw new NotFoundException('Section not found.');
+    assertMayPublish(actor);
+    const schoolId = this.schoolOf(actor);
+
+    const section = await this.prisma.forSchool(schoolId, async (tx) => {
+      const existing = await tx.unitSection.findUnique({ where: { id: sectionId } });
+      if (!existing) throw new NotFoundException('Section not found.');
+
+      // Something the import could not be sure of stays a draft until a
+      // teacher has looked at it — the same rule a question follows.
+      if (status === ContentStatus.PUBLISHED && existing.needsReview) {
+        throw new BadRequestException(
+          'This grammar page still needs checking. Confirm it before publishing.',
+        );
+      }
 
       return tx.unitSection.update({ where: { id: sectionId }, data: { status } });
     });
+
+    await this.audit.record({
+      action:
+        status === ContentStatus.PUBLISHED
+          ? AUDIT_ACTIONS.CONTENT_PUBLISHED
+          : AUDIT_ACTIONS.CONTENT_UNPUBLISHED,
+      schoolId,
+      actorUserId: actor.userId,
+      targetType: 'section',
+      targetId: sectionId,
+    });
+
+    return section;
   }
 
   async deleteSection(actor: CurrentUser, sectionId: string) {
     await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
       const section = await tx.unitSection.findUnique({ where: { id: sectionId } });
       if (!section) throw new NotFoundException('Section not found.');
+      assertMayChange(actor, section, 'This grammar page');
 
       await tx.unitSection.delete({ where: { id: sectionId } });
     });
@@ -760,6 +795,7 @@ export class ContentService {
             : await tx.vocabularyItem.findUnique({ where: { id: parent.word } });
 
       if (!exists) throw new NotFoundException('That has been removed. Reload the page.');
+      assertMayChange(actor, exists, 'This item');
 
       const last = await tx.mediaAsset.findFirst({
         where,
@@ -851,8 +887,17 @@ export class ContentService {
 
   async removeMedia(actor: CurrentUser, mediaId: string) {
     await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
-      const asset = await tx.mediaAsset.findUnique({ where: { id: mediaId } });
+      const asset = await tx.mediaAsset.findUnique({
+        where: { id: mediaId },
+        include: {
+          section: { select: { status: true } },
+          question: { select: { status: true } },
+          vocabularyItem: { select: { status: true } },
+        },
+      });
       if (!asset) throw new NotFoundException('File not found.');
+      const parent = asset.section ?? asset.question ?? asset.vocabularyItem;
+      if (parent) assertMayChange(actor, parent, 'The item this file belongs to');
 
       await tx.mediaAsset.delete({ where: { id: mediaId } });
     });
@@ -898,6 +943,7 @@ export class ContentService {
     return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
       const item = await tx.vocabularyItem.findUnique({ where: { id: itemId } });
       if (!item) throw new NotFoundException('Word not found.');
+      assertMayChange(actor, item, 'This word');
 
       // Renaming a word onto one the unit already has, same as adding one.
       if (dto.wordEn && dto.wordEn !== item.wordEn) {
@@ -924,20 +970,89 @@ export class ContentService {
   }
 
   async setVocabularyStatus(actor: CurrentUser, itemId: string, status: ContentStatus) {
-    return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
-      const item = await tx.vocabularyItem.findUnique({ where: { id: itemId } });
-      if (!item) throw new NotFoundException('Word not found.');
+    assertMayPublish(actor);
+    const schoolId = this.schoolOf(actor);
+
+    const item = await this.prisma.forSchool(schoolId, async (tx) => {
+      const existing = await tx.vocabularyItem.findUnique({ where: { id: itemId } });
+      if (!existing) throw new NotFoundException('Word not found.');
+
+      if (status === ContentStatus.PUBLISHED && existing.needsReview) {
+        throw new BadRequestException(
+          'This word still needs checking. Confirm it before publishing.',
+        );
+      }
 
       return tx.vocabularyItem.update({ where: { id: itemId }, data: { status } });
     });
+
+    await this.audit.record({
+      action:
+        status === ContentStatus.PUBLISHED
+          ? AUDIT_ACTIONS.CONTENT_PUBLISHED
+          : AUDIT_ACTIONS.CONTENT_UNPUBLISHED,
+      schoolId,
+      actorUserId: actor.userId,
+      targetType: 'vocabulary',
+      targetId: itemId,
+    });
+
+    return item;
   }
 
   async deleteVocabulary(actor: CurrentUser, itemId: string) {
     await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
       const item = await tx.vocabularyItem.findUnique({ where: { id: itemId } });
       if (!item) throw new NotFoundException('Word not found.');
+      assertMayChange(actor, item, 'This word');
 
       await tx.vocabularyItem.delete({ where: { id: itemId } });
+    });
+  }
+
+  /**
+   * What publishing this unit would do, before it is done.
+   *
+   * The review a teacher reads before she presses the button: for each kind
+   * of content, how much is already published, how much is a draft ready to
+   * go, and how much is held back because the import could not be sure of it.
+   * Held-back items are never published by the unit; each needs her eye.
+   */
+  async unitReview(actor: CurrentUser, unitId: string) {
+    const schoolId = this.schoolOf(actor);
+
+    return this.prisma.forSchool(schoolId, async (tx) => {
+      const unit = await this.mustFindUnit(tx, unitId);
+
+      const tally = async (
+        count: (where: Record<string, unknown>) => Promise<number>,
+        extra: Record<string, unknown> = {},
+      ) => ({
+        published: await count({ ...extra, status: ContentStatus.PUBLISHED }),
+        ready: await count({ ...extra, status: ContentStatus.DRAFT, needsReview: false }),
+        held: await count({ ...extra, needsReview: true }),
+      });
+
+      const [words, sections, activity, assessment] = await Promise.all([
+        tally((where) => tx.vocabularyItem.count({ where: { unitId, ...where } })),
+        tally((where) => tx.unitSection.count({ where: { unitId, ...where } })),
+        tally((where) => tx.question.count({ where: { unitId, ...where } }), {
+          purpose: QuestionPurpose.ACTIVITY,
+        }),
+        tally((where) => tx.question.count({ where: { unitId, ...where } }), {
+          purpose: QuestionPurpose.ASSESSMENT,
+        }),
+      ]);
+
+      return {
+        unitId,
+        unitStatus: unit.status,
+        canPublish: actor.role === UserRole.TEACHER,
+        words,
+        sections,
+        activity,
+        assessment,
+      };
     });
   }
 
@@ -945,35 +1060,38 @@ export class ContentService {
    * Publishes a unit and everything inside it in one step.
    *
    * Approving unit by unit is what the teacher actually does after reviewing
-   * imported material, rather than approving each word separately.
+   * imported material, rather than approving each word separately. Only what
+   * is ready goes out: an item the import could not be sure of — a question
+   * with no answer, a word glossed with a digit, a scan paired by guesswork —
+   * stays a draft however the unit is approved, and is counted back so she
+   * knows what is still waiting for her.
    */
   async publishUnitTree(actor: CurrentUser, unitId: string) {
+    assertMayPublish(actor);
     const schoolId = this.schoolOf(actor);
 
     const counts = await this.prisma.forSchool(schoolId, async (tx) => {
       await this.mustFindUnit(tx, unitId);
 
       const sections = await tx.unitSection.updateMany({
-        where: { unitId, status: ContentStatus.DRAFT },
+        where: { unitId, status: ContentStatus.DRAFT, needsReview: false },
         data: { status: ContentStatus.PUBLISHED },
       });
       const words = await tx.vocabularyItem.updateMany({
-        where: { unitId, status: ContentStatus.DRAFT },
+        where: { unitId, status: ContentStatus.DRAFT, needsReview: false },
         data: { status: ContentStatus.PUBLISHED },
       });
-
-      // Questions too, otherwise approving a unit gives the students a unit
-      // with nothing to do. The one exception is the rule that matters: a
-      // question the import could not read the answer for stays a draft
-      // however the unit is approved, and is reported so the teacher knows
-      // what is still waiting for her.
       const questions = await tx.question.updateMany({
         where: { unitId, status: ContentStatus.DRAFT, needsReview: false },
         data: { status: ContentStatus.PUBLISHED },
       });
-      const heldBack = await tx.question.count({
-        where: { unitId, needsReview: true },
-      });
+
+      const [questionsNeedingReview, sectionsNeedingReview, wordsNeedingReview] =
+        await Promise.all([
+          tx.question.count({ where: { unitId, needsReview: true } }),
+          tx.unitSection.count({ where: { unitId, needsReview: true } }),
+          tx.vocabularyItem.count({ where: { unitId, needsReview: true } }),
+        ]);
 
       await tx.unit.update({ where: { id: unitId }, data: { status: ContentStatus.PUBLISHED } });
 
@@ -981,7 +1099,9 @@ export class ContentService {
         sections: sections.count,
         words: words.count,
         questions: questions.count,
-        questionsNeedingReview: heldBack,
+        questionsNeedingReview,
+        sectionsNeedingReview,
+        wordsNeedingReview,
       };
     });
 

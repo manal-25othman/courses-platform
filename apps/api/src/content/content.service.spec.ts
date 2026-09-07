@@ -12,11 +12,13 @@ const teacher: CurrentUser = {
   sub: 't1', userId: 't1', role: UserRole.TEACHER, schoolId: SCHOOL, mustChangePassword: false,
 };
 const student: CurrentUser = { ...teacher, sub: 's1', userId: 's1', role: UserRole.STUDENT };
+const admin: CurrentUser = { ...teacher, sub: 'a1', userId: 'a1', role: UserRole.ADMIN };
 
 /** Records the filters the service builds, which is what hides drafts. */
 function serviceCapturing(captured: {
   unitWhere?: Record<string, unknown>;
   questionWhere?: Record<string, unknown>;
+  wordWhere?: Record<string, unknown>;
   school?: string;
 }) {
   const tx = {
@@ -38,8 +40,14 @@ function serviceCapturing(captured: {
       update: async () => ({}),
       updateMany: async () => ({ count: 0 }),
     },
-    unitSection: { updateMany: async () => ({ count: 3 }) },
-    vocabularyItem: { updateMany: async () => ({ count: 5 }) },
+    unitSection: { updateMany: async () => ({ count: 3 }), count: async () => 1 },
+    vocabularyItem: {
+      updateMany: async (args: { where: Record<string, unknown> }) => {
+        captured.wordWhere = args.where;
+        return { count: 5 };
+      },
+      count: async () => 0,
+    },
     question: {
       updateMany: async (args: { where: Record<string, unknown> }) => {
         captured.questionWhere = args.where;
@@ -69,6 +77,7 @@ describe('ContentService draft visibility', () => {
   let captured: {
     unitWhere?: Record<string, unknown>;
     questionWhere?: Record<string, unknown>;
+    wordWhere?: Record<string, unknown>;
     school?: string;
   };
   let service: ContentService;
@@ -128,7 +137,50 @@ describe('ContentService draft visibility', () => {
       words: 5,
       questions: 7,
       questionsNeedingReview: 2,
+      sectionsNeedingReview: 1,
+      wordsNeedingReview: 0,
     });
+  });
+
+  /**
+   * A word or a page the import could not be sure of follows the same rule
+   * as a question: approving the unit never publishes it.
+   */
+  it('never publishes a word or a page that still needs checking', async () => {
+    await service.publishUnitTree(teacher, 'unit-1');
+
+    expect(captured.wordWhere?.needsReview).toBe(false);
+  });
+
+  /**
+   * The school's administrator may prepare curriculum but not release it.
+   * Enforced here, in the service, so a request that skips the screen is
+   * refused all the same.
+   */
+  it('refuses to let a school administrator publish or hide a unit', async () => {
+    await expect(service.publishUnitTree(admin, 'unit-1')).rejects.toThrow(/only a teacher/i);
+    await expect(
+      service.setUnitStatus(admin, 'unit-1', ContentStatus.PUBLISHED),
+    ).rejects.toThrow(/only a teacher/i);
+    await expect(
+      service.setUnitStatus(admin, 'unit-1', ContentStatus.DRAFT),
+    ).rejects.toThrow(/only a teacher/i);
+  });
+
+  it('lets a school administrator create a unit, as a draft', async () => {
+    const unit = await service.createUnit(admin, { title: 'Prepared by the office' });
+
+    expect((unit as { status: ContentStatus }).status).toBe(ContentStatus.DRAFT);
+  });
+
+  it('reports what publishing would do, and who may do it', async () => {
+    const forTeacher = await service.unitReview(teacher, 'unit-1');
+    const forAdmin = await service.unitReview(admin, 'unit-1');
+
+    expect(forTeacher.canPublish).toBe(true);
+    expect(forAdmin.canPublish).toBe(false);
+    expect(forTeacher.words).toEqual({ published: 0, ready: 0, held: 0 });
+    expect(forTeacher.activity).toEqual({ published: 2, ready: 2, held: 2 });
   });
 
   /**
@@ -276,5 +328,84 @@ describe('ContentService media signatures', () => {
 
   it('leaves a type it does not know alone', () => {
     expect(looks(ascii('anything'), 'audio/x-something-new')).toBe(true);
+  });
+});
+
+
+/**
+ * The lifecycle of one word, as the roles meet it: the administrator saves
+ * drafts and nothing more; the teacher publishes, and only what has been
+ * checked; a published word is a teacher's to change.
+ */
+describe('ContentService word lifecycle by role', () => {
+  function harness(
+    words: { id: string; unitId: string; wordEn: string; status: ContentStatus; needsReview: boolean }[],
+  ) {
+    const updates: Record<string, unknown>[] = [];
+    const tx = {
+      unit: { findUnique: async () => ({ id: 'u1', courseId: 'course-1', orderIndex: 0, status: ContentStatus.DRAFT }) },
+      course: { findFirst: async () => ({ id: 'course-1', ownerSchoolId: SCHOOL }) },
+      vocabularyItem: {
+        findFirst: async () => null,
+        findUnique: async (args: { where: { id: string } }) => words.find((w) => w.id === args.where.id) ?? null,
+        create: async (args: { data: Record<string, unknown> }) => ({ id: 'new', ...args.data }),
+        update: async (args: { where: { id: string }; data: Record<string, unknown> }) => {
+          updates.push(args.data);
+          return { ...words.find((w) => w.id === args.where.id), ...args.data };
+        },
+        delete: async () => ({}),
+      },
+    };
+    const prisma = {
+      forSchool: async <T>(_schoolId: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+    } as unknown as PrismaService;
+    const service = new ContentService(
+      prisma,
+      { record: vi.fn() } as unknown as AuditService,
+      { resolve: vi.fn() } as unknown as SettingsService,
+    );
+    return { service, updates };
+  }
+
+  const draft = { id: 'w-draft', unitId: 'u1', wordEn: 'beetle', status: ContentStatus.DRAFT, needsReview: false };
+  const live = { id: 'w-live', unitId: 'u1', wordEn: 'camel', status: ContentStatus.PUBLISHED, needsReview: false };
+  const flagged = { id: 'w-flag', unitId: 'u1', wordEn: 'hundred', status: ContentStatus.DRAFT, needsReview: true };
+
+  it('saves a new word from the administrator as a draft', async () => {
+    const { service } = harness([]);
+    const word = await service.addVocabulary(admin, 'u1', { wordEn: 'tortoise' });
+    expect((word as { status: ContentStatus }).status).toBe(ContentStatus.DRAFT);
+  });
+
+  it('lets the administrator edit a draft but not a published word', async () => {
+    const { service } = harness([draft, live]);
+    await expect(service.updateVocabulary(admin, 'w-draft', { meaningAr: 'خنفساء' } as never)).resolves.toBeTruthy();
+    await expect(service.updateVocabulary(admin, 'w-live', { meaningAr: 'جمل' } as never)).rejects.toThrow(/only a teacher/i);
+    await expect(service.deleteVocabulary(admin, 'w-live')).rejects.toThrow(/only a teacher/i);
+  });
+
+  it('refuses to let the administrator publish or hide a word', async () => {
+    const { service, updates } = harness([draft, live]);
+    await expect(service.setVocabularyStatus(admin, 'w-draft', ContentStatus.PUBLISHED)).rejects.toThrow(/only a teacher/i);
+    await expect(service.setVocabularyStatus(admin, 'w-live', ContentStatus.DRAFT)).rejects.toThrow(/only a teacher/i);
+    expect(updates).toHaveLength(0);
+  });
+
+  it('lets the teacher publish a checked word and hide it again', async () => {
+    const { service, updates } = harness([draft, live]);
+    await service.setVocabularyStatus(teacher, 'w-draft', ContentStatus.PUBLISHED);
+    await service.setVocabularyStatus(teacher, 'w-live', ContentStatus.DRAFT);
+    expect(updates).toEqual([{ status: ContentStatus.PUBLISHED }, { status: ContentStatus.DRAFT }]);
+  });
+
+  it('will not publish a word that still needs checking, even for the teacher', async () => {
+    const { service, updates } = harness([flagged]);
+    await expect(service.setVocabularyStatus(teacher, 'w-flag', ContentStatus.PUBLISHED)).rejects.toThrow(/needs checking/i);
+    expect(updates).toHaveLength(0);
+  });
+
+  it('lets the teacher change a published word', async () => {
+    const { service } = harness([live]);
+    await expect(service.updateVocabulary(teacher, 'w-live', { meaningAr: 'جمل' } as never)).resolves.toBeTruthy();
   });
 });

@@ -293,6 +293,27 @@ export interface CurriculumOverview {
   units: UnitContents[];
 }
 
+/** One kind of content in a unit: how much is out, ready, or held back. */
+export interface ReviewTally {
+  published: number;
+  /** Drafts nothing is wrong with: publishing the unit would release them. */
+  ready: number;
+  /** Items the import could not be sure of. Never released by the unit. */
+  held: number;
+}
+
+/** What publishing a unit would do, read before it is done. */
+export interface UnitReview {
+  unitId: string;
+  unitStatus: ContentStatus;
+  /** Whether the signed-in person may press the button at all. */
+  canPublish: boolean;
+  words: ReviewTally;
+  sections: ReviewTally;
+  activity: ReviewTally;
+  assessment: ReviewTally;
+}
+
 /**
  * One question as a student would be shown it.
  *

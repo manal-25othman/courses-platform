@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { ContentStatus, Question, QuestionPurpose, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
+import { assertMayChange, assertMayPublish } from '../content/content.policy';
 import { CurrentUser } from '../auth/auth.types';
 import { QuestionEngineService, StoredQuestion } from './question-engine.service';
 import { assessmentPool } from './assessment-pool';
@@ -159,6 +160,7 @@ export class QuestionsService {
     return this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
       const existing = await tx.question.findUnique({ where: { id: questionId } });
       if (!existing) throw new NotFoundException('Question not found.');
+      assertMayChange(actor, existing, 'This question');
 
       const payload = dto.payload ?? existing.payload;
       const answerKey = dto.answerKey ?? existing.answerKey;
@@ -196,6 +198,7 @@ export class QuestionsService {
    * mark them wrong for a correct response.
    */
   async setStatus(actor: CurrentUser, questionId: string, status: ContentStatus) {
+    assertMayPublish(actor);
     const schoolId = this.schoolOf(actor);
 
     const question = await this.prisma.forSchool(schoolId, async (tx) => {
@@ -234,6 +237,7 @@ export class QuestionsService {
     await this.prisma.forSchool(this.schoolOf(actor), async (tx) => {
       const existing = await tx.question.findUnique({ where: { id: questionId } });
       if (!existing) throw new NotFoundException('Question not found.');
+      assertMayChange(actor, existing, 'This question');
 
       await tx.question.delete({ where: { id: questionId } });
     });

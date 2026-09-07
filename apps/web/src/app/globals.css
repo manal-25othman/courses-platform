@@ -2511,3 +2511,32 @@ body:has(.world) { background: #F2EDFF; }
 .world .game-card::before { background: var(--w3); }
 .world .game-icon { background: var(--w1); }
 .world .game-card .game-name { color: var(--ink); }
+
+/* ==========================================================================
+   LIFECYCLE — one language for Draft / Published and Visible / Not visible
+   The two facts sit on one chip: the state in bold, the access after it.
+   ========================================================================== */
+.state-chip {
+  display: inline-flex; align-items: baseline; gap: .4rem; flex-wrap: wrap;
+  font-size: var(--fs-caption); font-weight: 600;
+  padding: .2rem .6rem; border-radius: var(--r-sm);
+  background: var(--ground-2); color: var(--ink-2); border: 1px solid var(--line);
+}
+.state-chip b { font-weight: 800; }
+.state-chip span { color: var(--ink-3); font-weight: 500; }
+.state-chip[data-tone='visible'] { background: var(--ok-soft); border-color: var(--ok-edge); color: var(--ok-ink); }
+.state-chip[data-tone='visible'] span { color: var(--ok-ink); }
+.state-chip[data-tone='held'],
+.state-chip[data-tone='blocked'] { background: var(--warn-soft); border-color: var(--warn); color: var(--warn-ink); }
+.state-chip[data-tone='held'] span,
+.state-chip[data-tone='blocked'] span { color: var(--warn-ink); }
+
+.lifecycle-note {
+  margin: 0; padding: var(--s3) var(--s4);
+  border-radius: var(--r-md); background: var(--brand-soft); color: var(--brand-ink);
+  font-size: var(--fs-small); border-left: 4px solid var(--brand);
+}
+.review-table { font-size: var(--fs-small); }
+.review-table th { font-size: var(--fs-caption); }
+.review-table td[data-tone='held'] { color: var(--warn-ink); font-weight: 700; }
+.review-table td.num { font-variant-numeric: tabular-nums; }

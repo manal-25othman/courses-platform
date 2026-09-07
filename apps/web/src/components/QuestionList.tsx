@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { canChange, canPublish, ItemControls, ItemState } from './Lifecycle';
+import type { Me } from '@/lib/api';
 import {
   api,
   ApiError,
@@ -34,11 +36,17 @@ import {
  */
 export function QuestionList({
   unitId,
+  me,
+  unitOpen,
   purpose,
   sections,
   onRun,
 }: {
   unitId: string;
+  /** Who is looking: decides which controls are drawn. The API decides for real. */
+  me: Me;
+  /** Whether the unit is visible to students, which every question's access depends on. */
+  unitOpen: boolean;
   /** Which pool this is: her practice questions, or the unit's assessment. */
   purpose: QuestionPurpose;
   /** The unit's grammar sections, so an exercise can be linked to its rule. */
@@ -142,7 +150,7 @@ export function QuestionList({
         <p className="muted" data-testid="question-summary">
           {isAssessment
             ? `${summary.assessmentPublished} of ${summary.assessmentTotal} published`
-            : `${summary.published} published · ${summary.readyToPublish} ready · ${summary.needingReview} needing a check`}
+            : `${summary.published} published, ${summary.readyToPublish} ready to publish, ${summary.needingReview} held for a check`}
         </p>
       )}
 
@@ -170,6 +178,8 @@ export function QuestionList({
           <QuestionRow
             key={question.id}
             question={question}
+            me={me}
+            unitOpen={unitOpen}
             sections={sections}
             isEditing={editing === question.id}
             onToggle={() => setEditing(editing === question.id ? null : question.id)}
@@ -690,12 +700,16 @@ function ChoiceFields({
 
 function QuestionRow({
   question,
+  me,
+  unitOpen,
   sections,
   isEditing,
   onToggle,
   onSave,
 }: {
   question: Question;
+  me: Me;
+  unitOpen: boolean;
   sections: Section[];
   isEditing: boolean;
   onToggle: () => void;
@@ -727,12 +741,30 @@ function QuestionRow({
               Needs a check
             </span>
           )}
-          <span className={`badge ${question.status === 'PUBLISHED' ? 'active' : 'disabled'}`}>
-            {question.status === 'PUBLISHED' ? 'Published' : 'Draft'}
-          </span>
-          <button className="small" onClick={onToggle} aria-label={`Edit: ${question.prompt}`}>
-            {isEditing ? 'Close' : 'Edit'}
-          </button>
+          <ItemState item={question} unitOpen={unitOpen} testId="question-state" />
+          <ItemControls
+            me={me}
+            item={question}
+            publish={() =>
+              void onSave(
+                () => api.post(`/questions/${question.id}/status`, { status: 'PUBLISHED' }),
+                unitOpen
+                  ? 'Question published. Students can meet it now.'
+                  : 'Question published. Students will meet it once the unit is visible.',
+              )
+            }
+            hide={() =>
+              void onSave(
+                () => api.post(`/questions/${question.id}/status`, { status: 'DRAFT' }),
+                'Question hidden from students.',
+              )
+            }
+          />
+          {canChange(me, question) && (
+            <button className="small" onClick={onToggle} aria-label={`Edit: ${question.prompt}`}>
+              {isEditing ? 'Close' : 'Edit'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -803,6 +835,7 @@ function QuestionRow({
       {isEditing && (
         <QuestionEditor
           question={question}
+          me={me}
           sections={sections}
           onSave={onSave}
           onDone={onToggle}
@@ -822,11 +855,13 @@ function QuestionRow({
  */
 function QuestionEditor({
   question,
+  me,
   sections,
   onSave,
   onDone,
 }: {
   question: Question;
+  me: Me;
   sections: Section[];
   onSave: (work: () => Promise<unknown>, message: string) => Promise<void>;
   onDone: () => void;
@@ -1049,32 +1084,35 @@ function QuestionEditor({
         >
           {question.purpose === 'ASSESSMENT' ? 'Move to activity' : 'Move to assessment'}
         </button>
-        {question.status === 'PUBLISHED' ? (
-          <button
-            className="small"
-            onClick={() =>
-              onSave(
-                () => api.post(`/questions/${question.id}/status`, { status: 'DRAFT' }),
-                'Question hidden from students.',
-              )
-            }
-          >
-            Hide from students
-          </button>
-        ) : (
-          <button
-            className="small"
-            data-testid="publish-question"
-            onClick={() =>
-              onSave(
-                () => api.post(`/questions/${question.id}/status`, { status: 'PUBLISHED' }),
-                'Question published.',
-              )
-            }
-          >
-            Publish to students
-          </button>
-        )}
+        {canPublish(me) &&
+          (question.status === 'PUBLISHED' ? (
+            <button
+              className="small"
+              onClick={() =>
+                onSave(
+                  () => api.post(`/questions/${question.id}/status`, { status: 'DRAFT' }),
+                  'Question hidden from students.',
+                )
+              }
+            >
+              Hide from students
+            </button>
+          ) : (
+            <button
+              className="small"
+              data-testid="publish-question"
+              disabled={Boolean(question.needsReview)}
+              title={question.needsReview ? 'Check it first, then publish.' : undefined}
+              onClick={() =>
+                onSave(
+                  () => api.post(`/questions/${question.id}/status`, { status: 'PUBLISHED' }),
+                  'Question published.',
+                )
+              }
+            >
+              Publish
+            </button>
+          ))}
       </div>
     </div>
   );

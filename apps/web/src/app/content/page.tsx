@@ -13,6 +13,7 @@ import {
 import { TeacherHeader } from '@/components/TeacherShell';
 import { Icon } from '@/components/Icon';
 import { Facts } from '@/components/Facts';
+import { canPublish, DraftNote, ReviewAndPublish, UnitState } from '@/components/Lifecycle';
 
 /**
  * The curriculum, as the teacher manages it.
@@ -34,6 +35,7 @@ export default function ContentPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState<UnitContents | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -71,33 +73,13 @@ export default function ContentPage() {
     if (me) void load();
   }, [me, load]);
 
-  async function publish(unit: UnitContents) {
-    setBusyId(unit.id);
-    setError(null);
-    setNotice(null);
-
-    try {
-      const result = await api.post<{ sections: number; words: number }>(
-        `/content/units/${unit.id}/publish`,
-      );
-      setNotice(
-        `${unit.title} is open to students — ${result.sections} sections and ${result.words} words.`,
-      );
-      await load();
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'That could not be published.');
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   async function hide(unit: UnitContents) {
     setBusyId(unit.id);
     setError(null);
     setNotice(null);
     try {
       await api.post(`/content/units/${unit.id}/status`, { status: 'DRAFT' });
-      setNotice(`${unit.title} is hidden from students again.`);
+      setNotice(`${unit.title} is hidden from students. Its published items stay published and reappear when you open it again.`);
       await load();
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'That could not be changed.');
@@ -165,15 +147,41 @@ export default function ContentPage() {
           </p>
         )}
 
-        <p className="alert warn">
-          A unit you have not opened to students is invisible to them. Once it is open,{' '}
-          <strong>every change you make is live straight away</strong> — there is no separate
-          draft copy of a published unit.
-        </p>
+        <DraftNote me={me} unitOpen={false} />
+
+        {canPublish(me) && (
+          <p className="alert warn">
+            A student sees an item only when the item is published <em>and</em> its unit is
+            visible. In a visible unit, <strong>a change to a published item is live straight
+            away</strong> — hide the unit first to work on it privately.
+          </p>
+        )}
+
+        {reviewing && (
+          <ReviewAndPublish
+            me={me}
+            unitId={reviewing.id}
+            unitTitle={reviewing.title}
+            onCancel={() => setReviewing(null)}
+            onError={(message) => {
+              setError(message);
+              setReviewing(null);
+            }}
+            onDone={async (message) => {
+              setReviewing(null);
+              setNotice(message);
+              await load();
+            }}
+          />
+        )}
 
         <AddUnitForm
           onAdded={(title) => {
-            setNotice(`${title} was added. It is hidden from students until you open it.`);
+            setNotice(
+              canPublish(me)
+                ? `${title} was added as a draft. It is hidden from students until you review and publish it.`
+                : `${title} was added as a draft. Students cannot see it; a teacher publishes it when it is ready.`,
+            );
             void load();
           }}
           onError={setError}
@@ -208,8 +216,9 @@ export default function ContentPage() {
                       key={unit.id}
                       unit={unit}
                       busy={busyId === unit.id}
+                      me={me}
                       onOpen={() => router.push(`/content/${unit.id}`)}
-                      onPublish={() => publish(unit)}
+                      onPublish={() => setReviewing(unit)}
                       onHide={() => hide(unit)}
                     />
                   ))}
@@ -229,8 +238,9 @@ export default function ContentPage() {
                       key={unit.id}
                       unit={unit}
                       busy={busyId === unit.id}
+                      me={me}
                       onOpen={() => router.push(`/content/${unit.id}`)}
-                      onPublish={() => publish(unit)}
+                      onPublish={() => setReviewing(unit)}
                       onHide={() => hide(unit)}
                     />
                   ))}
@@ -280,12 +290,14 @@ export function unfinished(unit: UnitContents): string[] {
 function UnitRow({
   unit,
   busy,
+  me,
   onOpen,
   onPublish,
   onHide,
 }: {
   unit: UnitContents;
   busy: boolean;
+  me: Me;
   onOpen: () => void;
   onPublish: () => void;
   onHide: () => void;
@@ -339,10 +351,7 @@ function UnitRow({
             {unit.title}
             <Icon name="back" />
           </button>
-          <span className="flag" data-tone={live ? 'quiet' : 'hidden'}>
-            <Icon name={live ? 'tick' : 'lock'} />
-            {live ? 'Open to students' : 'Hidden from students'}
-          </span>
+          <UnitState status={unit.status} />
         </div>
         <div className="parts">
           {parts.map((part) => (
@@ -362,14 +371,22 @@ function UnitRow({
       )}
 
       <div className="unitrow-do">
-        {live ? (
-          <button className="small" disabled={busy} onClick={onHide}>
-            {busy ? 'Working…' : 'Hide from students'}
-          </button>
+        {/* A teacher's controls. An administrator reads the state and asks. */}
+        {canPublish(me) ? (
+          <>
+            <button className="small" disabled={busy} onClick={onPublish} data-testid="review-unit">
+              {live ? 'Publish drafts…' : 'Review and publish…'}
+            </button>
+            {live && (
+              <button className="small" disabled={busy} onClick={onHide} data-testid="hide-unit">
+                {busy ? 'Working…' : 'Hide from students'}
+              </button>
+            )}
+          </>
         ) : (
-          <button className="small" disabled={busy} onClick={onPublish}>
-            {busy ? 'Working…' : 'Open to students'}
-          </button>
+          <span className="muted" style={{ fontSize: 'var(--fs-caption)' }}>
+            A teacher publishes this unit
+          </span>
         )}
       </div>
     </li>
