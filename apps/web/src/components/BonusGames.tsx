@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, BonusGame, BonusGameRound } from '@/lib/api';
 import { Icon } from './Icon';
+import { GrammarAdventure } from './GrammarAdventure';
+import type { SceneKind } from '@/lib/world';
 
 /**
  * Bonus review games.
@@ -14,7 +16,9 @@ import { Icon } from './Icon';
  * Everything is a button rather than a drag, so it works the same with a
  * finger as with a mouse.
  */
-export function BonusGames({ unitId }: { unitId: string }) {
+export function BonusGames({ unitId, scene }: { unitId: string; scene: SceneKind }) {
+  /** Grammar Adventure is a place rather than a round, so it opens on its own. */
+  const [adventure, setAdventure] = useState(false);
   const [games, setGames] = useState<BonusGame[] | null>(null);
   const [playing, setPlaying] = useState<BonusGameRound | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +37,10 @@ export function BonusGames({ unitId }: { unitId: string }) {
 
   async function start(key: string) {
     setError(null);
+    if (key === 'grammar_adventure') {
+      setAdventure(true);
+      return;
+    }
     try {
       setPlaying(await api.get<BonusGameRound>(`/learn/units/${unitId}/games/${key}`));
     } catch (caught) {
@@ -45,6 +53,21 @@ export function BonusGames({ unitId }: { unitId: string }) {
       <div className="game-shelf">
         <div className="skeleton" style={{ height: '11rem' }} />
         <div className="skeleton" style={{ height: '11rem' }} />
+      </div>
+    );
+  }
+
+  if (adventure) {
+    return (
+      <div className="stack" data-kind="games">
+        <div className="between">
+          <h2 className="marked-title" style={{ margin: 0 }}>Grammar Adventure</h2>
+          <button className="ghost small" onClick={() => setAdventure(false)} data-testid="game-exit">
+            <Icon name="back" />
+            All games
+          </button>
+        </div>
+        <GrammarAdventure unitId={unitId} scene={scene} onLeave={() => setAdventure(false)} />
       </div>
     );
   }
@@ -88,19 +111,27 @@ export function BonusGames({ unitId }: { unitId: string }) {
             data-testid={`game-${game.key}`}
           >
             <span className="game-icon" aria-hidden="true">
-              <Icon name={game.key === 'memory_match' ? 'games' : 'star'} size={22} />
+              <Icon
+                name={game.key === 'memory_match' ? 'games' : game.key === 'grammar_adventure' ? 'grammar' : 'star'}
+                size={22}
+              />
             </span>
             <span className="game-name">{game.displayName}</span>
             <span className="game-why">{game.description}</span>
             {game.available ? (
               <span className="row" style={{ color: 'var(--kind-ink)', fontWeight: 700, fontSize: 'var(--fs-small)' }}>
                 <Icon name="play" size={14} />
-                Play with {game.itemCount} words
+                {/* Each game counts the thing it is actually made of. */}
+                {game.key === 'grammar_adventure'
+                  ? 'Start the journey'
+                  : `Play with ${game.itemCount} words`}
               </span>
             ) : (
-              /* Why it is closed, in the terms she can act on: more words. */
+              /* Why it is closed, in the terms she can act on. */
               <span className="game-why">
-                Opens at {game.minimumItems} words. This unit has {game.itemCount}.
+                {game.key === 'grammar_adventure'
+                  ? `Opens at ${game.minimumItems} grammar questions. This unit has ${game.itemCount}.`
+                  : `Opens at ${game.minimumItems} words. This unit has ${game.itemCount}.`}
               </span>
             )}
           </button>

@@ -35,6 +35,12 @@ export const SETTING_KEYS = {
   LEARNING_SEQUENTIAL_UNLOCK: 'learning.sequential_unlock',
   /** How many questions one assessment attempt asks. */
   ASSESSMENT_QUESTION_COUNT: 'assessment.question_count',
+  /**
+   * Which stored question kinds Grammar Adventure may build obstacles from.
+   * A setting, because whether a kind carries grammar is a curriculum's
+   * business rather than a rule in code.
+   */
+  GAMES_ADVENTURE_TYPES: 'games.grammar_adventure.types',
 } as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];

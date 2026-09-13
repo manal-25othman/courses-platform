@@ -307,6 +307,7 @@ function NewQuestion({
   const [sentence, setSentence] = useState('');
   const [points, setPoints] = useState(1);
   const [sectionId, setSectionId] = useState('');
+  const [hint, setHint] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
 
   const isChoice = (CHOICE_KINDS as readonly string[]).includes(typeKey);
@@ -366,6 +367,9 @@ function NewQuestion({
       }
       answerKey = { accepted: list };
     }
+
+    // The hint rides in the payload, beside the options it belongs to.
+    if (hint.trim()) payload = { ...payload, hint: hint.trim() };
 
     await onSave(
       () =>
@@ -481,6 +485,26 @@ function NewQuestion({
             aria-label="Marks for this question"
           />
         </label>
+
+
+      {/*
+        The nudge a student gets when she takes a wrong turn in Grammar
+        Adventure. It lives in the question's own payload, where everything
+        else about how a question is asked lives — no new column, and no new
+        kind of question. Optional: a question with no hint simply shows none.
+      */}
+      <label>
+        Hint for a wrong answer (optional)
+        <input
+          value={hint}
+          onChange={(e) => setHint(e.target.value)}
+          placeholder="Use “goes” with she, he and it."
+          data-testid="question-hint"
+        />
+        <span className="muted" style={{ fontSize: 'var(--fs-caption)' }}>
+          Shown in Grammar Adventure after a wrong try, never before.
+        </span>
+      </label>
 
         <SectionPicker sections={sections} value={sectionId} onChange={setSectionId} />
       </div>
@@ -878,6 +902,11 @@ function QuestionEditor({
       : '',
   );
   const [points, setPoints] = useState(question.points);
+  const [hint, setHint] = useState(
+    typeof (question.payload as { hint?: unknown }).hint === 'string'
+      ? ((question.payload as { hint: string }).hint)
+      : '',
+  );
   const [sectionId, setSectionId] = useState(question.sectionId ?? '');
   const [rawKey, setRawKey] = useState(JSON.stringify(question.answerKey, null, 2));
   const [reviewed, setReviewed] = useState(false);
@@ -941,6 +970,12 @@ function QuestionEditor({
         return;
       }
     }
+
+    // The hint is part of how the question is asked, so it is merged into
+    // whatever payload the kind above built rather than replacing it.
+    const basePayload = (body.payload as Record<string, unknown> | undefined) ?? question.payload;
+    const trimmed = hint.trim();
+    body.payload = { ...basePayload, ...(trimmed ? { hint: trimmed } : { hint: undefined }) };
 
     if (reviewed) body.reviewed = true;
 
@@ -1038,6 +1073,26 @@ function QuestionEditor({
             aria-label="Marks for this question"
           />
         </label>
+
+
+      {/*
+        The nudge a student gets when she takes a wrong turn in Grammar
+        Adventure. It lives in the question's own payload, where everything
+        else about how a question is asked lives — no new column, and no new
+        kind of question. Optional: a question with no hint simply shows none.
+      */}
+      <label>
+        Hint for a wrong answer (optional)
+        <input
+          value={hint}
+          onChange={(e) => setHint(e.target.value)}
+          placeholder="Use “goes” with she, he and it."
+          data-testid="question-hint"
+        />
+        <span className="muted" style={{ fontSize: 'var(--fs-caption)' }}>
+          Shown in Grammar Adventure after a wrong try, never before.
+        </span>
+      </label>
 
         <SectionPicker sections={sections} value={sectionId} onChange={setSectionId} />
       </div>

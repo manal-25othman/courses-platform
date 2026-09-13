@@ -6,6 +6,7 @@ import { api, ApiError, homeFor, LearnUnitSummary, Me } from '@/lib/api';
 import { Avatar, StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
 import { Scene, Glyph } from '@/components/world/Scene';
+import { Girl } from '@/components/world/Girl';
 import { WorldGround } from '@/components/world/WorldGround';
 import { themeFor, themeVars } from '@/lib/world';
 
@@ -144,7 +145,13 @@ function nextAction(unit: LearnUnitSummary, steps: Step[]) {
   return { ...wording[current.kind], kind: current.kind, step: current };
 }
 
-/** The line on the ticket, per kind of work: each phrase where it is true. */
+/**
+ * The encouraging line on the ticket, per kind of work.
+ *
+ * It sits on the ticket's paper rather than over the drawing: white type on a
+ * white pill over a white cloud was one shape too many, and the drawing reads
+ * better with nothing written across it.
+ */
 const ASK: Record<Step['kind'], string> = {
   vocabulary: 'Ready for more words?',
   grammar: 'Ready for the next challenge?',
@@ -226,21 +233,35 @@ export default function StudentHomePage() {
       <WorldGround />
       <main className="page has-navbar home-grid world">
         <div className="home-aside">
-        <header className="greeting">
-          <h1>Hello, {me.displayName.split(' ')[0]}</h1>
-          {/*
-            One line, and it has to earn its place: what is actually true of
-            her course right now, not a slogan. An empty course says so.
-          */}
-          <p className="greeting-line">
-            {core.length === 0
-              ? 'Your course opens as soon as your teacher adds the first unit.'
-              : finishedUnits === core.length
-                ? 'You have finished every unit. Play a game, or go back over one.'
-                : finishedUnits === 0
-                  ? `${core.length} units to work through. Start whenever you are ready.`
-                  : `${finishedUnits} of ${core.length} units finished. Keep going.`}
-          </p>
+        {/* Somebody is here to say hello. She is a drawing beside the words,
+            not instead of them: every line still reads with her removed. */}
+        <header className="greeting greeting-hi">
+          <Girl who="lina" pose="wave" mood="bright" className="girl greeting-girl" />
+          <div>
+            <h1>
+              Hello, {me.displayName.split(' ')[0]}!
+            </h1>
+            <p className="greeting-ask">
+              {core.length === 0
+                ? 'Your course is on its way.'
+                : finishedUnits === core.length
+                  ? 'You finished every unit!'
+                  : 'Ready for another English adventure?'}
+            </p>
+            {/*
+              One line of fact under it, and it has to earn its place: what is
+              actually true of her course right now, not a slogan.
+            */}
+            <p className="greeting-line">
+              {core.length === 0
+                ? 'Your course opens as soon as your teacher adds the first unit.'
+                : finishedUnits === core.length
+                  ? 'Play a game, or go back over a unit you enjoyed.'
+                  : finishedUnits === 0
+                    ? `${core.length} units to work through. Start whenever you are ready.`
+                    : `${finishedUnits} of ${core.length} units finished. Keep going.`}
+            </p>
+          </div>
         </header>
 
         {error && (
@@ -260,8 +281,8 @@ export default function StudentHomePage() {
             data-testid="next-action"
           >
             <span className="today-scene">
-              <span className="today-ask">{ASK[action.kind]}</span>
-              <Scene kind={themeFor(current.title, true, core.indexOf(current)).scene} />
+              <Scene kind={themeFor(current.title, true, core.indexOf(current)).scene} fit="fill" />
+              <Girl who="maya" pose="walk" className="girl today-girl" />
             </span>
             <span className="today-body">
               <span className="badge-icon" aria-hidden="true">
@@ -279,6 +300,7 @@ export default function StudentHomePage() {
                 />
               </span>
               <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="today-ask">{ASK[action.kind]}</span>
                 <span className="today-what">{action.what}</span>
                 <span className="today-why">{current.title}</span>
                 <span className="today-why">{action.why}</span>

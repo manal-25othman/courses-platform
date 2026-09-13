@@ -8,7 +8,17 @@ import { Icon } from '@/components/Icon';
 import { Glyph } from '@/components/world/Scene';
 import { WorldGround } from '@/components/world/WorldGround';
 import { themeFor, themeVars } from '@/lib/world';
+
 import { BonusGames } from '@/components/BonusGames';
+
+/**
+ * Names in a row, the way they are said aloud: "A", "A and B", "A, B and C".
+ * Joining every name with "and" reads as a stammer once a third game exists.
+ */
+function listOf(names: string[]): string {
+  if (names.length < 3) return names.join(' and ');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
 
 /**
  * Games, gathered in one place.
@@ -85,7 +95,14 @@ export default function GamesPage() {
             All units
           </button>
           <h1>{unit?.title}</h1>
-          <BonusGames unitId={openUnit} />
+          <BonusGames
+            unitId={openUnit}
+            scene={
+              unit
+                ? themeFor(unit.title, unit.progress.countsTowardCompletion, units.indexOf(unit)).scene
+                : 'journal'
+            }
+          />
         </main>
         <StudentNav />
       </>
@@ -114,8 +131,8 @@ export default function GamesPage() {
         <header className="greeting">
           <h1>Games</h1>
           <p className="greeting-line">
-            Practice with words you have already met. Nothing here is marked, and none of it
-            changes your progress.
+            Play with the words and the grammar you have already met. Nothing here is marked,
+            and none of it changes your progress.
           </p>
         </header>
 
@@ -123,10 +140,10 @@ export default function GamesPage() {
           <div className="locked-note">
             <Icon name="games" />
             <div>
-              <strong>Games open once a unit has enough words</strong>
+              <strong>Games open once a unit has enough to play with</strong>
               <p className="muted" style={{ margin: '.25rem 0 0' }}>
-                Memory Match needs six words with meanings, Quick Match needs four. Learn a few
-                more and come back.
+                Memory Match needs six words with meanings, Quick Match needs four, and Grammar
+                Adventure needs three grammar questions. Learn a few more and come back.
               </p>
             </div>
           </div>
@@ -149,9 +166,7 @@ export default function GamesPage() {
                   <span className="game-name">{unit.title}</span>
                   {/* Named, not counted: "2 games ready" says less than
                       "Memory Match, Quick Match" and takes the same room. */}
-                  <span className="game-why">
-                    {ready.map((g) => g.displayName).join(' and ')}
-                  </span>
+                  <span className="game-why">{listOf(ready.map((g) => g.displayName))}</span>
                 </button>
               );
             })}

@@ -1,4 +1,12 @@
-import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 /** One answer a student gives. Its shape depends on the question kind, so the
  *  engine's handler validates it, not this class. */
@@ -49,4 +57,21 @@ export class SendMessageDto {
   @IsNotEmpty()
   @MaxLength(2000)
   body!: string;
+}
+
+/**
+ * A try at getting past one obstacle in Grammar Adventure.
+ *
+ * The response's shape belongs to the question's own kind — an option id for
+ * a fork or a gate, a true/false value for a sign, an order for a bridge — so
+ * it is passed to the engine's handler to read rather than described here.
+ * The question is named by id and checked against the unit before anything is
+ * marked.
+ */
+export class AdventureAnswerDto {
+  @IsUUID()
+  questionId!: string;
+
+  @IsObject()
+  response!: Record<string, unknown>;
 }

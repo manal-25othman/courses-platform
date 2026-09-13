@@ -821,3 +821,35 @@ export interface BonusGameRound {
   pairs: { id: string; wordEn: string; meaningAr: string }[];
   questions: { wordEn: string; answer: string; options: string[] }[];
 }
+
+/**
+ * Grammar Adventure: one journey through a unit's world.
+ *
+ * Nothing here holds an answer. A checkpoint carries the question as the
+ * engine presented it; whether a way opens is decided on the server.
+ */
+export type CheckpointKind = 'path' | 'bridge' | 'gate' | 'signpost' | 'backpack' | 'final';
+
+export interface AdventureCheckpoint {
+  questionId: string;
+  kind: CheckpointKind;
+  /** The stored question kind, which decides how an answer is taken. */
+  typeKey: string;
+  prompt: string;
+  payload: Record<string, unknown>;
+  /** The teacher's own nudge. Shown only after a wrong turn. */
+  hint: string | null;
+}
+
+export interface AdventureRound {
+  gameKey: 'grammar_adventure';
+  unitId: string;
+  unitTitle: string;
+  checkpoints: AdventureCheckpoint[];
+}
+
+export interface AdventureAnswer {
+  questionId: string;
+  correct: boolean;
+  hint: string | null;
+}

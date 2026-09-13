@@ -14,7 +14,12 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUser as Actor } from '../auth/auth.types';
 import { LearningService } from './learning.service';
 import { GamesService } from './games.service';
-import { AnswerCheckDto, AudioPlayedDto, SubmitAttemptDto } from './dto/learning.dto';
+import {
+  AdventureAnswerDto,
+  AnswerCheckDto,
+  AudioPlayedDto,
+  SubmitAttemptDto,
+} from './dto/learning.dto';
 
 /**
  * The student's own screens.
@@ -96,6 +101,33 @@ export class LearningController {
   @Get('units/:id/games')
   async listGames(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
     return this.games.listForUnit(actor, id);
+  }
+
+  /**
+   * Grammar Adventure: a journey through this unit's world.
+   *
+   * Its own route rather than another `games/:key`, because a round is a
+   * different shape — a road with obstacles on it, not a pile of cards.
+   */
+  @Get('units/:id/adventure')
+  async adventure(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.games.adventureRound(actor, id);
+  }
+
+  /**
+   * Tries a way on.
+   *
+   * Marked on the server by the engine that marks everything else, so the
+   * answer never leaves it. Nothing is recorded: this is a game.
+   */
+  @Post('units/:id/adventure/answer')
+  @HttpCode(HttpStatus.OK)
+  async adventureAnswer(
+    @CurrentUser() actor: Actor,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AdventureAnswerDto,
+  ) {
+    return this.games.checkAdventureAnswer(actor, id, dto.questionId, dto.response);
   }
 
   @Get('units/:id/games/:key')

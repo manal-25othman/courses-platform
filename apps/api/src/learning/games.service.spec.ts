@@ -9,8 +9,15 @@
 import { describe, expect, it } from 'vitest';
 import { ContentStatus, UserRole } from '@prisma/client';
 import { GamesService } from './games.service';
+import { QuestionEngineService } from '../questions/question-engine.service';
 import { CurrentUser } from '../auth/auth.types';
+import type { SettingsService } from '../settings/settings.service';
 import type { PrismaService } from '../prisma/prisma.service';
+
+/** The real engine: a game must present and mark through the same one. */
+const engine = new QuestionEngineService();
+/** Nothing configured, so the adventure falls back to its own type list. */
+const settings = { resolve: async () => undefined } as unknown as SettingsService;
 
 const student: CurrentUser = {
   sub: 's1',
@@ -62,13 +69,21 @@ function serviceOver(words: Word[], unitPublished = true) {
     vocabularyProgress: { create: refuse('vocabularyProgress.create'), update: refuse('vocabularyProgress.update') },
     sectionProgress: { create: refuse('sectionProgress.create') },
     attemptAnswer: { create: refuse('attemptAnswer.create'), update: refuse('attemptAnswer.update') },
+    // Grammar Adventure reads questions; this harness holds none unless a
+    // test supplies them, and writing one is refused like every other write.
+    question: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      create: refuse('question.create'),
+      update: refuse('question.update'),
+    },
   };
 
   const prisma = {
     forSchool: async <T>(_s: string, work: (t: typeof tx) => Promise<T>) => work(tx),
   } as unknown as PrismaService;
 
-  return new GamesService(prisma);
+  return new GamesService(prisma, engine, settings);
 }
 
 const SIX = [

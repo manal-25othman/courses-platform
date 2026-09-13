@@ -18,6 +18,7 @@ import { StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
 import { UnitJourney } from '@/components/UnitJourney';
 import { Scene, Glyph } from '@/components/world/Scene';
+import { Girl } from '@/components/world/Girl';
 import { WorldGround } from '@/components/world/WorldGround';
 import { themeFor, themeVars } from '@/lib/world';
 
@@ -182,6 +183,12 @@ export default function LearnUnitPage() {
         {/* The unit's banner: its place, its name, and how far along she is. */}
         <header className="unit-banner">
           <Scene kind={theme.scene} />
+          <Girl
+            who="maya"
+            pose={progress?.assessmentState.passed ? 'cheer' : 'walk'}
+            mood={progress?.assessmentState.passed ? 'bright' : 'happy'}
+            className="girl banner-girl"
+          />
           <span className="unit-place">
             <Glyph kind={theme.scene} size={16} />
             {PLACE[theme.scene]}
@@ -290,7 +297,7 @@ export default function LearnUnitPage() {
               Never locked and never locking. A game is not a step in the
               sequence: it cannot be required, and playing one changes nothing.
             */}
-            <BonusGames unitId={unitId} />
+            <BonusGames unitId={unitId} scene={theme.scene} />
           </>
         )}
 

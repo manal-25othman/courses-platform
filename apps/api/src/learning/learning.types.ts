@@ -159,3 +159,36 @@ export interface BonusGameRound {
   /** Quick Match: a word and four real meanings from the same unit. */
   questions: { wordEn: string; answer: string; options: string[] }[];
 }
+
+/**
+ * Grammar Adventure: a journey through the unit's own world.
+ *
+ * The round holds where she is going and what stands in the way. It never
+ * holds an answer — every checkpoint's payload comes through the engine's
+ * `present`, and the marking happens on the server.
+ */
+export interface AdventureCheckpoint {
+  questionId: string;
+  /** What the obstacle is: a fork, a bridge, a gate, a sign, a bag, the last one. */
+  kind: 'path' | 'bridge' | 'gate' | 'signpost' | 'backpack' | 'final';
+  /** The stored question kind, so the screen knows how to take an answer. */
+  typeKey: string;
+  prompt: string;
+  payload: Record<string, unknown>;
+  /** The teacher's own nudge, shown only after a wrong turn. */
+  hint: string | null;
+}
+
+export interface AdventureRound {
+  gameKey: 'grammar_adventure';
+  unitId: string;
+  unitTitle: string;
+  checkpoints: AdventureCheckpoint[];
+}
+
+/** What came back from trying a way on. Nothing was recorded. */
+export interface AdventureAnswer {
+  questionId: string;
+  correct: boolean;
+  hint: string | null;
+}
