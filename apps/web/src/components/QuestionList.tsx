@@ -502,7 +502,9 @@ function NewQuestion({
           data-testid="question-hint"
         />
         <span className="muted" style={{ fontSize: 'var(--fs-caption)' }}>
-          Shown in Grammar Adventure after a wrong try, never before.
+          Shown in Grammar Adventure after a wrong try, never before. The game opens once a
+          unit has 3 published questions it can use: sentence completion, true/false and word
+          ordering always count, and multiple choice counts when it sits on a grammar page.
         </span>
       </label>
 
@@ -1090,7 +1092,9 @@ function QuestionEditor({
           data-testid="question-hint"
         />
         <span className="muted" style={{ fontSize: 'var(--fs-caption)' }}>
-          Shown in Grammar Adventure after a wrong try, never before.
+          Shown in Grammar Adventure after a wrong try, never before. The game opens once a
+          unit has 3 published questions it can use: sentence completion, true/false and word
+          ordering always count, and multiple choice counts when it sits on a grammar page.
         </span>
       </label>
 

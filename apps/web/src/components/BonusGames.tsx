@@ -4,8 +4,21 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, BonusGame, BonusGameRound } from '@/lib/api';
 import { Icon } from './Icon';
 import { GrammarAdventure } from './GrammarAdventure';
+import { Glyph } from './world/Scene';
 import { Girl } from './world/Girl';
 import type { SceneKind } from '@/lib/world';
+
+/**
+ * What a game is made of, in the words a student would use.
+ *
+ * The registry row names the pool; this turns that into a noun, in one place.
+ * It is here rather than beside each game so that adding a game is a row in
+ * the registry, not a new `if (key === ...)` in every screen that lists games.
+ */
+export function poolNoun(pool: string, count: number): string {
+  const one = pool === 'grammar_questions' ? 'grammar question' : 'word';
+  return `${count} ${one}${count === 1 ? '' : 's'}`;
+}
 
 /**
  * Bonus review games.
@@ -112,27 +125,31 @@ export function BonusGames({ unitId, scene }: { unitId: string; scene: SceneKind
             data-testid={`game-${game.key}`}
           >
             <span className="game-icon" aria-hidden="true">
-              <Icon
-                name={game.key === 'memory_match' ? 'games' : game.key === 'grammar_adventure' ? 'grammar' : 'star'}
-                size={22}
-              />
+              {/* A game that walks through the unit's world is marked with that
+                  world, not with a book. The word games keep their own marks. */}
+              {game.contentPool === 'grammar_questions' ? (
+                <Glyph kind={scene} size={22} />
+              ) : (
+                <Icon name={game.key === 'memory_match' ? 'games' : 'star'} size={22} />
+              )}
             </span>
             <span className="game-name">{game.displayName}</span>
             <span className="game-why">{game.description}</span>
             {game.available ? (
               <span className="row" style={{ color: 'var(--kind-ink)', fontWeight: 700, fontSize: 'var(--fs-small)' }}>
                 <Icon name="play" size={14} />
-                {/* Each game counts the thing it is actually made of. */}
-                {game.key === 'grammar_adventure'
+                {/* Each game counts the thing it is actually made of, and the
+                    registry says what that is. */}
+                {game.contentPool === 'grammar_questions'
                   ? 'Start the journey'
-                  : `Play with ${game.itemCount} words`}
+                  : `Play with ${poolNoun(game.contentPool, game.itemCount)}`}
               </span>
             ) : (
-              /* Why it is closed, in the terms she can act on. */
-              <span className="game-why">
-                {game.key === 'grammar_adventure'
-                  ? `Opens at ${game.minimumItems} grammar questions. This unit has ${game.itemCount}.`
-                  : `Opens at ${game.minimumItems} words. This unit has ${game.itemCount}.`}
+              /* Why it is closed, in the terms she can act on. Never hidden:
+                 a game that vanishes looks like a game that does not exist. */
+              <span className="game-why" data-testid={`shut-${game.key}`}>
+                Opens at {poolNoun(game.contentPool, game.minimumItems)}. This unit has{' '}
+                {game.itemCount}.
               </span>
             )}
           </button>

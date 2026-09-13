@@ -1,7 +1,7 @@
 /**
  * Brings a new production database up to the current migration, and proves it.
  *
- * The 17 migrations must go on through Prisma rather than by pasting them into
+ * The 18 migrations must go on through Prisma rather than by pasting them into
  * a SQL console. Prisma's ledger is not bookkeeping here: `least_privilege`
  * begins by revoking `app_user`'s access to `_prisma_migrations`, a table only
  * Prisma creates, so pasted by hand that file aborts and everything after its
@@ -32,9 +32,12 @@ const require = createRequire(new URL('../../apps/api/package.json', import.meta
 const PRISMA_CLI = require.resolve('prisma/build/index.js');
 const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/api');
 
-/** What a database built by all 17 migrations, and nothing else, looks like. */
+/** What a database built by all 18 migrations, and nothing else, looks like. */
 const EXPECTED = {
-  migrations: 17,
+  // Bump this with every migration added. It is the check that catches a
+  // production database left behind: Grammar Adventure was invisible to every
+  // student for exactly this reason — its migration had never been applied.
+  migrations: 18,
   tables: 25,
   policies: 34,
   securityDefinerFunctions: 11,
@@ -177,7 +180,7 @@ async function verify(db) {
   const expect = (label, actual, wanted) =>
     record(label, n(actual) === wanted, `${n(actual)} (expected ${wanted})`);
 
-  expect('All 17 migrations applied', counts.migrations, EXPECTED.migrations);
+  expect(`All ${EXPECTED.migrations} migrations applied`, counts.migrations, EXPECTED.migrations);
   expect('Tables created', counts.tables, EXPECTED.tables);
   expect('Row-level security policies', counts.policies, EXPECTED.policies);
   expect('SECURITY DEFINER functions', counts.secdef, EXPECTED.securityDefinerFunctions);

@@ -10,7 +10,7 @@ import { WorldGround } from '@/components/world/WorldGround';
 import { Girl } from '@/components/world/Girl';
 import { themeFor, themeVars } from '@/lib/world';
 
-import { BonusGames } from '@/components/BonusGames';
+import { BonusGames, poolNoun } from '@/components/BonusGames';
 
 /**
  * Names in a row, the way they are said aloud: "A", "A and B", "A, B and C".
@@ -113,9 +113,9 @@ export default function GamesPage() {
   const playable = units.filter((u) => (counts[u.id] ?? []).some((g) => g.available));
   /*
     Which units she could still open games in. Two things disqualify a unit:
-    having no words at all (there is nothing to learn towards yet — Grammar
-    Review is the case here), and not being part of the course. Naming those
-    would promise something that will never happen.
+    having nothing to play with at all (there is nothing to learn towards yet —
+    Grammar Review is the case here), and not being part of the course. Naming
+    those would promise something that will never happen.
   */
   const notYet = units.filter(
     (u) =>
@@ -123,6 +123,10 @@ export default function GamesPage() {
       !(counts[u.id] ?? []).some((g) => g.available) &&
       (counts[u.id] ?? []).some((g) => g.itemCount > 0),
   );
+
+  /** What each game still needs, said once and the same way everywhere. */
+  const shortOf = (game: BonusGame) =>
+    `${game.displayName} opens at ${poolNoun(game.contentPool, game.minimumItems)} — this unit has ${game.itemCount}.`;
 
   return (
     <>
@@ -152,6 +156,7 @@ export default function GamesPage() {
           <div className="game-shelf">
             {playable.map((unit) => {
               const ready = (counts[unit.id] ?? []).filter((g) => g.available);
+              const shut = (counts[unit.id] ?? []).filter((g) => !g.available);
               return (
                 <button
                   key={unit.id}
@@ -166,8 +171,17 @@ export default function GamesPage() {
                   </span>
                   <span className="game-name">{unit.title}</span>
                   {/* Named, not counted: "2 games ready" says less than
-                      "Memory Match, Quick Match" and takes the same room. */}
+                      "Memory Match, Quick Match" and takes the same room. The
+                      names come from the games the API actually returned. */}
                   <span className="game-why">{listOf(ready.map((g) => g.displayName))}</span>
+                  {/* And what is not open yet, with the number she can act on.
+                      Leaving a closed game unmentioned is how Grammar Adventure
+                      came to look as though it did not exist. */}
+                  {shut.length > 0 && (
+                    <span className="game-shut" data-testid="games-unit-shut">
+                      {shut.map(shortOf).join(' ')}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -180,10 +194,18 @@ export default function GamesPage() {
           going" — and the second one she can do something about.
         */}
         {playable.length > 0 && notYet.length > 0 && (
-          <p className="round-note" style={{ maxWidth: 'none', textAlign: 'left' }}>
-            More games open as you learn the words in{' '}
-            {notYet.map((u) => u.title).join(', ')}.
-          </p>
+          <div className="stack" style={{ gap: 'var(--s2)' }} data-testid="games-not-yet">
+            {notYet.map((unit) => (
+              <p
+                key={unit.id}
+                className="round-note"
+                style={{ maxWidth: 'none', textAlign: 'left', margin: 0 }}
+              >
+                <strong>{unit.title}:</strong>{' '}
+                {(counts[unit.id] ?? []).filter((g) => !g.available).map(shortOf).join(' ')}
+              </p>
+            ))}
+          </div>
         )}
       </main>
       <StudentNav />

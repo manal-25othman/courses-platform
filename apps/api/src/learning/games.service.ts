@@ -112,6 +112,7 @@ export class GamesService {
           available: held >= type.minimumItems,
           itemCount: held,
           minimumItems: type.minimumItems,
+          contentPool: type.contentPool,
         };
       });
     });

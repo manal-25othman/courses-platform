@@ -64,7 +64,7 @@ script checks rather than assumes.
 
 ## What it checks afterwards
 
-Fifteen assertions, each of which fails the run: all 17 migrations recorded, 25
+Fifteen assertions, each of which fails the run: all 18 migrations recorded, 25
 tables, 34 policies, 11 `SECURITY DEFINER` functions, 22 tables under `FORCE`
 row-level security with only the three intended exemptions, the four scoped
 `settings` policies, `app_user` present and non-superuser and non-`BYPASSRLS`

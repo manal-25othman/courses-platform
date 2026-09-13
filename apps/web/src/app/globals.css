@@ -2511,6 +2511,13 @@ body:has(.world) { background: #F2EDFF; }
 .world .locked-note { background: var(--surface); border-color: var(--w2); }
 .world .locked-note .ico { color: var(--w1); }
 
+/* What a unit's games are still short of. Quieter than the names above it —
+   it is a reason, not an invitation — but never absent. */
+.game-shut {
+  display: block; font-size: var(--fs-caption); font-weight: 600;
+  color: var(--ink-3); line-height: 1.35; margin-top: var(--s1);
+}
+
 /* --- games: the shelf takes each unit's place --------------------------- */
 .world .game-card::before { background: var(--w3); }
 .world .game-icon { background: var(--w1); }

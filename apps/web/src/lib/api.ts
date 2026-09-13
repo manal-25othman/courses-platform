@@ -812,6 +812,12 @@ export interface BonusGame {
   available: boolean;
   itemCount: number;
   minimumItems: number;
+  /**
+   * Which pool the game draws on, straight from its registry row. The screens
+   * need it to say what a game is short of without asking "which game is this
+   * again?" — a question that has to be answered afresh for every game added.
+   */
+  contentPool: string;
 }
 
 /** One round of a bonus game. Nothing about it is stored anywhere. */

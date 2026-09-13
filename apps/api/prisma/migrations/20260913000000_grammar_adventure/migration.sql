@@ -11,24 +11,29 @@
 -- and — where she chose to — tied to a grammar page. There is no second copy
 -- of any curriculum content anywhere in this game, and no new table holding
 -- anything academic.
+--
+-- One row, and deliberately only one row.
+--
+-- An earlier draft of this migration also seeded a GLOBAL row in `settings`
+-- naming the question kinds the game may use. It ran locally and would have
+-- failed in production, which is worth recording so nobody adds it back:
+-- `settings` is under FORCE ROW LEVEL SECURITY, and `settings_insert` admits
+-- only `scope = 'SCHOOL'`. FORCE applies the policy to the table's owner too,
+-- so a managed-Postgres migration role — an owner, but not a superuser — is
+-- refused. Proved by running that exact INSERT as a non-superuser owner:
+--
+--   ERROR: new row violates row-level security policy for table "settings"
+--
+-- The whole migration would have rolled back and this registry row with it.
+-- The setting is not needed anyway: with no row, the game falls back to the
+-- same list in code (DEFAULT_ELIGIBLE_TYPES), and a school that wants to widen
+-- it writes a SCHOOL-scoped row through the app, which the policy does allow.
 -- ---------------------------------------------------------------------------
 
 INSERT INTO "bonus_game_types"
   (key, display_name, description, content_pool, minimum_items, is_active, order_index)
 VALUES
   ('grammar_adventure', 'Grammar Adventure',
-   'Walk a path through the unit''s world. Every gate, bridge and fork opens with the right grammar.',
+   'Help Lina reach the destination. Every gate, bridge and fork on the way opens with the right grammar.',
    'grammar_questions', 3, true, 3)
 ON CONFLICT (key) DO NOTHING;
-
--- Which stored question kinds may become an obstacle. A setting rather than a
--- rule in code, because a school whose multiple-choice questions are all about
--- grammar should be able to say so without waiting for a release. Absent this
--- row the game falls back to the same list.
-INSERT INTO "settings" (id, scope, scope_id, key, value, created_at, updated_at)
-SELECT gen_random_uuid(), 'GLOBAL', NULL, 'games.grammar_adventure.types',
-       '["complete_sentence","true_false","word_ordering","multiple_choice"]'::jsonb,
-       now(), now()
-WHERE NOT EXISTS (
-  SELECT 1 FROM "settings" WHERE key = 'games.grammar_adventure.types' AND scope = 'GLOBAL'
-);
