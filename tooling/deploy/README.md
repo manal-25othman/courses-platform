@@ -70,14 +70,35 @@ this page claiming one: every migration in the repository recorded, 25 tables,
 security with only the three intended exemptions, the four scoped `settings`
 policies, `app_user` present and non-superuser and non-`BYPASSRLS` and owning
 nothing, no `PUBLIC` grant on any table, no `app_user` grant on the migration
-ledger, the registries read-only, every tenant table empty — and every bonus
-game this release expects present in `bonus_game_types`, with the right content
-pool, minimum and active state.
+ledger, the registries read-only — and every bonus game this release expects
+present in `bonus_game_types`, with the right content pool, minimum and active
+state.
 
 That last one exists because a migration count is not a feature. Grammar
 Adventure's registry row is what makes the game appear for students; without a
 named check for it, "all migrations applied" can be true while the game is
 invisible.
+
+## What it asks about the content
+
+Nothing about how much there is. A production database in use holds schools,
+teachers, units and questions, and that is not a fault to be reported.
+
+It asks the two questions that are worth asking of a database somebody depends
+on, and reports a third:
+
+- **Is every tenant table still readable?** A migration that drops or renames
+  one is caught here rather than on a student's screen.
+- **Did anything disappear?** Every tenant table is counted before the
+  migrations run and again afterwards, and a count may only go up. This is the
+  assertion that actually protects the client's work.
+- **What is in there?** Printed as a `DATA` line and on the run summary —
+  reported, never judged.
+
+This replaced an assertion that no school, account or content existed, which
+was true on the morning it was written and false from the first school onward.
+It failed run #13 with `schools=4, users=10, …` after a migration that had in
+fact succeeded.
 
 ## `check` fails when production is behind
 

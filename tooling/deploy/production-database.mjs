@@ -33,7 +33,13 @@ const require = createRequire(new URL('../../apps/api/package.json', import.meta
 const PRISMA_CLI = require.resolve('prisma/build/index.js');
 const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/api');
 
-/** What a database built by all 18 migrations, and nothing else, looks like. */
+/**
+ * The SHAPE every production database must have, whatever it holds.
+ *
+ * These are structural facts — tables, policies, functions — and they are as
+ * true of a live database with four schools in it as of an empty one on its
+ * first day. Nothing here says anything about content; that is deliberate.
+ */
 const EXPECTED = {
   // Bump this with every migration added. It is the check that catches a
   // production database left behind: Grammar Adventure was invisible to every
@@ -48,7 +54,15 @@ const EXPECTED = {
   withoutForcedRls: ['_prisma_migrations', 'password_reset_tokens', 'refresh_tokens'],
 };
 
-/** Tables that must be empty in a production database nobody has used yet. */
+/**
+ * The tables that hold a school's own work.
+ *
+ * They used to be checked for being empty, which was true on the day this
+ * script was written and false ever after. They are now counted before and
+ * after a migration, and the count may only go up: what matters on a live
+ * database is not that it is empty but that a migration did not take anything
+ * away.
+ */
 const TENANT_TABLES = [
   'schools',
   'users',
@@ -62,6 +76,37 @@ const TENANT_TABLES = [
 ];
 
 const results = [];
+
+/**
+ * How many rows each tenant table holds right now.
+ *
+ * Tolerates a table that does not exist yet, because this is taken before the
+ * migrations run as well as after: on a database's first day there is nothing
+ * to count, and that is not a fault.
+ */
+async function census(db) {
+  const counts = new Map();
+  const unreadable = [];
+
+  for (const table of TENANT_TABLES) {
+    try {
+      const [row] = await db.$queryRawUnsafe(`SELECT count(*) AS n FROM "${table}"`);
+      counts.set(table, Number(row.n));
+    } catch {
+      unreadable.push(table);
+    }
+  }
+
+  return { counts, unreadable };
+}
+
+/** "schools=4, users=10, …", or a plain word when there is nothing to say. */
+function describeCensus({ counts }) {
+  const held = [...counts].filter(([, n]) => n > 0);
+  return held.length === 0
+    ? 'every tenant table empty'
+    : held.map(([table, n]) => `${table}=${n}`).join(', ');
+}
 const record = (name, ok, detail) => {
   results.push({ name, ok, detail });
   console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
@@ -161,7 +206,7 @@ function runPrisma(args, url) {
   });
 }
 
-async function verify(db) {
+async function verify(db, before, after) {
   console.log('\nChecking the result:\n');
 
   const [counts] = await db.$queryRaw`
@@ -264,16 +309,46 @@ async function verify(db) {
     writable.map((r) => r.table_name).join(', ') || 'read-only, as intended',
   );
 
-  let occupied = [];
-  for (const table of TENANT_TABLES) {
-    const [row] = await db.$queryRawUnsafe(`SELECT count(*) AS n FROM "${table}"`);
-    if (n(row.n) > 0) occupied.push(`${table}=${n(row.n)}`);
+  /*
+    What a live database needs asked of it.
+
+    This used to assert that no school, account or content existed — true on
+    the morning it was written, and false from the first school onwards. It
+    failed run #13 with "schools=4, users=10, …", which is not a fault: it is
+    the client's real work, and the run should have been green.
+
+    Three questions replace it, and all three are worth asking of a database
+    that is in use:
+
+      1. Is every tenant table still readable? A migration that drops or
+         renames one is caught here, before anybody's screen goes blank.
+      2. Did anything disappear? The census taken before the migration is
+         compared with the one after, and a count may only go up. This is the
+         assertion that actually protects the client's content.
+      3. What is in there? Reported, never judged.
+  */
+  record(
+    'Every tenant table is still readable',
+    after.unreadable.length === 0,
+    after.unreadable.length === 0
+      ? `${TENANT_TABLES.length} tables queried`
+      : `UNREADABLE: ${after.unreadable.join(', ')}`,
+  );
+
+  const lost = [];
+  for (const [table, count] of after.counts) {
+    const was = before.counts.get(table);
+    if (was !== undefined && count < was) lost.push(`${table} ${was} -> ${count}`);
   }
   record(
-    'No school, account or content exists yet',
-    occupied.length === 0,
-    occupied.join(', ') || 'every tenant table empty',
+    'The migration removed no existing school, account or content',
+    lost.length === 0,
+    lost.length === 0
+      ? 'nothing lost'
+      : `ROWS DISAPPEARED: ${lost.join(', ')}`,
   );
+
+  console.log(`\n  DATA  ${describeCensus(after)}`);
 
   /*
     The games a student is offered are rows, not code. A migration count says
@@ -415,6 +490,20 @@ async function main() {
     process.exit(0);
   }
 
+  /*
+    Count the client's work BEFORE touching anything, so that afterwards there
+    is something to compare against. A migration that quietly removed rows
+    would otherwise be indistinguishable from one that did not.
+  */
+  const beforeDb = new PrismaClient({ datasourceUrl: url });
+  let before;
+  try {
+    before = await census(beforeDb);
+    console.log(`Before   : ${describeCensus(before)}\n`);
+  } finally {
+    await beforeDb.$disconnect();
+  }
+
   console.log('Applying migrations…\n');
   const deploy = runPrisma(['migrate', 'deploy'], url);
   console.log(`${deploy.stdout ?? ''}${deploy.stderr ?? ''}`.split('\n').filter((l) => !/^warn |pris\.ly/.test(l)).join('\n'));
@@ -425,8 +514,10 @@ async function main() {
   }
 
   const db = new PrismaClient({ datasourceUrl: url });
+  let after;
   try {
-    await verify(db);
+    after = await census(db);
+    await verify(db, before, after);
   } finally {
     await db.$disconnect();
   }
@@ -441,7 +532,8 @@ async function main() {
   console.log(`\nAll ${results.length} checks passed. The production database matches the approved schema.`);
   await summarise(
     '✅ Migrations applied and verified',
-    `All ${results.length} checks passed, including the bonus-game registry.`,
+    `All ${results.length} checks passed, including the bonus-game registry.\n\n`
+      + `Data in the database: ${describeCensus(after)}. Nothing was removed.`,
     '',
   );
 }
@@ -460,7 +552,24 @@ async function summarise(heading, detail, next) {
   await appendFile(file, `${body}\n`);
 }
 
-main().catch((error) => {
-  console.error(`\n${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+/*
+  Run when executed, stay quiet when imported.
+
+  The guard below refuses to touch anything but the production database, which
+  is right, and it also meant none of this could be exercised against a test
+  database. Splitting "being run" from "being imported" lets the counting and
+  comparison be tested for real, without the guard being softened by a flag
+  that could one day be set by accident.
+*/
+const executedDirectly =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (executedDirectly) {
+  main().catch((error) => {
+    console.error(`\n${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
+}
+
+export { census, describeCensus, TENANT_TABLES };
