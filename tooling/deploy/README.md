@@ -64,12 +64,28 @@ script checks rather than assumes.
 
 ## What it checks afterwards
 
-Fifteen assertions, each of which fails the run: all 18 migrations recorded, 25
-tables, 34 policies, 11 `SECURITY DEFINER` functions, 22 tables under `FORCE`
-row-level security with only the three intended exemptions, the four scoped
-`settings` policies, `app_user` present and non-superuser and non-`BYPASSRLS`
-and owning nothing, no `PUBLIC` grant on any table, no `app_user` grant on the
-migration ledger, the registries read-only, and every tenant table empty.
+Every assertion fails the run, and the script prints its own total rather than
+this page claiming one: every migration in the repository recorded, 25 tables,
+34 policies, 11 `SECURITY DEFINER` functions, 22 tables under `FORCE` row-level
+security with only the three intended exemptions, the four scoped `settings`
+policies, `app_user` present and non-superuser and non-`BYPASSRLS` and owning
+nothing, no `PUBLIC` grant on any table, no `app_user` grant on the migration
+ledger, the registries read-only, every tenant table empty — and every bonus
+game this release expects present in `bonus_game_types`, with the right content
+pool, minimum and active state.
+
+That last one exists because a migration count is not a feature. Grammar
+Adventure's registry row is what makes the game appear for students; without a
+named check for it, "all migrations applied" can be true while the game is
+invisible.
+
+## `check` fails when production is behind
+
+A read-only check that finds unapplied migrations exits non-zero. Green means
+production is up to date — nothing else. This is not fussiness: a run that
+reported `20260913000000_grammar_adventure` as unapplied, and then showed a
+green tick, is exactly how a shipped game stayed invisible to every student
+while everyone believed it had been deployed.
 
 A failure stops the run and names what is wrong.
 

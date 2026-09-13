@@ -23,6 +23,7 @@
  * database that looks like a development one.
  */
 import { spawnSync } from 'node:child_process';
+import { appendFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -273,6 +274,43 @@ async function verify(db) {
     occupied.length === 0,
     occupied.join(', ') || 'every tenant table empty',
   );
+
+  /*
+    The games a student is offered are rows, not code. A migration count says
+    the ledger moved; it does not say the row that makes a game exist actually
+    landed — and a game whose row is missing looks exactly like a game that was
+    never written. So each registry row this release depends on is named and
+    checked: key, pool, minimum and active state.
+
+    Add a row here whenever a game is added. It is three lines, and it is the
+    difference between "18 migrations applied" and "the students can see it".
+  */
+  const EXPECTED_GAMES = [
+    { key: 'memory_match', pool: 'vocabulary', minimum: 6 },
+    { key: 'quick_match', pool: 'vocabulary', minimum: 4 },
+    { key: 'grammar_adventure', pool: 'grammar_questions', minimum: 3 },
+  ];
+
+  const games = await db.$queryRaw`
+    SELECT key, content_pool, minimum_items, is_active FROM bonus_game_types
+  `;
+  const bySlug = new Map(games.map((g) => [g.key, g]));
+
+  for (const want of EXPECTED_GAMES) {
+    const got = bySlug.get(want.key);
+    const ok =
+      got !== undefined &&
+      got.content_pool === want.pool &&
+      n(got.minimum_items) === want.minimum &&
+      got.is_active === true;
+    record(
+      `Game "${want.key}" is registered and active`,
+      ok,
+      got === undefined
+        ? 'MISSING — students will not see this game'
+        : `pool ${got.content_pool}, minimum ${n(got.minimum_items)}, ${got.is_active ? 'active' : 'INACTIVE'}`,
+    );
+  }
 }
 
 async function main() {
@@ -345,8 +383,35 @@ async function main() {
     process.exit(1);
   }
 
+  const pending = /have not yet been applied/i.test(statusText);
+
   if (mode === 'check') {
     console.log(statusText.split('\n').filter((l) => !/^warn |pris\.ly|^$/.test(l)).join('\n'));
+
+    /*
+      A read-only check that finds production behind and then reports success
+      is how Grammar Adventure stayed invisible after somebody had already
+      "run the migration workflow, green". The run did exactly what it was
+      asked — it looked, and it found the migration unapplied — and the green
+      tick said the opposite of what the log said.
+
+      Green now means one thing: production is up to date. Behind is a
+      failure, whatever mode found it.
+    */
+    if (pending) {
+      console.error('\nProduction is BEHIND. The migrations listed above have not been applied.');
+      console.error('Nothing was changed — this mode only looks.');
+      console.error('\nTo apply them: re-run this workflow with mode=apply and confirm=APPLY.');
+      await summarise(
+        '❌ Production is behind',
+        'The migrations named in the log are not applied. Nothing was changed.',
+        'Re-run this workflow with **mode: apply** and **confirm: APPLY**.',
+      );
+      process.exit(1);
+    }
+
+    console.log('\nProduction is up to date. Nothing to apply.');
+    await summarise('✅ Production is up to date', 'Every migration in the repository is applied.', '');
     process.exit(0);
   }
 
@@ -374,8 +439,25 @@ async function main() {
   }
 
   console.log(`\nAll ${results.length} checks passed. The production database matches the approved schema.`);
-  console.log('\nNext: give app_user a password, which is the only thing standing between');
-  console.log('this database and a running API. That is the next step, not this one.');
+  await summarise(
+    '✅ Migrations applied and verified',
+    `All ${results.length} checks passed, including the bonus-game registry.`,
+    '',
+  );
+}
+
+/**
+ * A line on the run's own summary page.
+ *
+ * The log said "have not yet been applied" and the run still showed a green
+ * tick; nobody reads forty lines of Prisma output to find that out. This puts
+ * the verdict where the tick is.
+ */
+async function summarise(heading, detail, next) {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (!file) return;
+  const body = [`### ${heading}`, '', detail, next ? `\n**Next:** ${next}` : ''].join('\n');
+  await appendFile(file, `${body}\n`);
 }
 
 main().catch((error) => {

@@ -14,13 +14,16 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'check = what is pending. runtime = prove the API can connect. apply = run the migrations.'
+        description: 'apply = CHANGE the database. check = look only, changes nothing. runtime = prove the API can connect.'
         required: true
+        # check is the safe default, and it now FAILS when production is behind
+        # rather than reporting success — a green read-only run that had found
+        # an unapplied migration is how a shipped game stayed invisible.
         default: check
         type: choice
         options: [check, runtime, apply]
       confirm:
-        description: 'For apply only: type APPLY to confirm. Ignored for check.'
+        description: 'For apply only: type APPLY to confirm. Ignored for check — and setting it does NOT switch the mode.'
         required: false
         default: ''
         type: string
