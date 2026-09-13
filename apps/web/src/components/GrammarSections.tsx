@@ -2,6 +2,7 @@
 
 import { api, apiUrl, LearnSection } from '@/lib/api';
 import { Icon } from './Icon';
+import { Girl } from './world/Girl';
 
 /**
  * One worked example.
@@ -52,7 +53,7 @@ export function GrammarSections({
   if (sections.length === 0) {
     return (
       <div className="locked-note">
-        <Icon name="grammar" />
+        <Girl who="lina" pose="read" className="girl note-girl" />
         <div>
           <strong>No grammar here yet</strong>
           <p className="muted" style={{ margin: '.25rem 0 0' }}>

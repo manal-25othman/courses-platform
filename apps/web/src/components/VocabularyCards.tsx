@@ -5,6 +5,7 @@ import { api, ApiError, apiUrl, CheckAnswerResult, LearnWord, VocabularyCheck } 
 import { englishSpeechStatus, pronounce, stopPronouncing, type SpokenBy } from '@/lib/pronounce';
 import { Icon } from './Icon';
 import { Scene } from './world/Scene';
+import { Girl } from './world/Girl';
 import type { SceneKind } from '@/lib/world';
 
 /**
@@ -80,7 +81,7 @@ export function VocabularyCards({
   if (words.length === 0) {
     return (
       <div className="locked-note">
-        <Icon name="words" />
+        <Girl who="lina" pose="point" className="girl note-girl" />
         <div>
           <strong>No words here yet</strong>
           <p className="muted" style={{ margin: '.25rem 0 0' }}>

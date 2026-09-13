@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, BonusGame, BonusGameRound } from '@/lib/api';
 import { Icon } from './Icon';
 import { GrammarAdventure } from './GrammarAdventure';
+import { Girl } from './world/Girl';
 import type { SceneKind } from '@/lib/world';
 
 /**
@@ -196,9 +197,7 @@ function MemoryMatch({ round, onAgain }: { round: BonusGameRound; onAgain: () =>
   if (done) {
     return (
       <div className="round-end" data-testid="game-done">
-        <span className="mark tick" style={{ width: '3.5rem', height: '3.5rem' }}>
-          <Icon name="tick" size={26} />
-        </span>
+        <Girl who="lina" pose="cheer" mood="bright" className="girl end-girl" />
         <span className="round-score">{tries}</span>
         <strong style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-title)' }}>
           {tries === round.pairs.length ? 'Perfect — every pair first time.' : `All ${round.pairs.length} pairs found.`}
@@ -279,9 +278,8 @@ function QuickMatch({ round, onAgain }: { round: BonusGameRound; onAgain: () => 
     const perfect = right === round.questions.length;
     return (
       <div className="round-end" data-testid="game-done">
-        <span className={`mark ${perfect ? 'tick' : 'cross'}`} style={{ width: '3.5rem', height: '3.5rem' }}>
-          <Icon name={perfect ? 'tick' : 'star'} size={26} />
-        </span>
+        {/* She cheers whatever the score: a practice round is not a verdict. */}
+        <Girl who="lina" pose="cheer" mood={perfect ? 'bright' : 'happy'} className="girl end-girl" />
         <span className="round-score">
           {right}<span style={{ color: 'var(--ink-4)' }}>/{round.questions.length}</span>
         </span>

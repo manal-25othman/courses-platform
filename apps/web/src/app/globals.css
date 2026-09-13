@@ -2569,6 +2569,16 @@ body:has(.world) { background: #F2EDFF; }
   font-variation-settings: 'SOFT' 100, 'WONK' 1;
   font-size: 1.05rem; font-weight: 700; color: var(--brand-ink);
 }
+/* In a note, she takes the icon's place: an empty screen is the one moment a
+   character earns her room, because there is nothing else on it. */
+.note-girl { width: 3.5rem; flex: none; margin: -.35rem 0 -.75rem; }
+/* At the end of a round she is the reward, so she gets the size of one. */
+.end-girl { width: 6rem; margin-bottom: calc(-1 * var(--s2)); }
+@media (max-width: 30rem) {
+  .note-girl { width: 2.75rem; }
+  .end-girl { width: 5rem; }
+}
+
 /* On the ticket and the unit banner she stands in the scene, on its floor. */
 .today-scene { position: relative; }
 /* She stands on the right so the question keeps the left of the scene to
@@ -2719,7 +2729,6 @@ body:has(.world) { background: #F2EDFF; }
 }
 .adv-nudge strong { display: block; color: var(--warn-ink); font-size: var(--fs-base); }
 .adv-nudge p { margin: .2rem 0 0; color: var(--ink-2); font-size: var(--fs-body); }
-.adv-helper { width: 3rem; flex: none; }
 
 .adv-done { justify-items: center; text-align: center; }
 .adv-win {

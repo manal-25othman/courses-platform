@@ -7,6 +7,7 @@ import { StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
 import { Glyph } from '@/components/world/Scene';
 import { WorldGround } from '@/components/world/WorldGround';
+import { Girl } from '@/components/world/Girl';
 import { themeFor, themeVars } from '@/lib/world';
 
 import { BonusGames } from '@/components/BonusGames';
@@ -138,7 +139,7 @@ export default function GamesPage() {
 
         {playable.length === 0 ? (
           <div className="locked-note">
-            <Icon name="games" />
+            <Girl who="lina" pose="point" className="girl note-girl" />
             <div>
               <strong>Games open once a unit has enough to play with</strong>
               <p className="muted" style={{ margin: '.25rem 0 0' }}>

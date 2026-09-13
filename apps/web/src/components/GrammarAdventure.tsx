@@ -279,7 +279,7 @@ export function GrammarAdventure({
           data-walking={phase === 'moving'}
         >
           <Girl
-            who="maya"
+            who="lina"
             pose={phase === 'arrived' ? 'cheer' : phase === 'wrong' ? 'think' : 'walk'}
             mood={phase === 'arrived' ? 'bright' : phase === 'wrong' ? 'thinking' : 'happy'}
           />
@@ -400,10 +400,13 @@ export function GrammarAdventure({
             </div>
           )}
 
-          {/* A wrong turn: never a red screen, never a score. */}
+          {/*
+            A wrong turn: never a red screen, never a score. No second figure
+            here — Lina is already on the road above, hand to her chin. Two of
+            her on one screen is one too many.
+          */}
           {phase === 'wrong' && (
             <div className="adv-nudge" role="status" data-testid="adventure-nudge">
-              <Girl who="nour" pose="think" mood="thinking" className="girl adv-helper" />
               <div>
                 <strong>{nudge}</strong>
                 {hint && <p data-testid="adventure-hint">{hint}</p>}

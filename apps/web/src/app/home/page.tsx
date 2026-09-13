@@ -282,7 +282,7 @@ export default function StudentHomePage() {
           >
             <span className="today-scene">
               <Scene kind={themeFor(current.title, true, core.indexOf(current)).scene} fit="fill" />
-              <Girl who="maya" pose="walk" className="girl today-girl" />
+              <Girl who="lina" pose="walk" className="girl today-girl" />
             </span>
             <span className="today-body">
               <span className="badge-icon" aria-hidden="true">

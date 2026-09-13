@@ -170,25 +170,33 @@ function Body({ look, pose }: { look: Look; pose: GirlPose }) {
   const shoe = (cx: number, cy: number, rotate = 0) => (
     <ellipse cx={cx} cy={cy} rx="9" ry="5" fill={look.bottom} transform={`rotate(${rotate} ${cx} ${cy})`} />
   );
+  /* An arm that goes somewhere needs a hand at the end of it, or it reads as
+     a stub. Only the poses that raise or reach draw one. */
+  const hand = (cx: number, cy: number) => <circle cx={cx} cy={cy} r="5.5" fill={look.skin} />;
 
   if (pose === 'read') {
-    // Sitting cross-legged with a book on her knees.
+    // Sitting cross-legged with a book open on her knees. The book is drawn
+    // open and outlined in her own colour: a closed cream rectangle
+    // disappeared against a white card, which is where she most often sits.
     return (
       <>
-        {leg('M46 132h-14')}
-        {leg('M74 132h14')}
+        {/* feet tucked out either side of her lap */}
+        <ellipse cx="36" cy="137" rx="10" ry="5" fill={look.skin} />
+        <ellipse cx="84" cy="137" rx="10" ry="5" fill={look.skin} />
         <path d="M60 80c-16 0-26 9-28 24-1 9-1 18 0 24h56c1-6 1-15 0-24-2-15-12-24-28-24Z" fill={look.top} />
-        {arm('M40 100c-6 8-7 16-4 22')}
-        {arm('M80 100c6 8 7 16 4 22')}
-        {/* the book */}
-        <path d="M34 118h52v18H34z" fill="#FFF6E6" />
-        <path d="M58 118h4v18h-4z" fill={look.bottom} />
-        <path d="M32 116l28 4 28-4v4l-28 4-28-4z" fill={look.bottom} />
+        <path d="M30 127h60c3 0 5 3 4 6-1 5-13 8-34 8s-33-3-34-8c-1-3 1-6 4-6Z" fill={look.bottom} />
+        {arm('M38 102c-6 9-6 17-3 22')}
+        {arm('M82 102c6 9 6 17 3 22')}
+        <path d="M60 116c-9-6-19-7-27-5v20c8-2 18-1 27 5Z" fill="#FFF6E6" stroke={look.bottom} strokeWidth="2.5" strokeLinejoin="round" />
+        <path d="M60 116c9-6 19-7 27-5v20c-8-2-18-1-27 5Z" fill="#FFF6E6" stroke={look.bottom} strokeWidth="2.5" strokeLinejoin="round" />
+        <path d="M40 121h13M40 127h11M68 121h13M68 127h11" stroke={look.bottom} strokeWidth="2" strokeLinecap="round" opacity=".45" />
       </>
     );
   }
 
   if (pose === 'cheer') {
+    // Both arms right up, past the top of her head. Stopping at cheek height
+    // read as hands-on-face rather than as a cheer.
     return (
       <>
         {leg('M52 128v18')}
@@ -196,8 +204,10 @@ function Body({ look, pose }: { look: Look; pose: GirlPose }) {
         {shoe(50, 148, -8)}
         {shoe(70, 148, 8)}
         <path d="M60 80c-15 0-24 8-26 22l-2 26h56l-2-26c-2-14-11-22-26-22Z" fill={look.top} />
-        {arm('M38 94c-8-8-11-18-10-26')}
-        {arm('M82 94c8-8 11-18 10-26')}
+        {arm('M40 96C28 80 20 58 18 38')}
+        {arm('M80 96C92 80 100 58 102 38')}
+        {hand(18, 36)}
+        {hand(102, 36)}
       </>
     );
   }
@@ -240,8 +250,10 @@ function Body({ look, pose }: { look: Look; pose: GirlPose }) {
         {shoe(70, 148, 8)}
         <path d="M60 80c-15 0-24 8-26 22l-2 26h56l-2-26c-2-14-11-22-26-22Z" fill={look.top} />
         {arm('M38 96c-4 9-3 17 2 22')}
-        {arm('M82 92c9-1 17-3 25-7')}
-        <circle cx="110" cy="84" r="5" fill={look.skin} />
+        {arm('M82 94c8-3 15-6 20-11')}
+        {hand(104, 81)}
+        {/* the finger, so she is pointing rather than reaching */}
+        <path d="M107 78l7-5" stroke={look.skin} strokeWidth="5" strokeLinecap="round" />
       </>
     );
   }
@@ -255,7 +267,14 @@ function Body({ look, pose }: { look: Look; pose: GirlPose }) {
       {shoe(70, 148, 8)}
       <path d="M60 80c-15 0-24 8-26 22l-2 26h56l-2-26c-2-14-11-22-26-22Z" fill={look.top} />
       {arm('M38 96c-4 9-3 17 2 22')}
-      {pose === 'wave' ? arm('M82 94c7-5 11-12 12-20') : arm('M82 96c4 9 3 17-2 22')}
+      {pose === 'wave' ? (
+        <>
+          {arm('M82 94C94 84 104 68 106 50')}
+          {hand(106, 47)}
+        </>
+      ) : (
+        arm('M82 96c4 9 3 17-2 22')
+      )}
     </>
   );
 }
@@ -301,8 +320,8 @@ export function Girl({
       )}
       {pose === 'think' && (
         <>
-          <circle cx="99" cy="30" r="5" fill="#fff" opacity=".95" />
-          <circle cx="108" cy="18" r="7" fill="#fff" opacity=".95" />
+          <circle cx="99" cy="30" r="5" fill="#fff" stroke="#C4B5FD" strokeWidth="1.6" />
+          <circle cx="108" cy="18" r="7" fill="#fff" stroke="#C4B5FD" strokeWidth="1.6" />
           <text x="108" y="23" textAnchor="middle" fontSize="11" fontWeight="800" fill="#8B6FE8">?</text>
         </>
       )}

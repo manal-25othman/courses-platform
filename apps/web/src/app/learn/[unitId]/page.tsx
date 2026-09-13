@@ -184,7 +184,7 @@ export default function LearnUnitPage() {
         <header className="unit-banner">
           <Scene kind={theme.scene} />
           <Girl
-            who="maya"
+            who="lina"
             pose={progress?.assessmentState.passed ? 'cheer' : 'walk'}
             mood={progress?.assessmentState.passed ? 'bright' : 'happy'}
             className="girl banner-girl"
