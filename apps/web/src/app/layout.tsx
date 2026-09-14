@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import type { ReactNode } from 'react';
+import { IdleGuard } from '@/components/IdleGuard';
 
 export const metadata: Metadata = {
   title: 'TOP GOAL',
@@ -16,7 +17,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" dir="ltr">
-      <body>{children}</body>
+      <body>
+        {children}
+        {/*
+          Mounted once, above every screen, rather than per page: a guard that
+          has to be remembered on each new route is a guard that will be
+          missed on one. It decides for itself which routes are behind a
+          session and does nothing on the rest.
+        */}
+        <IdleGuard />
+      </body>
     </html>
   );
 }

@@ -10,6 +10,9 @@ function LoginForm() {
   const params = useSearchParams();
   // Set after a password change, which signs every device out on purpose.
   const justChanged = params.get('changed') === '1';
+  // Set when the inactivity guard signed somebody out. Arriving at a sign-in
+  // screen with no explanation reads as a fault; this says what happened.
+  const wentQuiet = params.get('reason') === 'inactive';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +62,17 @@ function LoginForm() {
         {justChanged && (
           <p className="alert ok" style={{ marginTop: '1rem' }} role="status">
             Your password was changed. Please sign in with your new password.
+          </p>
+        )}
+
+        {wentQuiet && (
+          <p
+            className="alert warn"
+            style={{ marginTop: '1rem' }}
+            role="status"
+            data-testid="signed-out-idle"
+          >
+            You were signed out because you had been away for a while. Sign in to carry on.
           </p>
         )}
 

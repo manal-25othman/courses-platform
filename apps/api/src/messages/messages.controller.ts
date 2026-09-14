@@ -33,6 +33,19 @@ export class MessagesController {
     return this.messages.conversation(actor);
   }
 
+  /**
+   * Everything waiting for whoever is asking, in one call.
+   *
+   * Every signed-in role may ask, and each is answered about their own
+   * conversations only — the service decides the scope, so the bell cannot be
+   * a way to learn about somebody else's class.
+   */
+  @Roles(UserRole.TEACHER, UserRole.ADMIN, UserRole.STUDENT)
+  @Get('inbox')
+  async inbox(@CurrentUser() actor: Actor) {
+    return this.messages.inbox(actor);
+  }
+
   @Roles(UserRole.STUDENT)
   @Get('mine/unread')
   async myUnread(@CurrentUser() actor: Actor) {

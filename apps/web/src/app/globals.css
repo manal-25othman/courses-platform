@@ -2753,3 +2753,88 @@ body:has(.world) { background: #F2EDFF; }
   .adv-head { padding: var(--s3); }
   .adv-goal { font-size: var(--fs-base); }
 }
+
+/* ==========================================================================
+   THE BELL, AND THE QUESTION BEFORE SIGNING OUT
+   Two pieces of operational chrome. Both sit on every signed-in screen, so
+   both are deliberately quiet: the bell says nothing at all until there is
+   something to say, and the warning appears only once somebody has stopped.
+   ========================================================================== */
+
+.bell-wrap { position: relative; flex: none; }
+
+.bell {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 2.5rem; height: 2.5rem; padding: 0; flex: none;
+  border-radius: var(--r-md); border: 1px solid transparent;
+  background: transparent; color: var(--ink-2);
+}
+.bell:hover:not(:disabled) { background: var(--ground-2); color: var(--ink); }
+/* Something waiting is worth the brand colour; nothing waiting is not. */
+.bell[data-unread='true'] { color: var(--brand); }
+
+.bell-count {
+  position: absolute; top: .15rem; right: .1rem;
+  min-width: 1.1rem; height: 1.1rem; padding: 0 .22rem;
+  display: grid; place-items: center;
+  border-radius: 999px; background: var(--signal); color: #fff;
+  font-size: .6875rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.bell-menu {
+  position: absolute; right: 0; top: calc(100% + .4rem); z-index: 40;
+  min-width: 15rem; max-width: min(20rem, calc(100vw - 2rem));
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--e3);
+  padding: var(--s2); display: flex; flex-direction: column; gap: 2px;
+}
+.bell-head {
+  margin: 0; padding: .35rem var(--s3) .5rem;
+  font-size: var(--fs-caption); font-weight: 700; color: var(--ink-3);
+}
+.bell-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  width: 100%; text-align: left; border: 0; background: transparent;
+  padding: .55rem var(--s3); border-radius: var(--r-md);
+  font-size: var(--fs-body); font-weight: 600; color: var(--ink);
+}
+.bell-item:hover:not(:disabled) { background: var(--brand-soft); }
+.bell-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bell-n {
+  flex: none; min-width: 1.4rem; padding: .1rem .4rem; border-radius: 999px;
+  background: var(--signal-soft); color: var(--signal-ink);
+  font-size: var(--fs-caption); font-weight: 800; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- "are you still there?" ---------------------------------------------- */
+.idle-veil {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid; place-items: center; padding: var(--s5);
+  background: rgba(27, 23, 57, .45);
+  backdrop-filter: blur(2px);
+}
+.idle-card {
+  width: min(26rem, 100%);
+  background: var(--surface); color: var(--ink);
+  border-radius: var(--r-xl); box-shadow: var(--e3);
+  padding: var(--s6) var(--s5) var(--s5);
+  display: flex; flex-direction: column; gap: var(--s3);
+  text-align: center;
+}
+.idle-title {
+  font-family: var(--font-display); font-variation-settings: var(--wonk);
+  font-size: 1.5rem; font-weight: 800; line-height: 1.15;
+}
+.idle-body { margin: 0; color: var(--ink-2); font-size: var(--fs-body); }
+/* The number is the thing being watched, so it does not jump as it counts. */
+.idle-body b { font-variant-numeric: tabular-nums; color: var(--ink); }
+.idle-row { display: flex; gap: var(--s3); justify-content: center; flex-wrap: wrap; }
+.idle-row > button { flex: 1 1 9rem; justify-content: center; }
+
+@media (max-width: 30rem) {
+  .idle-card { padding: var(--s5) var(--s4) var(--s4); }
+  .idle-row > button { flex: 1 1 100%; }
+}

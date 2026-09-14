@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { RecoveryService } from './recovery.service';
+import { AccountStateService } from './account-state.service';
 
 @Module({
   imports: [
@@ -28,9 +29,9 @@ import { RecoveryService } from './recovery.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, PasswordService, TokenService, RecoveryService],
+  providers: [AuthService, PasswordService, TokenService, RecoveryService, AccountStateService],
   // JwtModule is exported because the global JwtAuthGuard is registered in
   // AppModule and needs JwtService from there.
-  exports: [AuthService, PasswordService, TokenService, RecoveryService, JwtModule],
+  exports: [AuthService, PasswordService, TokenService, RecoveryService, AccountStateService, JwtModule],
 })
 export class AuthModule {}

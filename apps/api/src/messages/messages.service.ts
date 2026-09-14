@@ -196,4 +196,88 @@ export class MessagesService {
 
     return { unread };
   }
+
+  /**
+   * What is waiting, across every conversation the caller has.
+   *
+   * The per-conversation count above answers "is there anything new from this
+   * one person", which is what a thread needs. A bell needs the other
+   * question — "is there anything new at all" — and for a teacher with a class
+   * that is a different sum, one she cannot get by opening every student in
+   * turn.
+   *
+   * Nothing new is stored for this. It reads the same `readAt` the
+   * conversation already keeps, so a message opened in a thread stops counting
+   * here with no second thing to keep in step.
+   */
+  async inbox(actor: CurrentUser): Promise<{
+    unread: number;
+    threads: { studentId: string; name: string; unread: number }[];
+  }> {
+    const schoolId = this.schoolOf(actor);
+
+    if (actor.role === UserRole.STUDENT) {
+      // A student has one teacher, so her bell is her one conversation. An
+      // unassigned student has nowhere for a message to come from, and that
+      // is a quiet bell rather than an error on every page she opens.
+      const profile = await this.prisma.forSchool(schoolId, (tx) =>
+        tx.studentProfile.findFirst({ where: { userId: actor.userId } }),
+      );
+      if (!profile?.assignedTeacherId) return { unread: 0, threads: [] };
+
+      const unread = await this.prisma.forSchool(schoolId, (tx) =>
+        tx.message.count({
+          where: {
+            teacherId: profile.assignedTeacherId!,
+            studentId: actor.userId,
+            senderId: { not: actor.userId },
+            readAt: null,
+          },
+        }),
+      );
+      return { unread, threads: [] };
+    }
+
+    /*
+      A teacher sees only her own students, and an admin sees the school's.
+      This is the same rule `participants` applies one student at a time,
+      written once here over the whole set rather than relaxed.
+    */
+    const mine: Prisma.MessageWhereInput = {
+      senderId: { not: actor.userId },
+      readAt: null,
+      ...(actor.role === UserRole.TEACHER ? { teacherId: actor.userId } : {}),
+    };
+
+    const grouped = await this.prisma.forSchool(schoolId, (tx) =>
+      tx.message.groupBy({ by: ['studentId'], where: mine, _count: { _all: true } }),
+    );
+
+    if (grouped.length === 0) return { unread: 0, threads: [] };
+
+    // Named, because "3 unread" without a name is not something a teacher can
+    // act on. One query for the names rather than one per thread.
+    const students = await this.prisma.forSchool(schoolId, (tx) =>
+      tx.user.findMany({
+        where: { id: { in: grouped.map((g) => g.studentId) }, deletedAt: null },
+        select: { id: true, username: true, studentProfile: { select: { fullName: true } } },
+      }),
+    );
+    const nameOf = new Map(
+      students.map((u) => [u.id, u.studentProfile?.fullName ?? u.username]),
+    );
+
+    const threads = grouped
+      // A student removed since the message was written has no name to show,
+      // and nothing useful to open, so she is left out of the list.
+      .filter((g) => nameOf.has(g.studentId))
+      .map((g) => ({
+        studentId: g.studentId,
+        name: nameOf.get(g.studentId)!,
+        unread: g._count._all,
+      }))
+      .sort((a, b) => b.unread - a.unread || a.name.localeCompare(b.name));
+
+    return { unread: threads.reduce((sum, t) => sum + t.unread, 0), threads };
+  }
 }

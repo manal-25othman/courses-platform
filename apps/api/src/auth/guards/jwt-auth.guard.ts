@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { AccessTokenPayload, CurrentUser } from '../auth.types';
+import { AccountStateService } from '../account-state.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 /**
@@ -11,12 +12,18 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
  * Registered globally, so protection is the default and an endpoint has to opt
  * out with @Public() rather than opt in. A new endpoint that nobody remembered
  * to protect is therefore closed, not open (SRS 37, ARCHITECTURE 9.2).
+ *
+ * A valid signature is necessary and not sufficient. The token says who
+ * somebody was when it was issued; it cannot say whether their account has
+ * since been deactivated or their school suspended, and a token stays valid
+ * for fifteen minutes. So the account is checked too, on every request.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
+    private readonly accounts: AccountStateService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -42,6 +49,18 @@ export class JwtAuthGuard implements CanActivate {
       payload = await this.jwt.verifyAsync<AccessTokenPayload>(token);
     } catch {
       throw new UnauthorizedException('Your session has expired. Please sign in again.');
+    }
+
+    /*
+      The token is genuine. Is the account still one that may act?
+
+      Same sentence for both cases on purpose. "Your school has been
+      suspended" would tell whoever holds a stolen token something about the
+      organisation; the person it actually happens to is told properly by the
+      sign-in screen, which knows who she is.
+    */
+    if (!(await this.accounts.isUsable(payload.sub))) {
+      throw new UnauthorizedException('Your session has ended. Please sign in again.');
     }
 
     request.user = { ...payload, userId: payload.sub };

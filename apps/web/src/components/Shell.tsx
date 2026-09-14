@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
+import { MessageBell } from './MessageBell';
 
 /**
  * The brand mark.
@@ -142,6 +143,9 @@ export function TopBar({ right, nav = false }: { right?: ReactNode; nav?: boolea
         <Brandmark />
         {nav && <StudentTopNav />}
         <span style={{ flex: 1 }} />
+        {/* `nav` already means "a signed-in student is looking at this", which
+            is exactly when there is an inbox to ring about. */}
+        {nav && <MessageBell role="STUDENT" />}
         {right}
       </div>
     </header>

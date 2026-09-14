@@ -6,6 +6,7 @@ import { api, Me } from '@/lib/api';
 import { Avatar, Brandmark, TeacherNav } from './Shell';
 import { SchoolHeader } from './SchoolShell';
 import { Icon } from './Icon';
+import { MessageBell } from './MessageBell';
 
 /**
  * The frame every teacher screen sits in.
@@ -57,6 +58,8 @@ export function TeacherHeader({
         <span className="bar-rule" aria-hidden="true" />
         <TeacherNav />
         <span style={{ flex: 1 }} />
+        {/* Her students' replies, counted where she will see them. */}
+        <MessageBell role="TEACHER" />
         <span className="who">
           <span className="who-name">{named}</span>
           <Avatar name={me.displayName} />

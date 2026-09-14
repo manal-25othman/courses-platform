@@ -683,6 +683,16 @@ export interface AttemptSummary {
 
 // --- Feedback between a teacher and a student ------------------------------
 
+/**
+ * Everything waiting for whoever asked, across all their conversations.
+ *
+ * `threads` is empty for a student, who has only one.
+ */
+export interface Inbox {
+  unread: number;
+  threads: { studentId: string; name: string; unread: number }[];
+}
+
 export interface Message {
   id: string;
   body: string;
