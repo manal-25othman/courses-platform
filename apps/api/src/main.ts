@@ -49,8 +49,31 @@ async function bootstrap(): Promise<void> {
   // nothing behind it.
   app.useGlobalFilters(new RlsDenialFilter());
 
-  const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:3000';
-  app.enableCors({ origin: corsOrigin, credentials: true });
+  /*
+    Which websites may call this API, as a list rather than one name.
+
+    Moving to a custom domain is two changes that cannot be made at the same
+    instant: the website starts answering on the new address, and this has to
+    already accept it. With room for one name, the order is a choice between
+    a broken window before the switch and a broken window after it — and the
+    break is a quiet one, because the site loads and only the data is missing.
+
+    A comma-separated list removes the choice. Both addresses are allowed
+    through the move, and the old one is dropped afterwards. It is still a
+    list of names somebody typed, so nothing is loosened: an origin that is
+    not on it is refused exactly as before.
+  */
+  const corsOrigin = (process.env.CORS_ORIGIN ?? 'http://localhost:3000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
+  app.enableCors({
+    // One name stays one name: handing an array of one to the CORS layer
+    // behaves the same, but this keeps the common case obvious in a log.
+    origin: corsOrigin.length === 1 ? corsOrigin[0] : corsOrigin,
+    credentials: true,
+  });
 
   // PORT first, because that is the one a host assigns. Render, Railway, Fly
   // and Heroku all pick a port, put it there, and route to it; a service that
