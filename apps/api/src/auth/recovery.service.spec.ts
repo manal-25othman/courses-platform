@@ -51,6 +51,8 @@ function harness(options: {
   usersByEmail?: ReturnType<typeof userRow>[];
   token?: { id: string; userId: string } | null;
   userById?: ReturnType<typeof userRow> | null;
+  /** Overrides what the environment says, for the link-building tests. */
+  env?: Record<string, string | undefined>;
 }): Harness {
   const sent: Harness['sent'] = [];
   const created: Record<string, unknown>[] = [];
@@ -111,10 +113,8 @@ function harness(options: {
 
   const audit = { record: async () => undefined } as unknown as AuditService;
 
-  const config = {
-    get: (key: string) =>
-      key === 'WEB_BASE_URL' ? 'https://learn.example.com' : undefined,
-  } as unknown as ConfigService;
+  const env = options.env ?? { WEB_BASE_URL: 'https://learn.example.com' };
+  const config = { get: (key: string) => env[key] } as unknown as ConfigService;
 
   return {
     service: new RecoveryService(prisma, new PasswordService(), tokens, email, audit, config),
@@ -278,5 +278,56 @@ describe('e-mail is not sent silently into nothing', () => {
 
     expect(sent[0].text).toMatch(/stops working in \d+ minutes/);
     expect(sent[0].text).toContain('only be used once');
+  });
+});
+
+/**
+ * A reset link is the one thing in this system that has to be correct in a
+ * place nobody can check before sending: an e-mail, already gone. It is built
+ * from configuration rather than from the request, so these pin the building.
+ */
+describe('the reset link is an address, whatever the environment says', () => {
+  async function linkFrom(env: Record<string, string | undefined>): Promise<string> {
+    const { service, sent } = harness({ usersByEmail: [userRow()], env });
+    await service.requestReset('teacher@example.com');
+    const match = sent[0].text.match(/https?:\/\/\S+/);
+    return match ? match[0] : '';
+  }
+
+  it('uses the website address when one is set', async () => {
+    expect(await linkFrom({ WEB_BASE_URL: 'https://learn.example.com' })).toContain(
+      'https://learn.example.com/reset-password?token=',
+    );
+  });
+
+  it('takes the first site when CORS_ORIGIN names several', async () => {
+    /*
+      This is the moving-day case, and the reason this test exists. During a
+      transfer CORS_ORIGIN legitimately holds both the new address and the old
+      one; used whole it produced a link beginning
+      "https://old.example, https://new.example/reset-password" — not an
+      address, and unclickable in every mail client.
+    */
+    const link = await linkFrom({
+      CORS_ORIGIN: 'https://new.example, https://old.example',
+    });
+
+    expect(link.startsWith('https://new.example/reset-password?token=')).toBe(true);
+    expect(link).not.toContain(',');
+    expect(link).not.toContain('old.example');
+  });
+
+  it('does not double the slash when an address ends in one', async () => {
+    const link = await linkFrom({ CORS_ORIGIN: 'https://new.example/' });
+    expect(link).toContain('https://new.example/reset-password?token=');
+  });
+
+  it('falls back to localhost when nothing is configured', async () => {
+    expect(await linkFrom({})).toContain('http://localhost:3000/reset-password?token=');
+  });
+
+  it('falls back to localhost when the value is blank', async () => {
+    // An empty environment variable is set, so `??` does not catch it.
+    expect(await linkFrom({ CORS_ORIGIN: '  ' })).toContain('http://localhost:3000/');
   });
 });

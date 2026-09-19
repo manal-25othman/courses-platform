@@ -183,12 +183,22 @@ export class RecoveryService {
     });
   }
 
-  /** Where the reset link points. The website, not this API. */
+  /**
+   * Where the reset link points. The website, not this API.
+   *
+   * `CORS_ORIGIN` is a fallback and may now name several sites at once — it
+   * does exactly that while a deployment is being moved from one address to
+   * another, which is when a broken reset link would hurt most. A list is not
+   * an address, so only the first entry is taken: the site being moved to is
+   * written first, and the old one keeps working because CORS still allows it.
+   * Setting `WEB_BASE_URL` skips all of this and is what production should do.
+   */
   private webBase(): string {
-    return (
-      this.config.get<string>('WEB_BASE_URL') ??
-      this.config.get<string>('CORS_ORIGIN') ??
-      'http://localhost:3000'
-    );
+    const configured =
+      this.config.get<string>('WEB_BASE_URL') ?? this.config.get<string>('CORS_ORIGIN') ?? '';
+
+    const first = configured.split(',')[0].trim().replace(/\/+$/, '');
+
+    return first.length > 0 ? first : 'http://localhost:3000';
   }
 }
