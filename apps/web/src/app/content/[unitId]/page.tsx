@@ -8,6 +8,7 @@ import {
   apiUrl,
   AssessmentRules,
   CurriculumOverview,
+  GameReadiness,
   homeFor,
   Me,
   PresentedQuestion,
@@ -285,6 +286,7 @@ export default function UnitPage() {
         */}
         {tab === 'activities' && (
           <>
+            <AdventureReadiness unitId={unit.id} />
             <StudentPreview unitId={unit.id} purpose="ACTIVITY" />
             <QuestionList
               key="activities"
@@ -415,6 +417,84 @@ function TestRules({
  * no attempt, no answer, no progress — so a teacher can look as often as she
  * likes without touching a single student's results.
  */
+/**
+ * What a teacher's grammar questions are worth to Grammar Adventure.
+ *
+ * The game has no content of its own -- it plays the questions on this screen.
+ * Nothing said so, so a teacher who wanted the game for a unit had no way to
+ * learn what it needed, and one who already had enough never knew it was on.
+ *
+ * Two things are worth being explicit about, because neither is guessable from
+ * the editor: that these questions are what the game plays, and that a typed
+ * answer cannot become an obstacle in it. A teacher short by one is far more
+ * likely to have written a spelling question than to be short of work.
+ *
+ * It is quiet when there is nothing to say and never blocks anything: a failed
+ * read renders nothing rather than putting an error over a working editor.
+ */
+function AdventureReadiness({ unitId }: { unitId: string }) {
+  const [state, setState] = useState<GameReadiness | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    api
+      .get<GameReadiness>(`/content/units/${unitId}/game-readiness`)
+      .then((got) => {
+        if (live) setState(got);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [unitId]);
+
+  // Off for this school: there is no game to prepare for, so saying anything
+  // about it would only be a distraction.
+  if (!state || !state.gameActive) return null;
+
+  const short = state.minimum - state.usable;
+
+  return (
+    <section className="panel" data-testid="adventure-readiness">
+      <div className="panel-head">
+        <h2 className="panel-title">Grammar Adventure</h2>
+        <span className="panel-note" data-testid="adventure-state">
+          {state.ready ? 'Ready to play' : `Needs ${short} more`}
+        </span>
+      </div>
+      <div className="panel-body stack">
+        <p className="note-line">
+          {state.ready ? (
+            <>
+              Your grammar questions here are what students play in Grammar Adventure.{' '}
+              <strong>{state.usable}</strong> of them can be used, and it needs{' '}
+              {state.minimum}.
+            </>
+          ) : (
+            <>
+              Grammar Adventure plays the grammar questions on this page. It needs{' '}
+              <strong>{state.minimum}</strong>, and so far <strong>{state.usable}</strong> can be
+              used.
+            </>
+          )}
+        </p>
+
+        <p className="hint">
+          Only questions a student can answer by tapping count — ordering words, true or false,
+          and multiple choice tied to a grammar page. Ones she has to type an answer to are left
+          out, because typing is not a way through a world.
+        </p>
+
+        {state.ready && !state.unitPublished && (
+          <p className="note-line" data-testid="adventure-draft">
+            Students will reach it once this unit is published.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function StudentPreview({
   unitId,
   purpose,

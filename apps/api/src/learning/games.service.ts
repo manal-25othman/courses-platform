@@ -13,6 +13,9 @@ import {
   isEligible,
   planAdventure,
 } from './grammar-adventure';
+
+/** The registry row Grammar Adventure is listed under. */
+const ADVENTURE_KEY = 'grammar_adventure';
 import { AdventureAnswer, AdventureRound, BonusGame, BonusGameRound } from './learning.types';
 
 /**
@@ -115,6 +118,74 @@ export class GamesService {
           contentPool: type.contentPool,
         };
       });
+    });
+  }
+
+  /**
+   * Whether Grammar Adventure would run for this unit, for the teacher who
+   * writes its questions.
+   *
+   * A teacher authoring grammar questions is already doing the thing that
+   * switches this game on -- the game has no content of its own and reads the
+   * unit's published grammar activities. Nothing said so, so a teacher who
+   * wanted the game for a unit had no way to find out what was missing, and a
+   * teacher who already had enough had no way to know it was on.
+   *
+   * The count deliberately goes through `adventureSources`, the same method a
+   * round is built from, rather than a `count` with the same filters written a
+   * second time. Eligibility is not a where-clause: a kind has to be permitted
+   * by a setting, and the engine has to be able to present it. A second
+   * implementation would agree today and drift the first time either changes,
+   * and a screen that says "ready" over a game that says "not enough yet" is
+   * worse than no screen at all.
+   *
+   * Unlike the student's listing this does not require the unit to be
+   * published -- a teacher preparing a draft is exactly who needs the answer.
+   * Whether it is published is returned instead, because it is the other half
+   * of "will my students see this".
+   */
+  async adventureReadiness(
+    actor: CurrentUser,
+    unitId: string,
+  ): Promise<{
+    usable: number;
+    minimum: number;
+    ready: boolean;
+    unitPublished: boolean;
+    gameActive: boolean;
+  }> {
+    const schoolId = this.schoolOf(actor);
+
+    return this.prisma.forSchool(schoolId, async (tx) => {
+      // Named against this school's own course, so a unit belonging to another
+      // school is "not found" here exactly as it is everywhere else.
+      const unit = await tx.unit.findFirst({
+        where: { id: unitId, course: { ownerSchoolId: schoolId } },
+        select: { status: true },
+      });
+      if (!unit) throw new NotFoundException('Unit not found.');
+
+      const [type, sources] = await Promise.all([
+        tx.bonusGameType.findUnique({
+          where: { key: ADVENTURE_KEY },
+          select: { minimumItems: true, isActive: true },
+        }),
+        this.adventureSources(tx, unitId),
+      ]);
+
+      // No registry row means the game is not installed on this deployment.
+      // That is not an error for a teacher looking at a unit; it is simply off,
+      // and the constant is the honest floor to report against.
+      const minimum = type?.minimumItems ?? MINIMUM_CHECKPOINTS;
+      const gameActive = type?.isActive ?? false;
+
+      return {
+        usable: sources.length,
+        minimum,
+        ready: gameActive && sources.length >= minimum,
+        unitPublished: unit.status === ContentStatus.PUBLISHED,
+        gameActive,
+      };
     });
   }
 

@@ -17,6 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CurrentUser as Actor } from '../auth/auth.types';
 import { ContentService } from './content.service';
+import { GamesService } from '../learning/games.service';
 import {
   CreateSectionDto,
   CreateUnitDto,
@@ -40,7 +41,11 @@ const EVERYONE = [UserRole.TEACHER, UserRole.ADMIN, UserRole.STUDENT];
  */
 @Controller('content')
 export class ContentController {
-  constructor(private readonly content: ContentService) {}
+  constructor(
+    private readonly content: ContentService,
+    /** Borrowed, so the game reports its own readiness. */
+    private readonly games: GamesService,
+  ) {}
 
   /** The kinds of section this curriculum uses. */
   @Roles(...EVERYONE)
@@ -74,6 +79,18 @@ export class ContentController {
   @Get('units/:id/assessment-rules')
   async assessmentRules(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
     return this.content.assessmentRules(actor, id);
+  }
+
+  /**
+   * Whether this unit's grammar questions are enough for Grammar Adventure.
+   *
+   * Teacher-only, and answered by the game itself rather than by this service,
+   * so the number here is the number the game plays with.
+   */
+  @Roles(...TEACHER)
+  @Get('units/:id/game-readiness')
+  async gameReadiness(@CurrentUser() actor: Actor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.games.adventureReadiness(actor, id);
   }
 
   @Roles(...EVERYONE)

@@ -9,6 +9,6 @@ import { SettingsModule } from '../settings/settings.module';
   imports: [QuestionsModule, SettingsModule],
   controllers: [LearningController],
   providers: [LearningService, GamesService],
-  exports: [LearningService],
+  exports: [LearningService, GamesService],
 })
 export class LearningModule {}

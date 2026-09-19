@@ -39,9 +39,38 @@ const published = (id: string, en: string, ar: string | null): Word => ({
 const GAME_TYPES = [
   { key: 'memory_match', displayName: 'Memory Match', description: 'd', contentPool: 'vocabulary', minimumItems: 6, isActive: true, orderIndex: 1 },
   { key: 'quick_match', displayName: 'Quick Match', description: 'd', contentPool: 'vocabulary', minimumItems: 4, isActive: true, orderIndex: 2 },
+  { key: 'grammar_adventure', displayName: 'Grammar Adventure', description: 'd', contentPool: 'grammar_questions', minimumItems: 3, isActive: true, orderIndex: 3 },
 ];
 
-function serviceOver(words: Word[], unitPublished = true) {
+type QRow = {
+  id: string;
+  typeKey: string;
+  prompt: string;
+  payload: Record<string, unknown>;
+  points: number;
+  orderIndex: number;
+  section: { type: { progressComponent: string } } | null;
+};
+
+/** A grammar question of a kind a thumb can answer, which is what the game takes. */
+const ordering = (id: string, over: Partial<QRow> = {}): QRow => ({
+  id,
+  typeKey: 'word_ordering',
+  prompt: 'Order the words to make a sentence',
+  payload: {
+    tokens: [
+      { id: 't1', text: 'She' },
+      { id: 't2', text: 'goes' },
+      { id: 't3', text: 'home' },
+    ],
+  },
+  points: 1,
+  orderIndex: 0,
+  section: { type: { progressComponent: 'grammar' } },
+  ...over,
+});
+
+function serviceOver(words: Word[], unitPublished = true, questions: QRow[] = []) {
   /** Any write is a failure, so the fakes for them throw rather than record. */
   const refuse = (what: string) => () => {
     throw new Error(`a bonus game must not write: ${what}`);
@@ -49,7 +78,15 @@ function serviceOver(words: Word[], unitPublished = true) {
 
   const tx = {
     unit: {
-      findFirst: async () => (unitPublished ? { id: 'u1' } : null),
+      // The student's paths ask for a published unit and get nothing when it
+      // is not; the teacher's readiness read asks regardless and is told which.
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        'status' in where && !unitPublished
+          ? null
+          : {
+              id: 'u1',
+              status: unitPublished ? ContentStatus.PUBLISHED : ContentStatus.DRAFT,
+            },
     },
     vocabularyItem: {
       findMany: async () => words.filter((w) => w.status === ContentStatus.PUBLISHED),
@@ -58,6 +95,8 @@ function serviceOver(words: Word[], unitPublished = true) {
     },
     bonusGameType: {
       findMany: async () => GAME_TYPES,
+      findUnique: async ({ where }: { where: { key: string } }) =>
+        GAME_TYPES.find((t) => t.key === where.key) ?? null,
       findFirst: async ({ where }: { where: { key: string } }) =>
         GAME_TYPES.find((t) => t.key === where.key) ?? null,
     },
@@ -72,7 +111,7 @@ function serviceOver(words: Word[], unitPublished = true) {
     // Grammar Adventure reads questions; this harness holds none unless a
     // test supplies them, and writing one is refused like every other write.
     question: {
-      findMany: async () => [],
+      findMany: async () => questions,
       findFirst: async () => null,
       create: refuse('question.create'),
       update: refuse('question.update'),
@@ -98,7 +137,7 @@ const SIX = [
 describe('bonus games record nothing', () => {
   it('lists games without writing anything', async () => {
     const games = await serviceOver(SIX).listForUnit(student, 'u1');
-    expect(games.map((g) => g.key)).toEqual(['memory_match', 'quick_match']);
+    expect(games.map((g) => g.key)).toEqual(['memory_match', 'quick_match', 'grammar_adventure']);
   });
 
   it('plays a memory round without writing anything', async () => {
@@ -169,5 +208,102 @@ describe('bonus games see only what a student may see', () => {
     await expect(
       serviceOver(SIX.slice(0, 4)).round(student, 'u1', 'memory_match'),
     ).rejects.toThrow(/enough words/i);
+  });
+});
+
+/**
+ * What the teacher is told about Grammar Adventure.
+ *
+ * The game has no content of its own: it plays the unit's published grammar
+ * activities, so a teacher writing those questions is the person who switches
+ * it on. Until this read existed she was never told so, and had no way to see
+ * what a unit was short of.
+ *
+ * The danger in adding it is a second opinion. A CMS that counts questions its
+ * own way will agree with the game on the day it is written and disagree the
+ * first time eligibility changes -- and "ready" over a game that says "not
+ * enough yet" is worse than saying nothing. So the first test here is not
+ * about a number; it is that the number is the game's own.
+ */
+describe('the teacher is told what Grammar Adventure has to play with', () => {
+  const teacher: CurrentUser = {
+    sub: 't1',
+    userId: 't1',
+    role: UserRole.TEACHER,
+    schoolId: 'school-1',
+    mustChangePassword: false,
+  };
+
+  const four = [ordering('q1'), ordering('q2'), ordering('q3'), ordering('q4')];
+
+  it('counts exactly what a round would be built from', async () => {
+    /*
+      The point of the whole read. A mix the game accepts in part: spelling is
+      typed, so a thumb cannot answer it and the game leaves it out. If this
+      count were written separately it would say five.
+    */
+    const mixed = [
+      ordering('q1'),
+      ordering('q2', { typeKey: 'spelling', payload: { mediaId: 'm1' } }),
+      ordering('q3'),
+      ordering('q4', { typeKey: 'grammar_transformation' }),
+      ordering('q5'),
+    ];
+    const service = serviceOver(SIX, true, mixed);
+
+    const readiness = await service.adventureReadiness(teacher, 'u1');
+    const round = await service.adventureRound(student, 'u1');
+
+    expect(readiness.usable).toBe(3);
+    expect(readiness.usable).toBe(round.checkpoints.length);
+  });
+
+  it('says a unit is ready once it has the minimum', async () => {
+    const readiness = await serviceOver(SIX, true, four).adventureReadiness(teacher, 'u1');
+    expect(readiness).toMatchObject({ usable: 4, minimum: 3, ready: true });
+  });
+
+  it('says a unit is short, and by how much, rather than hiding the game', async () => {
+    // Two questions is the case a teacher actually hits, and the one she can
+    // do something about -- if she is told the target.
+    const readiness = await serviceOver(SIX, true, [ordering('q1'), ordering('q2')])
+      .adventureReadiness(teacher, 'u1');
+
+    expect(readiness).toMatchObject({ usable: 2, minimum: 3, ready: false });
+  });
+
+  it('answers for a draft unit, and says it is a draft', async () => {
+    // A teacher preparing a unit is exactly who needs this, so unlike the
+    // student's listing it does not insist on a published unit.
+    const readiness = await serviceOver(SIX, false, four).adventureReadiness(teacher, 'u1');
+
+    expect(readiness).toMatchObject({ usable: 4, ready: true, unitPublished: false });
+  });
+
+  it('is not ready when the game itself is switched off', async () => {
+    const service = serviceOver(SIX, true, four);
+    const off = GAME_TYPES.find((t) => t.key === 'grammar_adventure')!;
+    off.isActive = false;
+    try {
+      const readiness = await service.adventureReadiness(teacher, 'u1');
+      // Enough questions, but nothing to play them in. Saying "ready" here
+      // would send a teacher looking for a game her students cannot see.
+      expect(readiness).toMatchObject({ usable: 4, ready: false, gameActive: false });
+    } finally {
+      off.isActive = true;
+    }
+  });
+
+  it('writes nothing, like every other game path', async () => {
+    // The harness throws on any write, so reaching the end is the assertion.
+    await expect(
+      serviceOver(SIX, true, four).adventureReadiness(teacher, 'u1'),
+    ).resolves.toMatchObject({ ready: true });
+  });
+
+  it('refuses an account with no school', async () => {
+    await expect(
+      serviceOver(SIX, true, four).adventureReadiness({ ...teacher, schoolId: null }, 'u1'),
+    ).rejects.toThrow(/not attached to a school/i);
   });
 });

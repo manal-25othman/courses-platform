@@ -336,6 +336,21 @@ export interface AssessmentRules {
   resultPolicy: string;
 }
 
+/**
+ * Whether a unit's grammar questions are enough for Grammar Adventure.
+ *
+ * Counted by the game rather than by the CMS, so `usable` is the number of
+ * challenges a round would actually be built from -- not the number of grammar
+ * questions the unit holds.
+ */
+export interface GameReadiness {
+  usable: number;
+  minimum: number;
+  ready: boolean;
+  unitPublished: boolean;
+  gameActive: boolean;
+}
+
 /** Where a signed-in user belongs, by role. */
 // --- The school office (Phase: School Admin) -------------------------------
 
