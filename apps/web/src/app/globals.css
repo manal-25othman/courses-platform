@@ -2872,13 +2872,10 @@ body:has(.world) { background: #F2EDFF; }
 .pw-eye[aria-pressed='true'] { color: var(--brand); }
 
 /* --- The way in ----------------------------------------------------------
-   The page is the meadow. The field is a full-bleed layer behind everything;
-   Lina stands on the road at the size of a character; and the form rests on a
-   translucent surface so the field shows through it rather than being covered
-   by it.
-
-   Built from tokens already in this file, plus the place's own three tints,
-   which `themeVars(PLACES.meadow)` puts on the <main>.
+   One composition, read in one sweep: Lina at the head of the road, the road
+   climbing to the right, and the way in at the top of its climb. The words
+   belong to the form, not to the picture -- split across the page they read
+   as a caption.
 */
 .signin {
   position: relative;
@@ -2889,7 +2886,6 @@ body:has(.world) { background: #F2EDFF; }
   background: var(--w3);
 }
 
-/* The field, edge to edge, behind the content and out of the way of it. */
 .trailhead {
   position: absolute;
   inset: 0;
@@ -2903,124 +2899,111 @@ body:has(.world) { background: #F2EDFF; }
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 76rem;
+  max-width: 74rem;
   margin: 0 auto;
-  padding: clamp(var(--s4), 3vw, var(--s6)) clamp(var(--s4), 4vw, var(--s7));
+  padding: clamp(var(--s4), 3vw, var(--s6)) clamp(var(--s5), 5vw, var(--s8));
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: var(--s5);
+  gap: var(--s4);
 }
 
-/* The mark sits in the scene, where the app's own bar carries it. */
 .signin-brand .brandmark .mark { width: 2.5rem; height: 2.5rem; border-radius: 13px; }
 .signin-brand .brandmark .name { font-size: 1.15rem; }
 
 .signin-middle { display: grid; align-items: center; gap: var(--s5); }
 
-/* --- her side ----------------------------------------------------------- */
-.signin-left { display: grid; justify-items: start; gap: var(--s4); }
+/* --- words and form: one block ------------------------------------------ */
+.signin-entry { display: grid; gap: var(--s4); }
+.signin-words { display: grid; gap: var(--s2); }
 
-/* The eyebrow every unit banner carries: the place, in the place's colour. */
-.signin-where {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  margin: 0;
-  color: var(--w1);
-  font-size: var(--fs-small);
-  font-weight: 700;
-  letter-spacing: .005em;
-}
-.signin-where .ico { color: var(--w1); }
-
-/* Fraunces at the size the product uses it, not at hero-banner size. */
 .signin-title {
   font-family: var(--font-display);
-  font-size: clamp(1.9rem, 1.4rem + 1.5vw, 2.6rem);
-  line-height: 1.1;
+  font-size: clamp(1.7rem, 1.3rem + 1.3vw, 2.25rem);
+  line-height: 1.12;
   margin: 0;
   color: var(--ink);
+  max-width: 17ch;
 }
-.signin-sub {
-  margin: 0;
-  color: var(--ink-2);
-  font-size: 1rem;
-  max-width: 30ch;
-}
+.signin-sub { margin: 0; color: var(--ink-2); font-size: 1rem; max-width: 34ch; }
 
+/* --- Lina ---------------------------------------------------------------- */
 /*
-  Big enough to be a person. She stands on the road's wide end, so the eye
-  goes her -> road -> away, which is the whole idea of the page.
+  The largest thing on the page after the field itself. She is the subject;
+  the road leaves her feet and the panel is where it arrives.
 */
 .signin-girl {
-  width: clamp(9rem, 20vw, 15rem);
-  filter: drop-shadow(0 18px 24px rgb(27 23 57 / .16));
+  width: clamp(11rem, 19vw, 16rem);
+  justify-self: center;
+  filter: drop-shadow(0 26px 30px rgb(27 23 57 / .18));
 }
 
 /* --- the panel ----------------------------------------------------------- */
 /*
-  Not a white card. A pane of the same paper the product's cards are made of,
-  thinned so the field reads through it, with a highlight along the top edge
-  the way glass catches light.
+  Paper thin enough for the field to show through, opaque enough to read a
+  password on without thinking about it. 86% is where that settled: at 74 the
+  hills showed through the labels.
 */
 .signin-panel {
   position: relative;
-  border-radius: var(--r-lg);
-  padding: clamp(var(--s4), 2.4vw, var(--s6));
-  background: rgb(255 255 255 / .74);
-  backdrop-filter: blur(18px) saturate(1.15);
-  -webkit-backdrop-filter: blur(18px) saturate(1.15);
-  border: 1px solid rgb(255 255 255 / .85);
+  border-radius: 22px;
+  padding: clamp(var(--s5), 2.2vw, var(--s6));
+  background: rgb(255 255 255 / .86);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  border: 1px solid rgb(255 255 255 / .9);
   box-shadow:
-    0 1px 0 rgb(255 255 255 / .9) inset,
-    0 24px 48px -20px rgb(27 23 57 / .28),
-    0 4px 12px -6px rgb(27 23 57 / .14);
+    0 1px 0 rgb(255 255 255 / .95) inset,
+    0 30px 60px -28px rgb(27 23 57 / .34),
+    0 6px 16px -8px rgb(27 23 57 / .16);
 }
-/*
-  Where a browser cannot blur, transparency alone would leave the form sitting
-  on grass. It gets opaque paper instead: less lovely, still legible.
-*/
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .signin-panel { background: rgb(255 255 255 / .96); }
+  .signin-panel { background: rgb(255 255 255 / .97); }
 }
 
-.signin-heading { font-family: var(--font-display); font-size: 1.5rem; margin: 0 0 var(--s1); }
-.signin-panel .muted { font-size: var(--fs-small); }
+/* A quieter heading: the h1 above it already said where you are. */
+.signin-heading {
+  font-family: var(--font-ui);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 var(--s1);
+}
+.signin-panel > .muted { font-size: var(--fs-small); margin: 0 0 var(--s3); }
+.signin-panel label { margin-top: var(--s3); }
+.signin-panel label:first-of-type { margin-top: 0; }
 
-/*
-  The inputs are the product's, thinned to match the pane: paper rather than
-  flat white, and a border that is felt more than seen until it is focused.
-*/
 .signin-panel input {
-  background: rgb(255 255 255 / .78);
-  border-color: rgb(214 205 240 / .9);
+  background: rgb(255 255 255 / .82);
+  border-color: rgb(205 194 236 / .95);
+  border-radius: 12px;
 }
 .signin-panel input:focus { background: var(--surface); }
 
-.signin-go { width: 100%; margin-top: var(--s5); }
-.signin-help { margin-top: var(--s4); font-size: var(--fs-small); }
-.signin-waiting { min-height: 21rem; }
+.signin-go { width: 100%; margin-top: var(--s4); border-radius: 12px; }
+.signin-help { margin-top: var(--s4); font-size: var(--fs-small); line-height: 1.55; }
+.signin-waiting { min-height: 19rem; }
 
-/* --- desktop: she is on the left of the road, the pane to its right ------ */
+/* --- desktop ------------------------------------------------------------- */
 @media (min-width: 64rem) {
-  .signin-stage { position: relative; }
+  .signin-stage { grid-template-rows: auto 1fr; }
   .signin-middle {
-    grid-template-columns: 1.1fr minmax(20rem, 25rem);
-    gap: clamp(var(--s6), 6vw, var(--s8));
-    align-items: start;
-    padding-top: clamp(var(--s5), 9vh, var(--s8));
+    grid-template-columns: 1fr minmax(20rem, 24.5rem);
+    gap: clamp(var(--s5), 4vw, var(--s7));
+    align-items: center;
   }
-  .signin-left { gap: var(--s4); }
   /*
-    Taken out of the flow and anchored to the foot of the window, because the
-    thing that has to line up is her feet and the road -- and the road is
-    drawn from the bottom of a scene that is itself anchored there. In the
-    flow she stood on the hillside above it, which read as floating.
+    Nudged toward the road's head and down onto it: the drawing anchors to the
+    bottom of the window, so she has to as well or she stands on the hillside
+    above the path.
   */
   .signin-girl {
-    position: absolute;
-    left: clamp(2rem, 6vw, 6rem);
-    bottom: 15%;
-    width: clamp(11rem, 17vw, 16rem);
+    align-self: end;
+    justify-self: start;
+    margin-left: clamp(1rem, 7vw, 7rem);
+    margin-bottom: clamp(2rem, 16vh, 10rem);
   }
+  /* Lifted, so the climbing road arrives at the panel's foot. */
+  .signin-entry { align-self: center; margin-bottom: clamp(1rem, 6vh, 4rem); }
 }

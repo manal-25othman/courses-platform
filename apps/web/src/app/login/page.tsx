@@ -7,7 +7,6 @@ import { Brandmark } from '@/components/Shell';
 import { PasswordField } from '@/components/PasswordField';
 import { Girl } from '@/components/world/Girl';
 import { Trailhead } from '@/components/world/Trailhead';
-import { Glyph } from '@/components/world/Scene';
 import { PLACES, themeVars } from '@/lib/world';
 
 /**
@@ -32,12 +31,7 @@ import { PLACES, themeVars } from '@/lib/world';
 function Welcome() {
   return (
     <div className="signin-words">
-      {/* The eyebrow every unit banner carries: the place, in its colour. */}
-      <p className="signin-where">
-        <Glyph kind="meadow" size={18} />
-        Your English journey
-      </p>
-      <h1 className="signin-title">Starts here</h1>
+      <h1 className="signin-title">Your English journey starts here</h1>
       <p className="signin-sub">Learn, practise, and grow with TOP GOAL.</p>
     </div>
   );
@@ -170,12 +164,16 @@ function Stage({ children }: { children: React.ReactNode }) {
         </header>
 
         <div className="signin-middle">
-          <div className="signin-left">
+          {/* She stands at the head of the road, and the road goes to the
+              panel -- so the eye travels her, then it, then the way in. */}
+          <Girl who="lina" pose="wave" mood="bright" className="girl signin-girl" />
+
+          {/* Words and form are one block. Split across the page they read as
+              a caption for a picture rather than as an invitation to sign in. */}
+          <div className="signin-entry">
             <Welcome />
-            {/* She stands on the road, at the end you start from. */}
-            <Girl who="lina" pose="wave" mood="bright" className="girl signin-girl" />
+            {children}
           </div>
-          {children}
         </div>
       </div>
     </main>

@@ -62,36 +62,36 @@ export function Trailhead() {
       <defs>
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="var(--w3)" />
-          <stop offset="0.72" stopColor="#FFFFFF" />
+          <stop offset="0.6" stopColor="#FFFFFF" />
         </linearGradient>
       </defs>
 
       {/* High and left of the panel, so nothing covers it. */}
-      <circle cx="742" cy="112" r="58" fill={SUN_SOFT} opacity=".5" />
-      <circle cx="742" cy="112" r="34" fill={SUN} opacity=".92" />
+      <circle cx="676" cy="92" r="52" fill={SUN_SOFT} opacity=".5" />
+      <circle cx="676" cy="92" r="31" fill={SUN} opacity=".92" />
 
-      <Cloud x={286} y={92} s={1.9} o={0.7} />
-      <Cloud x={452} y={72} s={1.35} o={0.55} />
-      <Cloud x={906} y={168} s={1.5} o={0.42} />
+      <Cloud x={214} y={74} s={1.7} o={0.65} />
+      <Cloud x={868} y={62} s={1.25} o={0.5} />
+      <Cloud x={1004} y={150} s={1.35} o={0.36} />
 
       {/* Far hills, lightest tint: distance as haze. Drawn to 1220 on both
           sides so no edge of the window can ever show through. */}
       <path
-        d="M-20 470C120 402 268 386 392 418c120 31 232 22 336-24 86-38 180-42 272-16
+        d="M-20 372C120 306 268 290 392 322c120 31 232 22 336-24 86-38 180-42 272-16
            68 19 148 26 240 22V780H-20Z"
         fill="var(--w3)"
       />
 
       {/* Middle hills. */}
       <path
-        d="M-20 556C130 498 288 492 414 538c110 40 224 30 338-26 92-45 192-46 288-12
+        d="M-20 462C130 406 288 400 414 446c110 40 224 30 338-26 92-45 192-46 288-12
            62 22 120 32 180 32V780H-20Z"
         fill="var(--w2)"
       />
 
       {/* One tree, built the way every tree in this world is built, set in the
           middle distance where the eye passes between Lina and the panel. */}
-      <g transform="translate(560 398) scale(.82)">
+      <g transform="translate(486 306) scale(.7)">
         <rect x="-9" y="66" width="19" height="86" rx="9" fill="#8A6244" />
         <circle cx="0" cy="50" r="54" fill="var(--w1)" />
         <circle cx="-44" cy="76" r="35" fill="var(--w1)" />
@@ -104,8 +104,8 @@ export function Trailhead() {
       {/* Full width, explicitly: the first version ran out of curve at x=1020
           and left a white rectangle in the corner of the window. */}
       <path
-        d="M-20 648C140 610 300 616 432 658c118 38 240 30 356-16 96-38 200-39 302-13
-           48 12 94 17 130 17V780H-20Z"
+        d="M-20 672C140 634 300 640 432 682c118 36 240 28 356-14 96-35 200-36 302-12
+           48 11 94 16 130 16V780H-20Z"
         fill="var(--w1)"
       />
 
@@ -116,12 +116,12 @@ export function Trailhead() {
         place she is about to enter.
       */}
       <path
-        d="M-20 780C10 690 140 622 300 590c170-34 366-52 594-58l146-4 0 34-144 4
-           c-224 6-416 24-582 56-158 30-268 78-314 158Z"
+        d="M-40 780C20 664 170 574 372 522c186-48 402-74 668-82l220-6 0 42-216 6
+           c-262 8-472 34-654 80-198 50-336 138-398 240Z"
         fill="var(--w2)"
       />
       <path
-        d="M-14 742C22 664 152 612 306 586c168-28 362-46 588-52l152-4"
+        d="M-30 762C30 656 180 570 380 519c186-47 400-73 664-81l224-6"
         stroke={PAPER}
         strokeWidth="6"
         strokeDasharray="10 16"
@@ -131,17 +131,17 @@ export function Trailhead() {
       />
 
       {/* Flowers along the near edge, thinning with distance. */}
-      <Flower x={62} y={648} s={1.05} />
-      <Flower x={214} y={690} s={1.2} />
-      <Flower x={412} y={664} s={.86} />
-      <Flower x={628} y={640} s={.74} />
-      <Flower x={858} y={622} s={.64} />
-      <Flower x={1074} y={648} s={.72} />
+      <Flower x={110} y={716} s={1.1} />
+      <Flower x={246} y={652} s={.95} />
+      <Flower x={470} y={596} s={.76} />
+      <Flower x={706} y={556} s={.62} />
+      <Flower x={942} y={534} s={.52} />
+      <Flower x={1136} y={560} s={.6} />
 
-      {[186, 640, 880, 1060].map((x, i) => (
+      {[150, 560, 830, 1064].map((x, i) => (
         <path
           key={x}
-          d={`M${x} ${702 - i * 18}c-3-20 2-33 9-42M${x + 13} ${702 - i * 18}c-2-17 0-28 5-34`}
+          d={`M${x} ${730 - i * 46}c-3-20 2-33 9-42M${x + 13} ${730 - i * 46}c-2-17 0-28 5-34`}
           stroke={LEAF}
           strokeWidth="4.5"
           fill="none"
@@ -151,7 +151,7 @@ export function Trailhead() {
       ))}
 
       {/* Two butterflies, on the class the rest of the world flits with. */}
-      <g transform="translate(398 318) scale(1.35)">
+      <g transform="translate(330 226) scale(1.2)">
         <g className="w-flit">
           <ellipse cx="-8" cy="-4" rx="8" ry="6" fill={CORAL} />
           <ellipse cx="8" cy="-4" rx="8" ry="6" fill={CORAL} />
@@ -161,7 +161,7 @@ export function Trailhead() {
           <path d="M-2-9c-3-4-6-6-9-7M2-9c3-4 6-6 9-7" stroke={INK} strokeWidth="1.4" fill="none" strokeLinecap="round" />
         </g>
       </g>
-      <g transform="translate(646 262) scale(.95)">
+      <g transform="translate(566 170) scale(.85)">
         <g className="w-flit w-flit-2">
           <ellipse cx="-8" cy="-4" rx="8" ry="6" fill={SUN} />
           <ellipse cx="8" cy="-4" rx="8" ry="6" fill={SUN} />
