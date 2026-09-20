@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, FormEvent } from 'react';
 import { api, ApiError, homeFor, Me } from '@/lib/api';
 import { Brandmark } from '@/components/Shell';
+import { PasswordField } from '@/components/PasswordField';
 
 function LoginForm() {
   const router = useRouter();
@@ -87,14 +88,14 @@ function LoginForm() {
             required
           />
 
-          <label htmlFor="password">Password</label>
-          <input
+          <PasswordField
             id="password"
-            type="password"
+            label="Password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={setPassword}
             autoComplete="current-password"
             required
+            testId="login-password"
           />
 
           {error && (

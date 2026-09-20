@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import { PrismaService, TenantClient } from '../prisma/prisma.service';
+import { storedUsername } from '../common/username';
 import { PasswordService } from '../auth/password.service';
 import { TokenService } from '../auth/token.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
@@ -172,7 +173,7 @@ export class StudentsService {
         data: {
           schoolId,
           role: UserRole.STUDENT,
-          username: dto.username,
+          username: storedUsername(dto.username),
           email: dto.email ?? null,
           passwordHash,
           // A password the teacher chose is temporary; the student sets her own
@@ -210,7 +211,7 @@ export class StudentsService {
       const updated = await tx.user.update({
         where: { id: student.id },
         data: {
-          ...(dto.username ? { username: dto.username } : {}),
+          ...(dto.username ? { username: storedUsername(dto.username) } : {}),
           // An empty string clears the address, since email is optional.
           ...(dto.email !== undefined ? { email: dto.email || null } : {}),
           ...(dto.fullName ? { studentProfile: { update: { fullName: dto.fullName } } } : {}),
@@ -381,8 +382,22 @@ export class StudentsService {
     username: string,
     exceptUserId?: string,
   ): Promise<void> {
+    /*
+      Compared without regard to case, so "Sara" cannot be created alongside
+      an existing "sara". Two accounts a child could not tell apart is a
+      support call at best and the wrong girl's progress at worst.
+
+      This is the friendly half of the rule. The database holds the same one
+      as a unique index, which is what makes it true under a race between two
+      administrators saving at the same moment -- a check-then-write cannot
+      promise that on its own.
+    */
     const clash = await tx.user.findFirst({
-      where: { schoolId, username, ...(exceptUserId ? { NOT: { id: exceptUserId } } : {}) },
+      where: {
+        schoolId,
+        username: { equals: storedUsername(username), mode: 'insensitive' },
+        ...(exceptUserId ? { NOT: { id: exceptUserId } } : {}),
+      },
     });
 
     if (clash) {

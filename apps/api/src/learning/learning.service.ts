@@ -92,6 +92,25 @@ function readExamples(config: unknown): string[] {
  *   and which result counts all come from the settings store (SRS 9, 19, 21,
  *   22).
  */
+/**
+ * A picture's details without the picture. See the same constant in
+ * ContentService for why: `data` is the file, JSON turns each byte into about
+ * twelve characters, and every screen renders from `url` instead. The student
+ * side matters more, not less -- she is on a school tablet.
+ */
+const MEDIA_WITHOUT_BYTES = {
+  id: true,
+  sectionId: true,
+  questionId: true,
+  vocabularyItemId: true,
+  url: true,
+  mimeType: true,
+  byteSize: true,
+  altText: true,
+  orderIndex: true,
+  createdAt: true,
+} as const;
+
 @Injectable()
 export class LearningService {
   constructor(
@@ -208,12 +227,12 @@ export class LearningService {
             type: { progressComponent: STUDENT_SECTION_COMPONENT },
           },
           orderBy: { orderIndex: 'asc' },
-          include: { type: true, media: true },
+          include: { type: true, media: { select: MEDIA_WITHOUT_BYTES } },
         }),
         tx.vocabularyItem.findMany({
           where: { unitId, status: ContentStatus.PUBLISHED },
           orderBy: { orderIndex: 'asc' },
-          include: { media: { orderBy: { orderIndex: 'asc' } } },
+          include: { media: { select: MEDIA_WITHOUT_BYTES, orderBy: { orderIndex: 'asc' } } },
         }),
         tx.question.count({
           where: {
@@ -493,7 +512,9 @@ export class LearningService {
       // Published only: progress cannot be recorded against a draft word.
       const item = await tx.vocabularyItem.findFirst({
         where: { id: itemId, status: ContentStatus.PUBLISHED },
-        include: { media: true },
+        // Only what the audio check reads. Loading the file to ask whether one
+        // exists costs a megabyte per recorded word.
+        include: { media: { select: MEDIA_WITHOUT_BYTES } },
       });
 
       if (!item) throw new NotFoundException('Word not found.');

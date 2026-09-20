@@ -42,6 +42,32 @@ function readExamples(config: unknown): string[] {
   return examples.filter((e): e is string => typeof e === 'string');
 }
 
+/**
+ * Every column of a picture except the picture.
+ *
+ * `data` holds the file itself, and Prisma's default include returns it. JSON
+ * has no way to say "bytes", so each one is serialised as `"12345":255` --
+ * about twelve characters for one byte. Two photographs in one unit, 1.1 MB on
+ * disk, arrived as a 13.6 MB response, and the editor sat on "Loading..." while
+ * a browser parsed it.
+ *
+ * Nothing wanted those bytes. `url` alongside them is this API's own route for
+ * the same file, which is what every screen actually renders -- so the payload
+ * was the whole picture, twice, in the more expensive of the two forms.
+ */
+const MEDIA_WITHOUT_BYTES = {
+  id: true,
+  sectionId: true,
+  questionId: true,
+  vocabularyItemId: true,
+  url: true,
+  mimeType: true,
+  byteSize: true,
+  altText: true,
+  orderIndex: true,
+  createdAt: true,
+} as const;
+
 @Injectable()
 export class ContentService {
   constructor(
@@ -344,12 +370,12 @@ export class ContentService {
           sections: {
             where: { status: { in: statuses } },
             orderBy: { orderIndex: 'asc' },
-            include: { type: true, media: { orderBy: { orderIndex: 'asc' } } },
+            include: { type: true, media: { select: MEDIA_WITHOUT_BYTES, orderBy: { orderIndex: 'asc' } } },
           },
           vocabularyItems: {
             where: { status: { in: statuses } },
             orderBy: { orderIndex: 'asc' },
-            include: { media: { orderBy: { orderIndex: 'asc' } } },
+            include: { media: { select: MEDIA_WITHOUT_BYTES, orderBy: { orderIndex: 'asc' } } },
           },
         },
       });
@@ -575,7 +601,7 @@ export class ContentService {
           ...(dto.needsReview !== undefined ? { needsReview: dto.needsReview } : {}),
           ...(dto.orderIndex !== undefined ? { orderIndex: dto.orderIndex } : {}),
         },
-        include: { type: true, media: { orderBy: { orderIndex: 'asc' } } },
+        include: { type: true, media: { select: MEDIA_WITHOUT_BYTES, orderBy: { orderIndex: 'asc' } } },
       });
     });
   }

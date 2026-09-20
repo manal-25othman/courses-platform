@@ -14,14 +14,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'apply = CHANGE the database. check = look only, changes nothing. runtime = prove the API can connect.'
+        description: 'apply = CHANGE the database. check = look only. runtime = prove the API can connect. usernames = list names that differ only in capitals, changes nothing.'
         required: true
         # check is the safe default, and it now FAILS when production is behind
         # rather than reporting success — a green read-only run that had found
         # an unapplied migration is how a shipped game stayed invisible.
         default: check
         type: choice
-        options: [check, runtime, apply]
+        options: [check, runtime, usernames, apply]
       confirm:
         description: 'For apply only: type APPLY to confirm. Ignored for check — and setting it does NOT switch the mode.'
         required: false
@@ -94,7 +94,7 @@ jobs:
       # The script does the guarding and the checking. It refuses a local or
       # development database, never prints the connection string, and makes
       # fifteen assertions about the result rather than reporting success.
-      - name: ${{ inputs.mode == 'apply' && 'Apply migrations and verify' || 'Read-only check' }}
+      - name: ${{ inputs.mode == 'apply' && 'Apply migrations and verify' || (inputs.mode == 'usernames' && 'Look for username collisions' || 'Read-only check') }}
         if: inputs.mode != 'runtime'
         env:
           DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}

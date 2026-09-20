@@ -2838,3 +2838,35 @@ body:has(.world) { background: #F2EDFF; }
   .idle-card { padding: var(--s5) var(--s4) var(--s4); }
   .idle-row > button { flex: 1 1 100%; }
 }
+
+/* --- Password field with a reveal ---------------------------------------
+   The button sits inside the box rather than beside it, so the field keeps
+   the same width and rhythm as every other input on the form. Logical
+   properties throughout: the teacher's screens are English today, and an
+   Arabic interface would otherwise put the eye over the caret.
+*/
+.pw-wrap { position: relative; display: block; }
+/* Room for the button, so a long password never runs underneath it. */
+.pw-wrap input { padding-inline-end: 3rem; }
+.pw-eye {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  /* 2.75rem = 44px, the smallest target a child's thumb hits reliably, and
+     the same figure every other control on a form uses. */
+  width: 2.75rem;
+  min-height: 2.75rem;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.pw-eye:hover { color: var(--ink); background: none; }
+.pw-eye:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; color: var(--ink); }
+/* Pressed means the password is showing — worth a colour, not just an icon. */
+.pw-eye[aria-pressed='true'] { color: var(--brand); }

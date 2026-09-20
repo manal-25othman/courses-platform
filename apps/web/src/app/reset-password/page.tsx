@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
+import { PasswordField } from '@/components/PasswordField';
 
 /**
  * Choosing a new password from a link.
@@ -62,26 +63,25 @@ function ResetForm() {
         <p className="muted">At least 8 characters.</p>
 
         <form onSubmit={submit} noValidate>
-          <label htmlFor="password">New password</label>
-          <input
+          <PasswordField
             id="password"
-            type="password"
+            label="New password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={setPassword}
             autoComplete="new-password"
+            minLength={8}
             required
-            data-testid="new-password"
+            testId="new-password"
           />
 
-          <label htmlFor="again">New password again</label>
-          <input
+          <PasswordField
             id="again"
-            type="password"
+            label="New password again"
             value={again}
-            onChange={(e) => setAgain(e.target.value)}
+            onChange={setAgain}
             autoComplete="new-password"
             required
-            data-testid="new-password-again"
+            testId="new-password-again"
           />
 
           {error && (

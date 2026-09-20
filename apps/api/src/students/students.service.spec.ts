@@ -491,3 +491,133 @@ describe('StudentsService assignment', () => {
     });
   });
 });
+
+/**
+ * Usernames stop being case-sensitive, and the uniqueness rule has to follow.
+ *
+ * If it did not, a school could hold both "Sara" and "sara". Once signing in
+ * is case-insensitive, either spelling then finds two accounts, and the
+ * sign-in path reads two accounts as "that name is ambiguous" and refuses --
+ * so the price of getting this wrong is not a confusing list, it is two
+ * children locked out.
+ */
+describe('a username is taken whatever the capitals', () => {
+  /** Records the filter the service used, and the school it scoped to. */
+  function harness(existing: { id: string } | null) {
+    const seen: { where?: Prisma.UserWhereInput; school?: string; created?: { username?: string } } =
+      {};
+
+    const tx = {
+      user: {
+        findFirst: async (args: { where: Prisma.UserWhereInput }) => {
+          seen.where = args.where;
+          return existing;
+        },
+        create: async (args: { data: { username?: string } }) => {
+          seen.created = args.data;
+          return { ...args.data, id: 'new', studentProfile: { fullName: 'A' }, createdAt: new Date() };
+        },
+      },
+    };
+
+    const prisma = {
+      forSchool: async <T>(school: string, work: (t: typeof tx) => Promise<T>) => {
+        seen.school = school;
+        return work(tx);
+      },
+      user: tx.user,
+    } as unknown as PrismaService;
+
+    const service = new StudentsService(
+      prisma,
+      { hash: async () => 'h' } as unknown as PasswordService,
+      {} as unknown as TokenService,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    return { service, seen };
+  }
+
+  it('refuses "Sara" when "sara" already exists', async () => {
+    const { service } = harness({ id: 'existing' });
+
+    await expect(
+      service.create(teacher, { fullName: 'A', username: 'Sara', password: 'password123' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('asks the database for a case-insensitive match', async () => {
+    // The assertion that would fail if someone "tidied" the filter back to an
+    // exact match: the mode is what makes the check mean what it says.
+    const { service, seen } = harness(null);
+
+    await service.create(teacher, { fullName: 'A', username: 'Sara', password: 'password123' });
+
+    expect(seen.where?.username).toEqual({ equals: 'Sara', mode: 'insensitive' });
+  });
+
+  it('still checks inside one school only', async () => {
+    // Case-insensitivity widens what counts as a match; it must not widen
+    // where the service looks. Two schools may each have a "sara".
+    const { service, seen } = harness(null);
+
+    await service.create(teacher, { fullName: 'A', username: 'Sara', password: 'password123' });
+
+    expect(seen.school).toBe(SCHOOL_A);
+    expect(seen.where?.schoolId).toBe(SCHOOL_A);
+  });
+
+  it('stores the capitals she typed', async () => {
+    // Her own account page shows this back to her. Lowercasing on the way in
+    // would quietly rename every account.
+    const { service, seen } = harness(null);
+
+    await service.create(teacher, { fullName: 'A', username: 'Sara.Q', password: 'password123' });
+
+    expect(seen.created?.username).toBe('Sara.Q');
+  });
+
+  it('drops space pasted around a name', async () => {
+    // Stored with the space, this is an account nobody can sign in to.
+    const { service, seen } = harness(null);
+
+    await service.create(teacher, { fullName: 'A', username: '  Sara  ', password: 'password123' });
+
+    expect(seen.created?.username).toBe('Sara');
+  });
+
+  it('leaves the password exactly as given', async () => {
+    // The one thing that must NOT follow the username's new rule.
+    let hashed: string | undefined;
+    const seen: { created?: unknown } = {};
+    const tx = {
+      user: {
+        findFirst: async () => null,
+        create: async (args: { data: unknown }) => {
+          seen.created = args.data;
+          return { id: 'new', studentProfile: { fullName: 'A' }, createdAt: new Date() };
+        },
+      },
+    };
+    const prisma = {
+      forSchool: async <T>(_s: string, work: (t: typeof tx) => Promise<T>) => work(tx),
+      user: tx.user,
+    } as unknown as PrismaService;
+
+    const service = new StudentsService(
+      prisma,
+      {
+        hash: async (plain: string) => {
+          hashed = plain;
+          return 'h';
+        },
+      } as unknown as PasswordService,
+      {} as unknown as TokenService,
+      { record: vi.fn() } as unknown as AuditService,
+    );
+
+    await service.create(teacher, { fullName: 'A', username: 'sara', password: 'CorrectHorse9' });
+
+    expect(hashed).toBe('CorrectHorse9');
+  });
+});

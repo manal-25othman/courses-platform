@@ -388,11 +388,47 @@ async function verify(db, before, after) {
   }
 }
 
+/**
+ * Usernames that differ only in capitals, within one school.
+ *
+ * Read-only, and the reason the case-insensitive migration is not simply
+ * applied. Once two names collide, making sign-in case-insensitive finds two
+ * rows for either spelling -- and the sign-in path reads two rows as "that
+ * name is ambiguous" and refuses. Applying it blind would lock out both
+ * girls rather than neither.
+ *
+ * Which of two real people keeps a name is the school's decision, so nothing
+ * here renames, merges or deletes anything. It reports and stops.
+ *
+ * It names the spellings and roles, because that is what somebody needs in
+ * order to decide, and nothing else -- no e-mail address, no full name, no
+ * password state. A collision report is not a reason to export a user list.
+ */
+async function usernameCollisions(db) {
+  return db.$queryRawUnsafe(`
+    SELECT
+      coalesce(s.name, '(platform — no school)') AS school,
+      lower(u.username)                          AS clashing_name,
+      count(*)                                   AS accounts,
+      string_agg(u.username || ' (' || u.role || ')', ', ' ORDER BY u.username) AS spellings
+    FROM users u
+    -- LEFT, not INNER: the platform operator belongs to no school, and two
+    -- operators sharing a name lock out the very person who would fix it.
+    LEFT JOIN schools s ON s.id = u.school_id
+    WHERE u.deleted_at IS NULL
+    GROUP BY s.name, u.school_id, lower(u.username)
+    HAVING count(*) > 1
+    ORDER BY 1, 2
+  `);
+}
+
 async function main() {
   const mode = process.argv[2];
 
-  if (mode !== 'check' && mode !== 'apply') {
-    console.error('Usage: DIRECT_URL=… node tooling/deploy/production-database.mjs <check|apply>');
+  if (mode !== 'check' && mode !== 'apply' && mode !== 'usernames') {
+    console.error(
+      'Usage: DIRECT_URL=… node tooling/deploy/production-database.mjs <check|apply|usernames>',
+    );
     process.exit(2);
   }
 
@@ -409,7 +445,50 @@ async function main() {
 
   console.log(`\nDatabase : ${where.database} on ${where.host}:${where.port}`);
   console.log(`Connecting as: ${where.user}`);
-  console.log(`Mode     : ${mode === 'apply' ? 'APPLY MIGRATIONS' : 'read-only check'}\n`);
+  console.log(
+    `Mode     : ${
+      mode === 'apply'
+        ? 'APPLY MIGRATIONS'
+        : mode === 'usernames'
+          ? 'read-only username collision check'
+          : 'read-only check'
+    }\n`,
+  );
+
+  /*
+    Answered before anything else and on its own. It touches no migration and
+    needs none applied, which is the point: it is what tells you whether the
+    case-insensitive migration is safe to apply at all.
+  */
+  if (mode === 'usernames') {
+    const db = new PrismaClient({ datasourceUrl: url });
+    try {
+      const clashes = await usernameCollisions(db);
+
+      if (clashes.length === 0) {
+        console.log('No username collisions. Two accounts differing only in capitals: none.');
+        console.log('The case-insensitive migration can be applied safely.');
+        await db.$disconnect();
+        return;
+      }
+
+      console.error(`${clashes.length} username collision(s) found.\n`);
+      for (const row of clashes) {
+        console.error(`  ${row.school} — "${row.clashing_name}" is held by ${row.accounts}:`);
+        console.error(`      ${row.spellings}`);
+      }
+      console.error('\nThe migration will refuse to apply while these exist, which is correct:');
+      console.error('making sign-in case-insensitive now would find two accounts for either');
+      console.error('spelling and lock out BOTH of them, not neither.\n');
+      console.error('Nothing has been changed. Renaming one of each pair is a decision about');
+      console.error('real people and belongs to the school, not to this script.');
+      await db.$disconnect();
+      process.exit(1);
+    } catch (error) {
+      await db.$disconnect().catch(() => undefined);
+      throw error;
+    }
+  }
 
   const status = runPrisma(['migrate', 'status'], url);
   const statusText = `${status.stdout ?? ''}${status.stderr ?? ''}`;

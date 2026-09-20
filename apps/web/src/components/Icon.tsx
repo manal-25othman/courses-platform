@@ -10,7 +10,8 @@
 export type IconName =
   | 'words' | 'grammar' | 'activity' | 'assessment' | 'games'
   | 'home' | 'progress' | 'message' | 'teacher'
-  | 'lock' | 'tick' | 'cross' | 'play' | 'sound' | 'back' | 'star' | 'signout';
+  | 'lock' | 'tick' | 'cross' | 'play' | 'sound' | 'back' | 'star' | 'signout'
+  | 'eye' | 'eye-off';
 
 const paths: Record<IconName, React.ReactNode> = {
   // Words: a card with a line of text on it.
@@ -35,6 +36,11 @@ const paths: Record<IconName, React.ReactNode> = {
   back: <path d="M15 5.5 8 12l7 6.5" />,
   star: <path d="m12 3.8 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 10l5.9-.9z" />,
   signout: <><path d="M14.5 8V5.5h-9v13h9V16" /><path d="M11 12h9.5M17.5 8.5 21 12l-3.5 3.5" /></>,
+  // Eye: shown. The outline everyone already reads as "look at this".
+  eye: <><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
+  // Eye, struck through: hidden. The stroke is what carries the meaning, so it
+  // runs the full width rather than stopping inside the shape.
+  'eye-off': <><path d="M2 12s3.8-6 10-6c1.6 0 3 .4 4.3 1M22 12s-3.8 6-10 6c-1.6 0-3-.4-4.3-1" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /><path d="M3.5 3.5l17 17" /></>,
 };
 
 export function Icon({

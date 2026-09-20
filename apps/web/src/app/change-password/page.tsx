@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, FormEvent } from 'react';
 import { api, ApiError } from '@/lib/api';
+import { PasswordField } from '@/components/PasswordField';
 
 /**
  * Where a temporary password is replaced (SRS 28.6.2).
@@ -47,36 +48,36 @@ export default function ChangePasswordPage() {
         </p>
 
         <form onSubmit={handleSubmit} noValidate>
-          <label htmlFor="current">Current password</label>
-          <input
+          <PasswordField
             id="current"
-            type="password"
+            label="Current password"
             value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
+            onChange={setCurrentPassword}
             autoComplete="current-password"
             required
+            testId="current-password"
           />
 
-          <label htmlFor="next">New password</label>
-          <input
+          <PasswordField
             id="next"
-            type="password"
+            label="New password"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={setNewPassword}
             autoComplete="new-password"
             minLength={8}
             required
+            hint="At least 8 characters."
+            testId="new-password"
           />
-          <p className="muted">At least 8 characters.</p>
 
-          <label htmlFor="confirm">New password again</label>
-          <input
+          <PasswordField
             id="confirm"
-            type="password"
+            label="New password again"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={setConfirmPassword}
             autoComplete="new-password"
             required
+            testId="confirm-password"
           />
 
           {error && (
