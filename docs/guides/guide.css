@@ -1,0 +1,169 @@
+/*
+  The look of the two guides.
+
+  It borrows the platform's own tokens rather than inventing a document style,
+  so a teacher reading the guide and then opening the product sees one thing,
+  not two. Fraunces for headings and Plus Jakarta Sans for text are the
+  product's faces; the violet is its primary action colour.
+
+  Built to be read on a phone and printed on A4 from the same file. The print
+  rules are not an afterthought: this is a school, somebody will print it.
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --ink: #1B1739;
+  --ink-2: #4A4370;
+  --ink-3: #635C87;
+  --ground: #F7F5FF;
+  --surface: #FFFFFF;
+  --line: #EAE5F8;
+  --line-2: #D6CDF0;
+  --brand: #6C4CE0;
+  --brand-ink: #4B2FB0;
+  --brand-soft: #F0EBFF;
+  --signal-ink: #C42561;
+  --ok-ink: #067A5E;
+  --ok-soft: #E0F8F1;
+  --warn-soft: #FFF3DF;
+  --warn-ink: #8A5300;
+  --bad-ink: #A3183F;
+  --bad-soft: #FFE9EF;
+  --display: 'Fraunces', Georgia, serif;
+  --ui: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--ui);
+  color: var(--ink);
+  background: var(--ground);
+  line-height: 1.65;
+  /* 16px side gutter on a phone, and never a horizontal scrollbar. */
+  padding: 0 16px;
+}
+
+.sheet {
+  max-width: 46rem;
+  margin: 0 auto;
+  background: var(--surface);
+  padding: 2.5rem 2rem 4rem;
+}
+
+/* --- the cover ---------------------------------------------------------- */
+.cover { border-bottom: 3px solid var(--brand); padding-bottom: 1.75rem; margin-bottom: 2rem; }
+.wordmark { display: flex; align-items: center; gap: .65rem; margin-bottom: 1.5rem; }
+.wordmark .tile {
+  width: 2.25rem; height: 2.25rem; border-radius: .7rem; background: var(--brand);
+  display: grid; place-items: center; color: #fff; font-weight: 700; flex: none;
+}
+.wordmark b { font-family: var(--display); font-size: 1.05rem; letter-spacing: .01em; display: block; line-height: 1.1; }
+.wordmark span { color: var(--signal-ink); font-size: .72rem; font-weight: 700; letter-spacing: .04em; }
+h1 { font-family: var(--display); font-size: 2.4rem; line-height: 1.1; margin: 0 0 .5rem; font-weight: 700; }
+.cover p { color: var(--ink-2); margin: 0; font-size: 1.05rem; }
+
+/* --- contents ----------------------------------------------------------- */
+.toc { background: var(--ground); border-radius: .9rem; padding: 1.25rem 1.5rem; margin-bottom: 2.5rem; }
+.toc h2 { font-family: var(--ui); font-size: .8rem; text-transform: none; letter-spacing: 0; margin: 0 0 .6rem; color: var(--ink-3); font-weight: 700; }
+.toc ol { margin: 0; padding-inline-start: 1.2rem; }
+.toc li { margin: .2rem 0; }
+.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line-2); }
+.toc a:hover { color: var(--brand); }
+
+/* --- sections ----------------------------------------------------------- */
+h2 {
+  font-family: var(--display); font-size: 1.6rem; font-weight: 700;
+  margin: 3rem 0 .75rem; padding-top: .5rem; line-height: 1.2;
+  border-top: 1px solid var(--line);
+}
+h2:first-of-type { border-top: 0; }
+h3 { font-size: 1.05rem; margin: 1.75rem 0 .5rem; font-weight: 700; }
+p { margin: .75rem 0; }
+p, li { max-width: 68ch; }
+
+/* Numbered procedures: the spine of both guides. */
+ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 1rem 0; }
+ol.steps > li {
+  counter-increment: step; position: relative;
+  padding-inline-start: 2.6rem; margin-bottom: .9rem;
+}
+ol.steps > li::before {
+  content: counter(step);
+  position: absolute; inset-inline-start: 0; top: -.05rem;
+  width: 1.8rem; height: 1.8rem; border-radius: 50%;
+  background: var(--brand-soft); color: var(--brand-ink);
+  font-weight: 700; font-size: .85rem; display: grid; place-items: center;
+}
+
+/* --- screenshots -------------------------------------------------------- */
+figure { margin: 1.5rem 0; }
+figure img {
+  width: 100%; height: auto; display: block;
+  border: 1px solid var(--line-2); border-radius: .75rem;
+  background: var(--surface);
+}
+/* A phone screenshot at full width is comically large on a laptop. */
+figure.phone img { max-width: 20rem; margin: 0 auto; }
+figcaption { font-size: .85rem; color: var(--ink-3); margin-top: .6rem; text-align: center; }
+
+/* --- callouts ----------------------------------------------------------- */
+.note, .warn, .tip {
+  border-inline-start: 4px solid; border-radius: .5rem;
+  padding: .85rem 1.1rem; margin: 1.25rem 0; font-size: .95rem;
+}
+.note { border-color: var(--brand); background: var(--brand-soft); }
+.warn { border-color: var(--warn-ink); background: var(--warn-soft); color: var(--warn-ink); }
+.tip  { border-color: var(--ok-ink); background: var(--ok-soft); color: var(--ok-ink); }
+.note b, .warn b, .tip b { display: block; margin-bottom: .15rem; }
+
+kbd {
+  font: inherit; font-weight: 600; background: var(--ground);
+  border: 1px solid var(--line-2); border-radius: .35rem; padding: .05rem .4rem;
+}
+
+/* --- tables ------------------------------------------------------------- */
+table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: .95rem; }
+th, td { text-align: start; padding: .6rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--ink-3); font-size: .8rem; font-weight: 700; }
+/* A table is the wrong shape on a phone, so it becomes stacked rows. */
+@media (max-width: 34rem) {
+  table, thead, tbody, tr, th, td { display: block; }
+  thead { display: none; }
+  tr { border: 1px solid var(--line); border-radius: .6rem; padding: .4rem .6rem; margin-bottom: .75rem; }
+  td { border: 0; padding: .3rem 0; }
+  td::before { content: attr(data-label) ': '; font-weight: 700; color: var(--ink-3); }
+}
+
+/* --- troubleshooting ---------------------------------------------------- */
+.qa { border: 1px solid var(--line); border-radius: .75rem; padding: 1rem 1.25rem; margin: 1rem 0; }
+.qa b { display: block; margin-bottom: .3rem; }
+.qa p { margin: .35rem 0 0; color: var(--ink-2); font-size: .95rem; }
+
+footer { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--ink-3); font-size: .85rem; }
+
+@media (max-width: 34rem) {
+  body { padding: 0 16px; }
+  .sheet { padding: 1.75rem 0 3rem; }
+  h1 { font-size: 1.85rem; }
+  h2 { font-size: 1.35rem; }
+}
+
+/* --- print -------------------------------------------------------------- */
+@media print {
+  body { background: #fff; padding: 0; }
+  .sheet { max-width: none; padding: 0; }
+  .toc a { border: 0; }
+  /* A heading alone at the foot of a page, or a screenshot split across two,
+     is what makes a printed guide feel careless. */
+  h2 { break-after: avoid; break-inside: avoid; }
+  h3 { break-after: avoid; }
+  figure, .qa, .note, .warn, .tip, ol.steps > li { break-inside: avoid; }
+  figure img { max-width: 100%; }
+  figure.phone img { max-width: 14rem; }
+  a { text-decoration: none; color: inherit; }
+}
+
+@page { margin: 18mm 16mm; }

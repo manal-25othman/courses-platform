@@ -480,9 +480,9 @@ function AdventureReadiness({ unitId }: { unitId: string }) {
         </p>
 
         <p className="hint">
-          Only questions a student can answer by tapping count — ordering words, true or false,
-          and multiple choice tied to a grammar page. Ones she has to type an answer to are left
-          out, because typing is not a way through a world.
+          Only questions a student can answer by tapping are counted: ordering words, true or
+          false, and multiple choice tied to a grammar page. Questions that need a typed answer
+          are left out, because typing is not a way through a world.
         </p>
 
         {state.ready && !state.unitPublished && (

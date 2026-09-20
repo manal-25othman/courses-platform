@@ -258,8 +258,8 @@ export default function StudentHomePage() {
                 : finishedUnits === core.length
                   ? 'Play a game, or go back over a unit you enjoyed.'
                   : finishedUnits === 0
-                    ? `${core.length} units to work through. Start whenever you are ready.`
-                    : `${finishedUnits} of ${core.length} units finished. Keep going.`}
+                    ? `${core.length} ${core.length === 1 ? 'unit' : 'units'} to work through. Start whenever you are ready.`
+                    : `${finishedUnits} of ${core.length} ${core.length === 1 ? 'unit' : 'units'} finished. Keep going.`}
             </p>
           </div>
         </header>
