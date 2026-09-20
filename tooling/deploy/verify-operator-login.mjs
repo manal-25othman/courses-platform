@@ -160,6 +160,60 @@ async function main() {
     `role ${who.role ?? '(none)'} — the website sends this role to /admin`,
   );
 
+  /*
+    Capitals in a username do not matter; capitals in a password do.
+
+    Added after migration 20260920000000 made sign-in case-insensitive. The
+    change lives in a database function, so it cannot be proved by a unit test
+    or by a local database -- only by asking the live deployment. These probe
+    the real one.
+
+    Six requests, deliberately: the brute-force limiter allows ten per minute
+    per account, and two of these are meant to be refused. Nothing here prints
+    a password, and nothing writes.
+  */
+  for (const spelling of [
+    operator.username.toUpperCase(),
+    operator.username.toLowerCase(),
+    // Alternating capitals: neither of the two shapes a person types by
+    // accident, so it can only pass if the comparison is genuinely blind to
+    // case rather than lowercasing one side.
+    [...operator.username].map((c, i) => (i % 2 ? c.toUpperCase() : c.toLowerCase())).join(''),
+  ]) {
+    const attempt = await call('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: spelling, password }),
+    });
+    record(
+      `Signing in as "${spelling}" reaches the same account`,
+      attempt.status === 200,
+      `status ${attempt.status}`,
+    );
+  }
+
+  // The other half, and the one that would be a security regression rather
+  // than an inconvenience: a password must still match exactly.
+  for (const [label, wrong] of [
+    ['all capitals', password.toUpperCase()],
+    ['all lower case', password.toLowerCase()],
+  ]) {
+    // Skip a password that is already in that shape — it would be the correct
+    // password, and asserting it fails would be wrong.
+    if (wrong === password) continue;
+
+    const attempt = await call('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: operator.username, password: wrong }),
+    });
+    record(
+      `The password in ${label} is refused, so passwords stay case-sensitive`,
+      attempt.status === 401,
+      `status ${attempt.status}`,
+    );
+  }
+
   const renewed = await call('/auth/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: cookies.header() },
