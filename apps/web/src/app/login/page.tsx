@@ -5,75 +5,41 @@ import { Suspense, useState, FormEvent } from 'react';
 import { api, ApiError, homeFor, Me } from '@/lib/api';
 import { Brandmark } from '@/components/Shell';
 import { PasswordField } from '@/components/PasswordField';
-import { Icon } from '@/components/Icon';
-import { Scene } from '@/components/world/Scene';
 import { Girl } from '@/components/world/Girl';
+import { Trailhead } from '@/components/world/Trailhead';
+import { Glyph } from '@/components/world/Scene';
 import { PLACES, themeVars } from '@/lib/world';
 
 /**
  * The way in.
  *
- * Every other screen a student sees stands in a place: a meadow with a dotted
- * path running through it, white posts along the way, Lina walking it. The
- * path is the one idea the whole product is built on — the trail of stations
- * on Home, the route through Grammar Adventure — so the front door is the
- * start of it. Lina waves at the trailhead; the path runs off toward the
- * horizon; signing in is stepping onto it.
+ * Not a form on a decorative background: the page is the meadow. The same
+ * meadow every unit stands in, laid out for a window instead of a card, with
+ * the road from Grammar Adventure starting at Lina's feet and running away to
+ * the right. Signing in is stepping onto it.
  *
- * The panel is deliberately the same shape as the ticket on Home — a rounded
- * card with the scene along its floor and words above — because the point is
- * not that this page is pretty, it is that it is recognisably the same place.
- * A different shape here would be a different product.
+ * Three things keep it from being wallpaper with a card on top. Lina is drawn
+ * at the size of a character rather than a sticker, and she stands ON the
+ * road, at its widest end. The panel is translucent and blurred, so the field
+ * shows through it and it reads as something resting in the scene rather than
+ * covering it. And the heading sits in the open air beside her, in the place's
+ * own green, the way every unit banner in the product names its place.
  *
- * Nothing about signing in changed. The form below is the one that was here:
- * same fields, same request, same errors, same two notices, same link. Only
- * what surrounds it is new.
+ * Nothing about signing in changed: same fields, same request, same errors,
+ * same two notices, same link, same cookies.
  */
-
-/** What is actually inside, named in the student's own icons. */
-const INSIDE = [
-  { icon: 'words', label: 'Words' },
-  { icon: 'grammar', label: 'Grammar' },
-  { icon: 'games', label: 'Games' },
-] as const;
 
 function Welcome() {
   return (
-    <section className="signin-welcome">
-      <Brandmark />
-
-      <div className="signin-words">
-        <h1 className="signin-title">Your English Journey Starts Here</h1>
-        <p className="signin-sub">Learn, practise, and grow with TOP GOAL.</p>
-      </div>
-
-      {/*
-        The scene and Lina are the components the rest of the product draws
-        with, not a picture made for this page. They cost nothing extra to
-        ship — both are inline SVG already in the bundle — and they cannot
-        drift away from the dashboard, because they are the dashboard's.
-      */}
-      {/*
-        The scene draws itself from --w1/--w2/--w3, which a unit's theme
-        supplies. Without them the hills paint black, which is exactly what
-        the first render of this page did. `themeVars` is the supported way to
-        hand a scene its colours, so the meadow here is the same green as the
-        meadow on Home rather than a copy of its values.
-      */}
-      <div className="signin-scene" style={themeVars(PLACES.meadow)}>
-        <Scene kind="meadow" fit="fill" className="scene" />
-        <Girl who="lina" pose="wave" mood="bright" className="girl signin-girl" />
-      </div>
-
-      <ul className="signin-inside">
-        {INSIDE.map((one) => (
-          <li key={one.label}>
-            <Icon name={one.icon} size={18} />
-            {one.label}
-          </li>
-        ))}
-      </ul>
-    </section>
+    <div className="signin-words">
+      {/* The eyebrow every unit banner carries: the place, in its colour. */}
+      <p className="signin-where">
+        <Glyph kind="meadow" size={18} />
+        Your English journey
+      </p>
+      <h1 className="signin-title">Starts here</h1>
+      <p className="signin-sub">Learn, practise, and grow with TOP GOAL.</p>
+    </div>
   );
 }
 
@@ -121,7 +87,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="card raised signin-card">
+    <div className="signin-panel">
       <h2 className="signin-heading">Sign in</h2>
       <p className="muted">Use the username you were given, not an email address.</p>
 
@@ -192,14 +158,35 @@ function LoginForm() {
   );
 }
 
-function SignIn() {
+function Stage({ children }: { children: React.ReactNode }) {
   return (
-    <main className="signin">
-      <div className="signin-inner">
-        <Welcome />
-        <LoginForm />
+    <main className="signin" style={themeVars(PLACES.meadow)}>
+      {/* The field itself, behind everything, edge to edge. */}
+      <Trailhead />
+
+      <div className="signin-stage">
+        <header className="signin-brand">
+          <Brandmark />
+        </header>
+
+        <div className="signin-middle">
+          <div className="signin-left">
+            <Welcome />
+            {/* She stands on the road, at the end you start from. */}
+            <Girl who="lina" pose="wave" mood="bright" className="girl signin-girl" />
+          </div>
+          {children}
+        </div>
       </div>
     </main>
+  );
+}
+
+function SignIn() {
+  return (
+    <Stage>
+      <LoginForm />
+    </Stage>
   );
 }
 
@@ -214,12 +201,9 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <main className="signin">
-          <div className="signin-inner">
-            <Welcome />
-            <div className="card raised signin-card signin-waiting" aria-hidden="true" />
-          </div>
-        </main>
+        <Stage>
+          <div className="signin-panel signin-waiting" aria-hidden="true" />
+        </Stage>
       }
     >
       <SignIn />

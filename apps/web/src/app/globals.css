@@ -2872,142 +2872,155 @@ body:has(.world) { background: #F2EDFF; }
 .pw-eye[aria-pressed='true'] { color: var(--brand); }
 
 /* --- The way in ----------------------------------------------------------
-   Two things side by side on a desktop: the place you are about to enter,
-   and the gate. On a phone they stack in that order, compressed, because the
-   gate is what she came for and it must not be pushed below the fold.
+   The page is the meadow. The field is a full-bleed layer behind everything;
+   Lina stands on the road at the size of a character; and the form rests on a
+   translucent surface so the field shows through it rather than being covered
+   by it.
 
-   Everything here is built from tokens already in this file. No new colour,
-   no new family, no new radius -- the point of the page is that it is the
-   same product as the dashboard, and a new palette would say the opposite.
+   Built from tokens already in this file, plus the place's own three tints,
+   which `themeVars(PLACES.meadow)` puts on the <main>.
 */
 .signin {
+  position: relative;
   min-height: 100dvh;
   display: grid;
-  place-items: center;
-  /* A quiet lift from the lavender ground to white, so the card has somewhere
-     to sit without a decorative gradient wash behind it. */
-  background: linear-gradient(180deg, var(--ground-2) 0%, var(--ground) 42%);
-  padding: clamp(var(--s4), 4vw, var(--s7)) var(--s4);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--w3);
 }
 
-.signin-inner {
+/* The field, edge to edge, behind the content and out of the way of it. */
+.trailhead {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  max-width: 62rem;
-  display: grid;
-  gap: clamp(var(--s5), 4vw, var(--s7));
-  align-items: center;
+  height: 100%;
+  z-index: 0;
+  display: block;
 }
 
-/* --- the welcome side --------------------------------------------------- */
-.signin-welcome { display: grid; gap: var(--s4); justify-items: start; }
+.signin-stage {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: clamp(var(--s4), 3vw, var(--s6)) clamp(var(--s4), 4vw, var(--s7));
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--s5);
+}
 
+/* The mark sits in the scene, where the app's own bar carries it. */
+.signin-brand .brandmark .mark { width: 2.5rem; height: 2.5rem; border-radius: 13px; }
+.signin-brand .brandmark .name { font-size: 1.15rem; }
+
+.signin-middle { display: grid; align-items: center; gap: var(--s5); }
+
+/* --- her side ----------------------------------------------------------- */
+.signin-left { display: grid; justify-items: start; gap: var(--s4); }
+
+/* The eyebrow every unit banner carries: the place, in the place's colour. */
+.signin-where {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: 0;
+  color: var(--w1);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: .005em;
+}
+.signin-where .ico { color: var(--w1); }
+
+/* Fraunces at the size the product uses it, not at hero-banner size. */
 .signin-title {
   font-family: var(--font-display);
-  /* Fits on two lines at every width it is read at, and never three. */
-  font-size: clamp(1.75rem, 1.1rem + 2.4vw, 2.9rem);
-  line-height: 1.08;
+  font-size: clamp(1.9rem, 1.4rem + 1.5vw, 2.6rem);
+  line-height: 1.1;
   margin: 0;
-  /* Wide enough for "Your English Journey" to hold together on one line, so
-     it breaks in two rather than three ragged ones. */
-  max-width: 21ch;
   color: var(--ink);
 }
 .signin-sub {
-  margin: var(--s2) 0 0;
+  margin: 0;
   color: var(--ink-2);
-  font-size: clamp(.9375rem, .9rem + .3vw, 1.0625rem);
-  max-width: 34ch;
+  font-size: 1rem;
+  max-width: 30ch;
 }
 
 /*
-  The same shape as the ticket on Home: a rounded card with the scene along
-  its floor. Reusing the shape is what makes this read as the front of a
-  product rather than the front of a website.
+  Big enough to be a person. She stands on the road's wide end, so the eye
+  goes her -> road -> away, which is the whole idea of the page.
 */
-.signin-scene {
-  position: relative;
-  width: 100%;
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  /* The same sky the ticket on Home uses, from the place's own light tint --
-     without it the panel reads as a white box with a green strip in it
-     rather than as a scene. */
-  background: linear-gradient(180deg, var(--w3) 0%, color-mix(in srgb, var(--w3) 55%, white) 100%);
-  box-shadow: var(--e2);
-  /* Fixed by ratio, so the illustration cannot shift the page as it paints. */
-  aspect-ratio: 5 / 2;
-}
-.signin-scene .scene { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* She stands at the start of the path, on the scene's own floor. */
 .signin-girl {
-  position: absolute;
-  left: 7%;
-  bottom: -.15rem;
-  width: 22%;
-  min-width: 3.25rem;
-  max-width: 6.5rem;
-  z-index: 1;
+  width: clamp(9rem, 20vw, 15rem);
+  filter: drop-shadow(0 18px 24px rgb(27 23 57 / .16));
 }
 
-/* What is inside, in the icons she will navigate by once she is in. */
-.signin-inside {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
-  color: var(--ink-3);
-  font-size: .875rem;
-  font-weight: 600;
+/* --- the panel ----------------------------------------------------------- */
+/*
+  Not a white card. A pane of the same paper the product's cards are made of,
+  thinned so the field reads through it, with a highlight along the top edge
+  the way glass catches light.
+*/
+.signin-panel {
+  position: relative;
+  border-radius: var(--r-lg);
+  padding: clamp(var(--s4), 2.4vw, var(--s6));
+  background: rgb(255 255 255 / .74);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border: 1px solid rgb(255 255 255 / .85);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / .9) inset,
+    0 24px 48px -20px rgb(27 23 57 / .28),
+    0 4px 12px -6px rgb(27 23 57 / .14);
 }
-.signin-inside li { display: flex; align-items: center; gap: .4rem; }
-.signin-inside .ico { color: var(--brand); }
+/*
+  Where a browser cannot blur, transparency alone would leave the form sitting
+  on grass. It gets opaque paper instead: less lovely, still legible.
+*/
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .signin-panel { background: rgb(255 255 255 / .96); }
+}
 
-/* --- the gate ------------------------------------------------------------ */
-.signin-card { padding: clamp(var(--s4), 3vw, var(--s6)); border-radius: var(--r-lg); }
-.signin-heading { font-family: var(--font-display); font-size: var(--fs-display); margin: 0 0 var(--s1); }
+.signin-heading { font-family: var(--font-display); font-size: 1.5rem; margin: 0 0 var(--s1); }
+.signin-panel .muted { font-size: var(--fs-small); }
+
+/*
+  The inputs are the product's, thinned to match the pane: paper rather than
+  flat white, and a border that is felt more than seen until it is focused.
+*/
+.signin-panel input {
+  background: rgb(255 255 255 / .78);
+  border-color: rgb(214 205 240 / .9);
+}
+.signin-panel input:focus { background: var(--surface); }
+
 .signin-go { width: 100%; margin-top: var(--s5); }
-.signin-help { margin-top: var(--s5); }
-/* Holds the card's place while the form resolves, so nothing jumps. */
-.signin-waiting { min-height: 22rem; }
+.signin-help { margin-top: var(--s4); font-size: var(--fs-small); }
+.signin-waiting { min-height: 21rem; }
 
-/* --- tablet: one column, and the scene becomes a band ------------------- */
-@media (min-width: 48rem) and (max-width: 63.9375rem) {
-  .signin-inner { max-width: 34rem; }
-  /* Not a shrunken desktop: the illustration goes wide, the card sits under
-     it at a comfortable reading width. 5:2 is the scene's own ratio, so
-     nothing is cropped -- at 16:5 the slice cut a cloud into a rectangle and
-     took the top off the sun. */
-  .signin-scene { aspect-ratio: 5 / 2; }
-  .signin-girl { width: 15%; }
-}
-
-/* --- desktop: the place, then the gate ---------------------------------- */
+/* --- desktop: she is on the left of the road, the pane to its right ------ */
 @media (min-width: 64rem) {
-  .signin-inner {
-    grid-template-columns: 1.05fr .95fr;
-    gap: clamp(var(--s6), 5vw, var(--s8));
+  .signin-stage { position: relative; }
+  .signin-middle {
+    grid-template-columns: 1.1fr minmax(20rem, 25rem);
+    gap: clamp(var(--s6), 6vw, var(--s8));
+    align-items: start;
+    padding-top: clamp(var(--s5), 9vh, var(--s8));
   }
-  .signin-scene { aspect-ratio: 2 / 1; }
-  .signin-girl { width: 24%; }
+  .signin-left { gap: var(--s4); }
+  /*
+    Taken out of the flow and anchored to the foot of the window, because the
+    thing that has to line up is her feet and the road -- and the road is
+    drawn from the bottom of a scene that is itself anchored there. In the
+    flow she stood on the hillside above it, which read as floating.
+  */
+  .signin-girl {
+    position: absolute;
+    left: clamp(2rem, 6vw, 6rem);
+    bottom: 15%;
+    width: clamp(11rem, 17vw, 16rem);
+  }
 }
-
-/* --- phone: the gate comes first --------------------------------------- */
-@media (max-width: 30rem) {
-  .signin { padding: var(--s4) var(--s4) var(--s6); align-content: start; }
-  .signin-inner { gap: var(--s4); }
-  .signin-welcome { gap: var(--s3); }
-  /* The scene's own ratio, so the sky is whole. Even at full height the
-     username box stays well above the fold on a 390x844 screen. */
-  .signin-scene { aspect-ratio: 5 / 2; }
-  .signin-girl { width: 18%; left: 5%; }
-  .signin-title { max-width: 18ch; }
-  /* The list is the first thing to go when room is short: the icons are
-     repeated on every screen inside, so nothing is lost by dropping them. */
-  .signin-inside { display: none; }
-}
-
-/* Nothing here animates, so there is nothing for reduced motion to switch
-   off -- the page paints once and holds still. The scene's fixed ratio is
-   what keeps it from moving as the SVG resolves. */
