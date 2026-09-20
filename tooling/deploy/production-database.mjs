@@ -26,7 +26,8 @@ import { spawnSync } from 'node:child_process';
 import { appendFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
+import { readdirSync, existsSync } from 'node:fs';
 import { PrismaClient } from '../prisma-client.mjs';
 
 const require = createRequire(new URL('../../apps/api/package.json', import.meta.url));
@@ -40,11 +41,45 @@ const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/api
  * true of a live database with four schools in it as of an empty one on its
  * first day. Nothing here says anything about content; that is deliberate.
  */
+/**
+ * How many migrations this repository contains.
+ *
+ * Counted, not written down. The number was hardcoded and went stale twice:
+ * once at 17, when Grammar Adventure's migration existed and production had
+ * never run it, and again at 18, when the case-insensitive username migration
+ * applied perfectly and the run went red for finding one migration too *many*.
+ * A number a human has to remember to bump is a number that will be wrong, and
+ * the second failure is the worse kind — it cries wolf over a good deploy, and
+ * a check nobody believes is a check nobody reads.
+ *
+ * Every directory here is a migration Prisma will apply, so the directory
+ * listing is the same fact the ledger should agree with. Comparing the two
+ * still catches a database left behind — applied < present, the Grammar
+ * Adventure case — and now also catches a database that has had something
+ * applied to it from outside this repository.
+ */
+function migrationsInRepository() {
+  const dir = join(API_DIR, 'prisma', 'migrations');
+
+  if (!existsSync(dir)) {
+    throw new Error(`No migrations directory at ${dir} — is this the repository root?`);
+  }
+
+  const found = readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(dir, entry.name, 'migration.sql')))
+    .length;
+
+  // A repository with no migrations cannot be right, and would otherwise make
+  // "0 applied" look like a pass against an empty database.
+  if (found === 0) {
+    throw new Error(`No migrations found in ${dir}.`);
+  }
+
+  return found;
+}
+
 const EXPECTED = {
-  // Bump this with every migration added. It is the check that catches a
-  // production database left behind: Grammar Adventure was invisible to every
-  // student for exactly this reason — its migration had never been applied.
-  migrations: 18,
+  migrations: migrationsInRepository(),
   tables: 25,
   policies: 34,
   securityDefinerFunctions: 11,
