@@ -19,7 +19,15 @@ export interface UnitTheme {
   w3: string;
 }
 
-const PLACES: Record<SceneKind, UnitTheme> = {
+/**
+ * Each place's own three tints.
+ *
+ * Exported so a scene can be themed by the place it draws, not only by the
+ * unit it belongs to. The sign-in page needs exactly that: it shows the
+ * meadow, and it is not a unit, so `themeFor` -- which reads a unit's title --
+ * has nothing to answer from. Without a theme a scene paints its hills black.
+ */
+export const PLACES: Record<SceneKind, UnitTheme> = {
   meadow:  { scene: 'meadow',  w1: '#0FA37E', w2: '#7ADBB9', w3: '#E2F8F0' },
   town:    { scene: 'town',    w1: '#F26B4E', w2: '#FFB59E', w3: '#FFEBE3' },
   sky:     { scene: 'sky',     w1: '#2E8FE0', w2: '#93CCF6', w3: '#E4F2FF' },

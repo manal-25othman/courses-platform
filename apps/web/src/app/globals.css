@@ -2870,3 +2870,144 @@ body:has(.world) { background: #F2EDFF; }
 .pw-eye:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; color: var(--ink); }
 /* Pressed means the password is showing — worth a colour, not just an icon. */
 .pw-eye[aria-pressed='true'] { color: var(--brand); }
+
+/* --- The way in ----------------------------------------------------------
+   Two things side by side on a desktop: the place you are about to enter,
+   and the gate. On a phone they stack in that order, compressed, because the
+   gate is what she came for and it must not be pushed below the fold.
+
+   Everything here is built from tokens already in this file. No new colour,
+   no new family, no new radius -- the point of the page is that it is the
+   same product as the dashboard, and a new palette would say the opposite.
+*/
+.signin {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  /* A quiet lift from the lavender ground to white, so the card has somewhere
+     to sit without a decorative gradient wash behind it. */
+  background: linear-gradient(180deg, var(--ground-2) 0%, var(--ground) 42%);
+  padding: clamp(var(--s4), 4vw, var(--s7)) var(--s4);
+}
+
+.signin-inner {
+  width: 100%;
+  max-width: 62rem;
+  display: grid;
+  gap: clamp(var(--s5), 4vw, var(--s7));
+  align-items: center;
+}
+
+/* --- the welcome side --------------------------------------------------- */
+.signin-welcome { display: grid; gap: var(--s4); justify-items: start; }
+
+.signin-title {
+  font-family: var(--font-display);
+  /* Fits on two lines at every width it is read at, and never three. */
+  font-size: clamp(1.75rem, 1.1rem + 2.4vw, 2.9rem);
+  line-height: 1.08;
+  margin: 0;
+  /* Wide enough for "Your English Journey" to hold together on one line, so
+     it breaks in two rather than three ragged ones. */
+  max-width: 21ch;
+  color: var(--ink);
+}
+.signin-sub {
+  margin: var(--s2) 0 0;
+  color: var(--ink-2);
+  font-size: clamp(.9375rem, .9rem + .3vw, 1.0625rem);
+  max-width: 34ch;
+}
+
+/*
+  The same shape as the ticket on Home: a rounded card with the scene along
+  its floor. Reusing the shape is what makes this read as the front of a
+  product rather than the front of a website.
+*/
+.signin-scene {
+  position: relative;
+  width: 100%;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  /* The same sky the ticket on Home uses, from the place's own light tint --
+     without it the panel reads as a white box with a green strip in it
+     rather than as a scene. */
+  background: linear-gradient(180deg, var(--w3) 0%, color-mix(in srgb, var(--w3) 55%, white) 100%);
+  box-shadow: var(--e2);
+  /* Fixed by ratio, so the illustration cannot shift the page as it paints. */
+  aspect-ratio: 5 / 2;
+}
+.signin-scene .scene { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* She stands at the start of the path, on the scene's own floor. */
+.signin-girl {
+  position: absolute;
+  left: 7%;
+  bottom: -.15rem;
+  width: 22%;
+  min-width: 3.25rem;
+  max-width: 6.5rem;
+  z-index: 1;
+}
+
+/* What is inside, in the icons she will navigate by once she is in. */
+.signin-inside {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+  color: var(--ink-3);
+  font-size: .875rem;
+  font-weight: 600;
+}
+.signin-inside li { display: flex; align-items: center; gap: .4rem; }
+.signin-inside .ico { color: var(--brand); }
+
+/* --- the gate ------------------------------------------------------------ */
+.signin-card { padding: clamp(var(--s4), 3vw, var(--s6)); border-radius: var(--r-lg); }
+.signin-heading { font-family: var(--font-display); font-size: var(--fs-display); margin: 0 0 var(--s1); }
+.signin-go { width: 100%; margin-top: var(--s5); }
+.signin-help { margin-top: var(--s5); }
+/* Holds the card's place while the form resolves, so nothing jumps. */
+.signin-waiting { min-height: 22rem; }
+
+/* --- tablet: one column, and the scene becomes a band ------------------- */
+@media (min-width: 48rem) and (max-width: 63.9375rem) {
+  .signin-inner { max-width: 34rem; }
+  /* Not a shrunken desktop: the illustration goes wide, the card sits under
+     it at a comfortable reading width. 5:2 is the scene's own ratio, so
+     nothing is cropped -- at 16:5 the slice cut a cloud into a rectangle and
+     took the top off the sun. */
+  .signin-scene { aspect-ratio: 5 / 2; }
+  .signin-girl { width: 15%; }
+}
+
+/* --- desktop: the place, then the gate ---------------------------------- */
+@media (min-width: 64rem) {
+  .signin-inner {
+    grid-template-columns: 1.05fr .95fr;
+    gap: clamp(var(--s6), 5vw, var(--s8));
+  }
+  .signin-scene { aspect-ratio: 2 / 1; }
+  .signin-girl { width: 24%; }
+}
+
+/* --- phone: the gate comes first --------------------------------------- */
+@media (max-width: 30rem) {
+  .signin { padding: var(--s4) var(--s4) var(--s6); align-content: start; }
+  .signin-inner { gap: var(--s4); }
+  .signin-welcome { gap: var(--s3); }
+  /* The scene's own ratio, so the sky is whole. Even at full height the
+     username box stays well above the fold on a 390x844 screen. */
+  .signin-scene { aspect-ratio: 5 / 2; }
+  .signin-girl { width: 18%; left: 5%; }
+  .signin-title { max-width: 18ch; }
+  /* The list is the first thing to go when room is short: the icons are
+     repeated on every screen inside, so nothing is lost by dropping them. */
+  .signin-inside { display: none; }
+}
+
+/* Nothing here animates, so there is nothing for reduced motion to switch
+   off -- the page paints once and holds still. The scene's fixed ratio is
+   what keeps it from moving as the SVG resolves. */
