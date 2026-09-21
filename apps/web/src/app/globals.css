@@ -3733,20 +3733,74 @@ body:has(.world) { background: #F2EDFF; }
 /* The question itself. One thing on the paper at a time, set large enough to
    read across a shared tablet, with the options as full-width targets. */
 .unit-world .running { padding: clamp(var(--s4), 3vw, var(--s6)); }
-.unit-world .q-pips { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; }
+/* --- jumping between questions ------------------------------------------- */
+.unit-world .q-jump { width: 100%; }
+.unit-world .q-jump > summary {
+  list-style: none;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+}
+.unit-world .q-jump > summary::-webkit-details-marker { display: none; }
+.unit-world .q-jump > summary:focus-visible { outline: 3px solid var(--brand); outline-offset: 4px; border-radius: 10px; }
+/* Answered against not answered, at a glance, without drawing forty-one of
+   anything. Both numbers are the ones already on screen. */
+.unit-world .q-jump-bar {
+  height: .55rem;
+  border-radius: 999px;
+  background: rgb(27 23 57 / .09);
+  overflow: hidden;
+}
+.unit-world .q-jump-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--w1);
+  transition: width 240ms ease;
+}
+.unit-world .q-jump-more {
+  font-size: var(--fs-small);
+  font-weight: 700;
+  color: var(--brand);
+  white-space: nowrap;
+}
+.unit-world .q-jump-more::after { content: ' ▾'; }
+.unit-world .q-jump[open] .q-jump-more::after { content: ' ▴'; }
+.unit-world .q-pips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2rem, 1fr));
+  gap: .45rem;
+  justify-items: center;
+  padding-top: var(--s3);
+  margin-top: var(--s2);
+  border-top: 1px solid rgb(27 23 57 / .08);
+}
 .unit-world .q-pip {
-  /* Flex items shrink by default: without this, forty-one of them collapsed
-     into a row of slivers rather than wrapping onto a second line. */
+  /*
+    The strip this replaces was a row of thin segments: `flex: 1 1 0` with a
+    `max-width: 1.1rem` cap and a `scaleY(1.5)` on the current one. Left in
+    place those three turned a circle into a squashed oval, so all three are
+    undone here rather than nudged.
+  */
   flex: 0 0 auto;
-  width: 1.7rem; height: 1.7rem; min-width: 0; min-height: 0; padding: 0;
+  transform: none;
+  width: 2rem; height: 2rem; max-width: none; min-width: 0; min-height: 0; padding: 0;
   border-radius: 50%; font-size: .7rem; font-weight: 700; line-height: 1;
   display: grid; place-items: center; box-shadow: none;
   border: 2px solid rgb(27 23 57 / .14); background: rgb(255 255 255 / .9); color: var(--ink-3);
 }
-.unit-world .q-pip[data-on='true'], .unit-world .q-pip[aria-selected='true'] {
-  background: var(--w1); border-color: var(--w1); color: #fff;
+.unit-world .q-pip:hover { transform: scale(1.1); border-color: var(--w1); }
+.unit-world .q-pip[data-answered='true'] {
+  background: var(--ok); border-color: var(--ok); color: #fff;
 }
-.unit-world .q-pip[data-done='true'] { background: var(--ok); border-color: var(--ok); color: #fff; }
+/* The one she is on wins over answered: it is where she is, not what she did. */
+.unit-world .q-pip[aria-selected='true'] {
+  background: var(--w1); border-color: var(--w1); color: #fff;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / .9), 0 0 0 5px var(--w1);
+}
 
 /* Answer options: a comfortable target on a tablet, and a visible focus ring
    that is not the browser's default hairline. */
@@ -3762,6 +3816,10 @@ body:has(.world) { background: #F2EDFF; }
   min-width: 3.25rem;
   font-size: 1.15rem;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 .unit-world .choice:focus-visible,
 .unit-world .q-pip:focus-visible,
@@ -3869,6 +3927,12 @@ body:has(.world) { background: #F2EDFF; }
   .unit-world .exam-rules { grid-template-columns: 1fr; gap: var(--s2); }
   .unit-world .exam-rule { display: flex; align-items: baseline; justify-content: center; gap: var(--s2); padding: var(--s3); }
   .unit-world .exam-rule b { display: inline; font-size: 1.25rem; }
+  .unit-world .q-jump > summary { grid-template-columns: 1fr auto; row-gap: var(--s2); }
+  .unit-world .q-jump-bar { grid-column: 1 / -1; order: -1; }
+  /* A thumb, not a cursor: the jump targets grow on a phone rather than
+     shrink with the screen. Seven still fit across 390px. */
+  .unit-world .q-pips { grid-template-columns: repeat(auto-fill, minmax(2.5rem, 1fr)); gap: .4rem; }
+  .unit-world .q-pip { width: 2.5rem; height: 2.5rem; font-size: .8rem; }
   .unit-world .q-move { flex-wrap: wrap; }
   .unit-world .q-move > button { flex: 1 1 8rem; }
   /* Thumb-sized, and never smaller: these are the controls a child taps most. */

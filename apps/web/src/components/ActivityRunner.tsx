@@ -368,24 +368,47 @@ export function ActivityRunner({
     <div className="stack">
       <div className="running">
         <div className="running-in">
-          {/* Every question, its state, and a way back to any of them. */}
-          <div className="q-pips" role="tablist" aria-label="Questions">
-            {attempt.questions.map((q, n) => (
-              <button
-                key={q.answerId}
-                className="q-pip"
-                role="tab"
-                aria-selected={n === at}
-                aria-current={n === at}
-                aria-label={`Question ${n + 1}${responses[q.answerId] !== undefined ? ', answered' : ''}`}
-                data-answered={responses[q.answerId] !== undefined}
-                onClick={() => setCursor(n)}
-              />
-            ))}
-          </div>
-          <p className="muted" style={{ margin: 0 }} data-testid="answered-count">
-            {answered} of {total} answered
-          </p>
+          {/*
+            Where she is, and a way back to any question.
+
+            Forty-one of these drawn at once filled three rows above every
+            question and crowded the phone badly -- a lot of screen for
+            something she does occasionally, when the card below already says
+            "Question 12 of 41". So the strip is folded away behind a native
+            disclosure: the bar and the count are always there, and every
+            question is still one tap away, with no scripting and no state of
+            its own. Nothing about the attempt changed.
+          */}
+          <details className="q-jump">
+            <summary>
+              <span className="q-jump-bar" aria-hidden="true">
+                <span style={{ width: `${total > 0 ? Math.round((answered / total) * 100) : 0}%` }} />
+              </span>
+              <p className="muted" style={{ margin: 0 }} data-testid="answered-count">
+                {answered} of {total} answered
+              </p>
+              <span className="q-jump-more">Jump to a question</span>
+            </summary>
+            <div className="q-pips" role="tablist" aria-label="Questions">
+              {attempt.questions.map((q, n) => (
+                <button
+                  key={q.answerId}
+                  className="q-pip"
+                  role="tab"
+                  aria-selected={n === at}
+                  aria-current={n === at}
+                  aria-label={`Question ${n + 1}${responses[q.answerId] !== undefined ? ', answered' : ''}`}
+                  data-answered={responses[q.answerId] !== undefined}
+                  onClick={() => setCursor(n)}
+                >
+                  {/* The number a person actually jumps by. The strip used to
+                      be unlabelled segments, which works for "how far along"
+                      and not at all for "take me back to 30". */}
+                  {n + 1}
+                </button>
+              ))}
+            </div>
+          </details>
         </div>
       </div>
 
