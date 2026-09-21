@@ -5,21 +5,33 @@ import { useEffect, useState } from 'react';
 import { api, ApiError, homeFor, LearnUnitSummary, Me } from '@/lib/api';
 import { Avatar, StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
-import { Scene, Glyph } from '@/components/world/Scene';
+import { Glyph } from '@/components/world/Scene';
 import { Girl } from '@/components/world/Girl';
-import { WorldGround } from '@/components/world/WorldGround';
-import { themeFor, themeVars } from '@/lib/world';
+import { Valley } from '@/components/world/Valley';
+import { themeFor, themeVars, PLACES } from '@/lib/world';
 
 /**
- * Where a student starts: her course, drawn as the run of units it is.
+ * Where a student starts: her course, drawn as the road it is.
  *
- * The screen answers two questions in the order she asks them — "what do I do
- * now?" at the top, then "where am I up to?" below. The run of stations is the
- * progress view; there is no separate dashboard, because a second view of the
- * same numbers would only be something else to keep in step.
+ * On the sign-in page she stood at the trailhead and looked down a path into
+ * a valley. This is that path. The units are the places along it, in the
+ * order the course runs, and she is somewhere on it -- so the screen answers
+ * her three questions with one object each rather than with three panels
+ * saying the same thing:
  *
- * Only units her teacher has published appear. That is the API's doing, not a
- * filter this page has to remember to apply.
+ *   "Where am I?"          the pin on the trail
+ *   "Where do I go next?"  the one open stop, with the work on it
+ *   "What have I done?"    the trail inked in behind her
+ *
+ * That is the change from the old screen, which carried a ticket naming the
+ * next action AND a list of stations repeating the same unit, the same state
+ * and the same numbers. One of them had to go; neither could go on its own,
+ * because each did half the job. So the stop she is standing on is the
+ * ticket, and every other stop is a marker.
+ *
+ * Nothing about her course changed. Only units her teacher has published
+ * appear, the order is the course's order, and every state drawn here is one
+ * the API reports -- `stepsOf` below is unchanged, down to the comments.
  */
 
 /** One of the four parts of a unit, as it stands for her right now. */
@@ -145,19 +157,53 @@ function nextAction(unit: LearnUnitSummary, steps: Step[]) {
   return { ...wording[current.kind], kind: current.kind, step: current };
 }
 
-/**
- * The encouraging line on the ticket, per kind of work.
- *
- * It sits on the ticket's paper rather than over the drawing: white type on a
- * white pill over a white cloud was one shape too many, and the drawing reads
- * better with nothing written across it.
- */
+/** The encouraging line above the work, per kind. */
 const ASK: Record<Step['kind'], string> = {
   vocabulary: 'Ready for more words?',
   grammar: 'Ready for the next challenge?',
   activity: 'Time to play!',
   assessment: 'One more step!',
 };
+
+const KIND_ICON: Record<Step['kind'], 'words' | 'grammar' | 'activity' | 'assessment'> = {
+  vocabulary: 'words',
+  grammar: 'grammar',
+  activity: 'activity',
+  assessment: 'assessment',
+};
+
+/**
+ * The four parts of a unit, drawn along the stop she is standing on.
+ *
+ * Same facts and same states as the old step track; drawn here as marks on
+ * the trail rather than as a row of boxed nodes, because on this screen they
+ * are the last stretch of the same road.
+ */
+function Parts({ steps }: { steps: Step[] }) {
+  return (
+    <ol className="trail-parts" data-testid="unit-parts">
+      {steps.map((step) => (
+        <li className="trail-part" key={step.kind} data-kind={step.kind} data-state={step.state}>
+          <span className="trail-part-node" aria-hidden="true">
+            {step.state === 'done' ? (
+              <Icon name="tick" size={14} />
+            ) : step.state === 'locked' ? (
+              <Icon name="lock" size={13} />
+            ) : step.state === 'spent' ? (
+              <Icon name="cross" size={13} />
+            ) : (
+              <Icon name={KIND_ICON[step.kind]} size={14} />
+            )}
+          </span>
+          <span className="trail-part-label">{step.label}</span>
+          <span className="trail-part-value" data-testid={`part-${step.kind}`}>
+            {step.value}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 export default function StudentHomePage() {
   const router = useRouter();
@@ -185,7 +231,11 @@ export default function StudentHomePage() {
       .then(setUnits)
       .catch((caught) => {
         setUnits([]);
-        setError(caught instanceof ApiError ? caught.message : 'Your units could not be loaded. Try again in a moment.');
+        setError(
+          caught instanceof ApiError
+            ? caught.message
+            : 'Your units could not be loaded. Try again in a moment.',
+        );
       });
   }, [me]);
 
@@ -230,29 +280,27 @@ export default function StudentHomePage() {
         }
       />
 
-      <WorldGround />
-      <main className="page has-navbar home-grid world">
-        <div className="home-aside">
-        {/* Somebody is here to say hello. She is a drawing beside the words,
-            not instead of them: every line still reads with her removed. */}
-        <header className="greeting greeting-hi">
-          <Girl who="lina" pose="wave" mood="bright" className="girl greeting-girl" />
-          <div>
-            <h1>
-              Hello, {me.displayName.split(' ')[0]}!
-            </h1>
-            <p className="greeting-ask">
+      {/* The valley, behind everything, edge to edge. It takes the meadow's
+          own tints -- the ones the sign-in page is drawn in -- so stepping
+          through the door does not change the weather. */}
+      <div className="valley-hold" style={themeVars(PLACES.meadow)} aria-hidden="true">
+        <Valley />
+      </div>
+
+      <main className="page has-navbar trail-page">
+        {/* Lina welcomes her in, and says it once. */}
+        <header className="trail-welcome">
+          <Girl who="lina" pose="wave" mood="bright" className="girl trail-girl" />
+          <div className="trail-hello">
+            <h1>Hello, {me.displayName.split(' ')[0]}!</h1>
+            <p className="trail-ask">
               {core.length === 0
                 ? 'Your course is on its way.'
                 : finishedUnits === core.length
                   ? 'You finished every unit!'
                   : 'Ready for another English adventure?'}
             </p>
-            {/*
-              One line of fact under it, and it has to earn its place: what is
-              actually true of her course right now, not a slogan.
-            */}
-            <p className="greeting-line">
+            <p className="trail-line">
               {core.length === 0
                 ? 'Your course opens as soon as your teacher adds the first unit.'
                 : finishedUnits === core.length
@@ -270,68 +318,13 @@ export default function StudentHomePage() {
           </p>
         )}
 
-        {/* The one thing she should do next, said once and said plainly —
-            on a ticket drawn in the place her unit lives. */}
-        {current && action && (
-          <button
-            className="today"
-            data-kind={action.kind}
-            style={themeVars(themeFor(current.title, true, core.indexOf(current)))}
-            onClick={() => router.push(`/learn/${current.id}`)}
-            data-testid="next-action"
-          >
-            <span className="today-scene">
-              <Scene kind={themeFor(current.title, true, core.indexOf(current)).scene} fit="fill" />
-              <Girl who="lina" pose="walk" className="girl today-girl" />
-            </span>
-            <span className="today-body">
-              <span className="badge-icon" aria-hidden="true">
-                <Icon
-                  name={
-                    action.kind === 'assessment'
-                      ? 'assessment'
-                      : action.kind === 'grammar'
-                        ? 'grammar'
-                        : action.kind === 'activity'
-                          ? 'activity'
-                          : 'words'
-                  }
-                  size={22}
-                />
-              </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span className="today-ask">{ASK[action.kind]}</span>
-                <span className="today-what">{action.what}</span>
-                <span className="today-why">{current.title}</span>
-                <span className="today-why">{action.why}</span>
-                {action.kind === 'vocabulary' && current.progress.vocabulary.total > 0 && (
-                  <span className="tally" aria-hidden="true">
-                    {Array.from({ length: current.progress.vocabulary.total }, (_, n) => (
-                      <i key={n} data-on={n < current.progress.vocabulary.done} />
-                    ))}
-                  </span>
-                )}
-              </span>
-              <span className="today-go" aria-hidden="true">
-                <Icon name="play" size={16} />
-                Let&rsquo;s go
-              </span>
-            </span>
-          </button>
-        )}
-
-        </div>
-
-        <div className="home-main">
-        <h2 className="marked-title">Your course</h2>
-
         {units === null ? (
           <div className="stack">
             <div className="skeleton" style={{ height: '7rem' }} />
             <div className="skeleton" style={{ height: '7rem' }} />
           </div>
         ) : core.length === 0 ? (
-          <div className="card">
+          <div className="trail-empty">
             <h2>Your units are on their way</h2>
             <p className="muted" style={{ marginTop: '.5rem' }}>
               Your teacher is still putting this course together. It will show up here as soon as
@@ -339,123 +332,114 @@ export default function StudentHomePage() {
             </p>
           </div>
         ) : (
-          <div className="journey journey-in" data-testid="unit-grid">
+          <ol className="trail" data-testid="unit-grid">
             {core.map((unit, i) => {
               const p = unit.progress;
-              const state = p.isComplete ? 'done' : unit.id === currentId ? 'current' : 'todo';
+              const open = unit.id === currentId;
+              const state = p.isComplete ? 'done' : open ? 'current' : 'todo';
               const steps = stepsOf(unit);
               const theme = themeFor(unit.title, true, i);
+              const here = current?.id === unit.id ? action : null;
+
               return (
-                <div
-                  className="station"
+                <li
+                  className="trail-stop"
                   data-state={state}
+                  data-open={open}
                   key={unit.id}
                   style={themeVars(theme)}
                 >
-                  {/* The station on the rail: the mark of the place this
-                      unit lives in, or a tick once it is behind her. */}
-                  <span className="station-badge" aria-hidden="true">
-                    {p.isComplete ? <Icon name="tick" size={18} /> : <Glyph kind={theme.scene} />}
+                  {/* The marker on the trail: the place's own mark, a tick
+                      once she is past it. */}
+                  <span className="trail-mark" aria-hidden="true">
+                    {p.isComplete ? <Icon name="tick" size={20} /> : <Glyph kind={theme.scene} />}
                   </span>
+
                   <button
-                    className="station-card"
+                    className="trail-body"
                     data-testid="unit-card"
                     onClick={() => router.push(`/learn/${unit.id}`)}
                   >
-                    <div className="between" style={{ gap: '.75rem' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <span className="row" style={{ gap: '.5rem' }}>
-                          <span className="station-no">Unit {i + 1}</span>
-                          {/* Where she stands, in her words. */}
-                          {p.isComplete ? (
-                            <span className="station-word" data-tone="done">
-                              <Icon name="star" size={11} />
-                              Unit complete!
-                            </span>
-                          ) : state === 'current' ? (
-                            <span className="station-word" data-tone="here">You are here</span>
-                          ) : (
-                            <span className="station-word" data-tone="soon">Coming up</span>
-                          )}
-                        </span>
-                        <span className="station-title" style={{ display: 'block' }}>
-                          {unit.title}
-                        </span>
-                      </div>
-                      {/* The chip beside the unit's number already says
-                          "complete"; the figure is for a unit still going. */}
+                    <span className="trail-head">
+                      <span className="trail-where">
+                        <span className="trail-no">Unit {i + 1}</span>
+                        {p.isComplete ? (
+                          <span className="trail-word" data-tone="done">
+                            <Icon name="star" size={11} />
+                            Unit complete!
+                          </span>
+                        ) : open ? (
+                          <span className="trail-word" data-tone="here">
+                            You are here
+                          </span>
+                        ) : (
+                          <span className="trail-word" data-tone="soon">
+                            Coming up
+                          </span>
+                        )}
+                      </span>
+                      <span className="trail-title">{unit.title}</span>
                       {!p.isComplete && p.overallPercent > 0 && (
-                        <strong className="station-pct num">{p.overallPercent}%</strong>
+                        <span className="trail-pct num">{p.overallPercent}%</span>
                       )}
-                    </div>
+                    </span>
 
-                    {/*
-                      The four parts, drawn as the sequence the server actually
-                      enforces. A connector fills only behind a finished step,
-                      so the line itself shows how far she has come.
-                    */}
-                    <ol className="track" data-testid="unit-parts">
-                      {steps.map((step, at) => (
-                        <li
-                          className="track-step"
-                          key={step.kind}
-                          data-kind={step.kind}
-                          data-state={step.state}
-                          data-fill-before={at > 0 && steps[at - 1].state === 'done'}
-                          data-fill-after={step.state === 'done'}
-                        >
-                          <span className="track-node" aria-hidden="true">
-                            {step.state === 'done' ? (
-                              <Icon name="tick" size={15} />
-                            ) : step.state === 'locked' ? (
-                              <Icon name="lock" size={14} />
-                            ) : step.state === 'spent' ? (
-                              <Icon name="cross" size={14} />
-                            ) : (
-                              <Icon name={step.kind === 'vocabulary' ? 'words' : step.kind} size={15} />
-                            )}
+                    {/* The stop she is standing on opens: the four parts, and
+                        the one thing she can get on with, on the spot. Every
+                        other stop stays a marker, because repeating this for
+                        units she cannot start yet is what made the old screen
+                        say everything twice. */}
+                    {open && (
+                      <>
+                        <Parts steps={steps} />
+                        {here && (
+                          <span className="trail-do" data-kind={here.kind} data-testid="next-action">
+                            <span className="trail-do-mark" aria-hidden="true">
+                              <Icon name={KIND_ICON[here.kind]} size={20} />
+                            </span>
+                            <span className="trail-do-words">
+                              <span className="trail-do-ask">{ASK[here.kind]}</span>
+                              <span className="trail-do-what">{here.what}</span>
+                              <span className="trail-do-why">{here.why}</span>
+                            </span>
+                            <span className="trail-go" aria-hidden="true">
+                              <Icon name="play" size={15} />
+                              Let&rsquo;s go
+                            </span>
                           </span>
-                          <span className="track-label">{step.label}</span>
-                          <span className="track-value" data-testid={`part-${step.kind}`}>
-                            {step.value}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
+                        )}
+                      </>
+                    )}
 
-                    {p.missingContent.length > 0 && (
-                      <p className="muted" style={{ margin: '.75rem 0 0', fontSize: 'var(--fs-small)' }}>
+                    {open && p.missingContent.length > 0 && (
+                      <span className="trail-note">
                         Your teacher is still adding part of this unit.
-                      </p>
+                      </span>
                     )}
                   </button>
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ol>
         )}
 
-        {/*
-          Grammar Review sits after the course rather than inside it: it is
-          revision, and it does not count towards finishing the four units.
-        */}
+        {/* Grammar Review sits past the end of the trail: it is revision, and
+            it does not count towards finishing the four units. */}
         {extra.map((unit) => (
           <button
             key={unit.id}
-            className="aside-card"
-            data-kind="grammar"
+            className="trail-extra"
             style={themeVars(themeFor(unit.title, false))}
             onClick={() => router.push(`/learn/${unit.id}`)}
           >
-            <span className="aside-icon" aria-hidden="true">
+            <span className="trail-extra-mark" aria-hidden="true">
               <Glyph kind={themeFor(unit.title, false).scene} size={20} />
             </span>
-            <span style={{ flex: 1, minWidth: 0, display: 'grid', gap: '.2rem' }}>
-              <span className="row" style={{ gap: '.5rem' }}>
-                <strong className="aside-title">{unit.title}</strong>
-                <span className="aside-tag">Extra</span>
+            <span className="trail-extra-words">
+              <span className="trail-extra-head">
+                <strong className="trail-extra-title">{unit.title}</strong>
+                <span className="trail-extra-tag">Extra</span>
               </span>
-              {/* Said as what it is for, not as what it is missing. */}
               <span className="muted">
                 Revision whenever you want it. It sits outside your four units, so nothing here
                 changes your course progress.
@@ -463,7 +447,6 @@ export default function StudentHomePage() {
             </span>
           </button>
         ))}
-        </div>
       </main>
 
       <StudentNav />

@@ -3082,3 +3082,349 @@ body:has(.world) { background: #F2EDFF; }
 
 /* Nothing on this page animates beyond the world's own butterfly, which
    already honours prefers-reduced-motion where it is defined. */
+
+/* ==========================================================================
+   THE TRAIL — student home
+   The sign-in page ends at a trailhead looking down a path into a valley.
+   This is that path: the units are places along it, in the course's order,
+   and she stands on it somewhere. Everything here is new naming on purpose --
+   `.journey`, `.station` and `.track` are shared with the unit screen and the
+   games, and this phase is Home alone.
+   ========================================================================== */
+
+/* The valley, fixed behind the page, so scrolling walks her down it rather
+   than scrolling the landscape away. */
+.valley-hold {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--w3);
+  pointer-events: none;
+}
+.valley { width: 100%; height: 100%; display: block; }
+
+.trail-page { position: relative; max-width: 54rem; }
+
+/* --- the welcome --------------------------------------------------------- */
+.trail-welcome {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: clamp(var(--s3), 3vw, var(--s5));
+  margin-bottom: clamp(var(--s5), 5vh, var(--s7));
+}
+.trail-girl {
+  width: clamp(5.5rem, 16vw, 8.5rem);
+  filter: drop-shadow(0 18px 22px rgb(27 23 57 / .16));
+}
+.trail-hello h1 {
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 1.2rem + 2vw, 2.6rem);
+  line-height: 1.08;
+  margin: 0;
+  color: var(--ink);
+}
+.trail-ask {
+  margin: var(--s2) 0 0;
+  color: var(--w1);
+  font-weight: 700;
+  font-size: clamp(.95rem, .9rem + .3vw, 1.1rem);
+}
+.trail-line { margin: var(--s1) 0 0; color: var(--ink-2); font-size: .9375rem; max-width: 42ch; }
+
+/* --- the trail itself ---------------------------------------------------- */
+/*
+  A walked path, not a rule: warm sand, wide enough to be a way through, with
+  stones down the middle. It runs behind the markers, and it is inked darker
+  behind a stop she has finished -- the part of the road already walked.
+*/
+.trail {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 5.5rem;
+  position: relative;
+}
+/*
+  A path that wanders.
+  A straight strip of sand is a post, however warm its colour -- the eye reads
+  a vertical band as an object, not as a way through. So the trail is one tile
+  of a gentle S, repeated down the page: it leaves the centre, comes back, and
+  leaves the other way, and it meets itself exactly at the tile edge so the
+  repeat is invisible. The wander is kept to +/-14px against a 32px band, which
+  means the centre line the markers sit on is never off the sand.
+  Stones are the same dashes the sign-in meadow lays along its path.
+*/
+.trail::before {
+  content: '';
+  position: absolute;
+  inset-block: -1rem -1.5rem;
+  inset-inline-start: 0;
+  width: 96px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='240' viewBox='0 0 96 240'%3E%3Cpath d='M48 0 C48 30 34 30 34 60 C34 90 48 90 48 120 C48 150 62 150 62 180 C62 210 48 210 48 240' fill='none' stroke='%23EFE1CB' stroke-width='32' stroke-linecap='round'/%3E%3Cpath d='M48 0 C48 30 34 30 34 60 C34 90 48 90 48 120 C48 150 62 150 62 180 C62 210 48 210 48 240' fill='none' stroke='%23DCC8A8' stroke-width='8' stroke-linecap='round' stroke-dasharray='2 21'/%3E%3C/svg%3E");
+  background-size: 96px 240px;
+  background-repeat: repeat-y;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 3rem, #000 calc(100% - 3.5rem), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 3rem, #000 calc(100% - 3.5rem), transparent);
+}
+
+.trail-stop { position: relative; padding-bottom: clamp(var(--s4), 2.5vh, var(--s5)); }
+
+/* The road behind a finished stop, walked and darker. */
+.trail-stop[data-state='done']::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -5.5rem;
+  top: 1.4rem;
+  bottom: -.1rem;
+  width: 96px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='240' viewBox='0 0 96 240'%3E%3Cpath d='M48 0 C48 30 34 30 34 60 C34 90 48 90 48 120 C48 150 62 150 62 180 C62 210 48 210 48 240' fill='none' stroke='%23E3D2B4' stroke-width='32' stroke-linecap='round'/%3E%3Cpath d='M48 0 C48 30 34 30 34 60 C34 90 48 90 48 120 C48 150 62 150 62 180 C62 210 48 210 48 240' fill='none' stroke='%23C9B189' stroke-width='8' stroke-linecap='round' stroke-dasharray='2 21'/%3E%3C/svg%3E");
+  background-size: 96px 240px;
+  background-repeat: repeat-y;
+}
+
+.trail-mark {
+  position: absolute;
+  inset-inline-start: -3.95rem;
+  top: .25rem;
+  z-index: 1;
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #FFFFFF;
+  border: 3px solid var(--w2);
+  color: var(--w1);
+  box-shadow: 0 6px 14px -8px rgb(27 23 57 / .4);
+}
+.trail-stop[data-state='done'] .trail-mark {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #FFFFFF;
+}
+.trail-stop[data-state='current'] .trail-mark {
+  border-color: var(--w1);
+  box-shadow: 0 0 0 5px rgb(255 255 255 / .55), 0 8px 18px -8px rgb(27 23 57 / .45);
+}
+
+/* --- a stop -------------------------------------------------------------- */
+.trail-body {
+  display: block;
+  width: 100%;
+  text-align: start;
+  border: 0;
+  cursor: pointer;
+  border-radius: 20px;
+  padding: var(--s3) var(--s4);
+  background: rgb(255 255 255 / .86);
+  color: inherit;
+  transition:
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+.trail-body:hover { background: rgb(255 255 255 / .96); }
+.trail-body:active { transform: translateY(1px); }
+
+/*
+  The stop she is standing on gets the sign-in panel's own paper: translucent,
+  blurred, the same radius and the same layered shadow. It is the one piece of
+  material carried across from the door, and it is why the two screens read as
+  one place.
+*/
+.trail-stop[data-open='true'] .trail-body {
+  border-radius: 26px;
+  padding: clamp(var(--s4), 2.4vw, var(--s5));
+  background: rgb(255 255 255 / .88);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid rgb(255 255 255 / .92);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / .95) inset,
+    0 34px 64px -30px rgb(27 23 57 / .34),
+    0 8px 20px -10px rgb(27 23 57 / .14);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .trail-stop[data-open='true'] .trail-body { background: rgb(255 255 255 / .97); }
+  .trail-body { background: rgb(255 255 255 / .93); }
+}
+
+.trail-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--s3);
+}
+.trail-where { grid-column: 1; display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.trail-no { font-size: .75rem; font-weight: 700; color: var(--ink-3); }
+.trail-title {
+  grid-column: 1;
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 1rem + .7vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink);
+  margin-top: .1rem;
+}
+.trail-pct { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 1.05rem; font-weight: 800; color: var(--w1); }
+
+.trail-word {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  font-size: var(--fs-micro, .6875rem);
+  font-weight: 800;
+  padding: .15rem .5rem;
+  border-radius: 999px;
+}
+.trail-word[data-tone='here'] { color: #fff; background: var(--w1); }
+.trail-word[data-tone='done'] { color: var(--ok-ink); background: var(--ok-soft); }
+.trail-word[data-tone='soon'] { color: var(--ink-3); background: rgb(27 23 57 / .06); }
+
+/* --- the four parts, on the open stop ------------------------------------ */
+.trail-parts {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s2);
+  margin: var(--s4) 0 0;
+  padding: 0;
+}
+.trail-part {
+  display: grid;
+  justify-items: center;
+  gap: .3rem;
+  text-align: center;
+  min-width: 0;
+}
+.trail-part-node {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(255 255 255 / .9);
+  border: 2px solid rgb(27 23 57 / .1);
+  color: var(--ink-3);
+}
+.trail-part[data-state='done'] .trail-part-node { background: var(--ok); border-color: var(--ok); color: #fff; }
+.trail-part[data-state='current'] .trail-part-node { background: var(--w1); border-color: var(--w1); color: #fff; }
+.trail-part[data-state='locked'] .trail-part-node,
+.trail-part[data-state='empty'] .trail-part-node { opacity: .55; }
+.trail-part-label { font-size: var(--fs-small); font-weight: 700; color: var(--ink-2); }
+.trail-part-value { font-size: var(--fs-small); color: var(--ink-3); }
+.trail-part[data-state='done'] .trail-part-value { color: var(--ok-ink); font-weight: 700; }
+.trail-part[data-state='current'] .trail-part-value { color: var(--ink); font-weight: 700; }
+.trail-part[data-state='spent'] .trail-part-value { color: var(--bad-ink, #B3261E); font-weight: 700; }
+
+/* --- the one thing to do now --------------------------------------------- */
+.trail-do {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s4);
+  padding: var(--s3);
+  border-radius: 18px;
+  background: rgb(108 76 224 / .07);
+}
+.trail-do-mark {
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: var(--brand);
+}
+.trail-do-words { flex: 1; min-width: 0; display: grid; gap: .1rem; }
+.trail-do-ask { font-size: var(--fs-small); font-weight: 700; color: var(--w1); }
+.trail-do-what { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--ink); }
+.trail-do-why { font-size: var(--fs-small); color: var(--ink-3); }
+.trail-go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .7rem 1.1rem;
+  border-radius: 14px;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+}
+.trail-body:hover .trail-go { filter: brightness(1.08); }
+
+.trail-note { display: block; margin-top: var(--s3); font-size: var(--fs-small); color: var(--ink-3); }
+
+/* --- past the end of the trail ------------------------------------------- */
+.trail-empty {
+  border-radius: 24px;
+  padding: var(--s5);
+  background: rgb(255 255 255 / .9);
+  box-shadow: 0 20px 44px -28px rgb(27 23 57 / .3);
+}
+.trail-empty h2 { font-family: var(--font-display); margin: 0; }
+
+.trail-extra {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  width: 100%;
+  text-align: start;
+  border: 0;
+  cursor: pointer;
+  margin-top: var(--s4);
+  padding: var(--s4);
+  border-radius: 20px;
+  background: rgb(255 255 255 / .86);
+  color: inherit;
+}
+.trail-extra:hover { background: rgb(255 255 255 / .9); }
+.trail-extra-mark {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--w3);
+  color: var(--w1);
+}
+.trail-extra-words { flex: 1; min-width: 0; display: grid; gap: .2rem; }
+.trail-extra-head { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.trail-extra-title { font-family: var(--font-display); font-size: 1.1rem; }
+.trail-extra-tag {
+  font-size: var(--fs-micro, .6875rem);
+  font-weight: 800;
+  color: var(--ink-3);
+  background: rgb(27 23 57 / .06);
+  padding: .15rem .5rem;
+  border-radius: 999px;
+}
+
+/* --- phone --------------------------------------------------------------- */
+@media (max-width: 30rem) {
+  .trail { padding-inline-start: 4.2rem; }
+  .trail::before { width: 72px; background-size: 72px 180px; }
+  .trail-stop[data-state='done']::before { inset-inline-start: -4.2rem; width: 72px; background-size: 72px 180px; }
+  .trail-mark { inset-inline-start: -3.1rem; width: 2.3rem; height: 2.3rem; border-width: 2px; }
+  .trail-welcome { align-items: center; gap: var(--s3); }
+  /* The action stacks rather than squeezing the button off the edge. */
+  .trail-do { flex-wrap: wrap; }
+  .trail-go { width: 100%; justify-content: center; }
+  .trail-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+}
+
+/* One orchestrated moment: the stops settle along the trail, once, on load. */
+@media (prefers-reduced-motion: no-preference) {
+  .trail-stop { animation: trail-settle 420ms cubic-bezier(.22, 1, .36, 1) both; }
+  .trail-stop:nth-child(1) { animation-delay: 60ms; }
+  .trail-stop:nth-child(2) { animation-delay: 130ms; }
+  .trail-stop:nth-child(3) { animation-delay: 200ms; }
+  .trail-stop:nth-child(n + 4) { animation-delay: 260ms; }
+}
+@keyframes trail-settle {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
