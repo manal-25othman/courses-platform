@@ -2872,18 +2872,22 @@ body:has(.world) { background: #F2EDFF; }
 .pw-eye[aria-pressed='true'] { color: var(--brand); }
 
 /* --- The way in ----------------------------------------------------------
-   One composition, read in one sweep: Lina at the head of the road, the road
-   climbing to the right, and the way in at the top of its climb. The words
-   belong to the form, not to the picture -- split across the page they read
-   as a caption.
+   The approved composition: an illustrated field edge to edge, the mark in
+   the top-left corner of it, the welcome and the form together in the middle,
+   and Lina beside them at the near end of the path.
+
+   Everything is drawn from tokens already in this file plus the place's own
+   three tints, which `themeVars(PLACES.meadow)` puts on the <main>.
 */
 .signin {
   position: relative;
   min-height: 100dvh;
   display: grid;
+  place-items: center;
   overflow: hidden;
   isolation: isolate;
   background: var(--w3);
+  padding: clamp(var(--s5), 5vh, var(--s7)) clamp(var(--s4), 4vw, var(--s7));
 }
 
 .trailhead {
@@ -2895,115 +2899,186 @@ body:has(.world) { background: #F2EDFF; }
   display: block;
 }
 
+/* The mark sits in the scene's own corner, as the app's bar carries it. */
+.signin-brand {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: clamp(var(--s4), 3vw, var(--s6));
+  inset-inline-start: clamp(var(--s4), 3vw, var(--s6));
+}
+.signin-brand .brandmark .mark { width: 2.6rem; height: 2.6rem; border-radius: 14px; }
+.signin-brand .brandmark .name { font-size: 1.15rem; }
+
 .signin-stage {
   position: relative;
   z-index: 1;
-  width: 100%;
-  max-width: 74rem;
-  margin: 0 auto;
-  padding: clamp(var(--s4), 3vw, var(--s6)) clamp(var(--s5), 5vw, var(--s8));
   display: grid;
-  grid-template-rows: auto 1fr;
-  gap: var(--s4);
+  justify-items: center;
+  width: 100%;
 }
 
-.signin-brand .brandmark .mark { width: 2.5rem; height: 2.5rem; border-radius: 13px; }
-.signin-brand .brandmark .name { font-size: 1.15rem; }
+/* --- the welcome --------------------------------------------------------- */
+.signin-words { text-align: center; display: grid; gap: var(--s1); }
 
-.signin-middle { display: grid; align-items: center; gap: var(--s5); }
-
-/* --- words and form: one block ------------------------------------------ */
-.signin-entry { display: grid; gap: var(--s4); }
-.signin-words { display: grid; gap: var(--s2); }
+.signin-eyebrow {
+  margin: 0;
+  color: var(--w1);
+  font-size: clamp(.9rem, .85rem + .25vw, 1.05rem);
+  font-weight: 700;
+  letter-spacing: .04em;
+}
 
 .signin-title {
   font-family: var(--font-display);
-  font-size: clamp(1.7rem, 1.3rem + 1.3vw, 2.25rem);
-  line-height: 1.12;
+  font-size: clamp(2.1rem, 1.5rem + 2.4vw, 3.4rem);
+  line-height: 1.05;
   margin: 0;
   color: var(--ink);
-  max-width: 17ch;
+  /* The soft mint underline from the approved design, drawn rather than
+     underlined so it keeps its weight and rounded ends. */
+  background-image: linear-gradient(var(--w2), var(--w2));
+  background-repeat: no-repeat;
+  background-size: 62% .3rem;
+  background-position: 50% 96%;
+  padding-bottom: .22em;
+  border-radius: 2px;
 }
-.signin-sub { margin: 0; color: var(--ink-2); font-size: 1rem; max-width: 34ch; }
 
-/* --- Lina ---------------------------------------------------------------- */
-/*
-  The largest thing on the page after the field itself. She is the subject;
-  the road leaves her feet and the panel is where it arrives.
-*/
-.signin-girl {
-  width: clamp(11rem, 19vw, 16rem);
-  justify-self: center;
-  filter: drop-shadow(0 26px 30px rgb(27 23 57 / .18));
+.signin-sub {
+  margin: var(--s2) 0 0;
+  color: var(--ink-2);
+  font-size: clamp(.95rem, .9rem + .3vw, 1.1rem);
 }
 
 /* --- the panel ----------------------------------------------------------- */
 /*
   Paper thin enough for the field to show through, opaque enough to read a
-  password on without thinking about it. 86% is where that settled: at 74 the
-  hills showed through the labels.
+  password on without thinking about it.
 */
 .signin-panel {
   position: relative;
-  border-radius: 22px;
-  padding: clamp(var(--s5), 2.2vw, var(--s6));
-  background: rgb(255 255 255 / .86);
-  backdrop-filter: blur(22px) saturate(1.2);
-  -webkit-backdrop-filter: blur(22px) saturate(1.2);
-  border: 1px solid rgb(255 255 255 / .9);
+  z-index: 1;
+  width: 100%;
+  border-radius: 26px;
+  padding: clamp(var(--s5), 2.6vw, var(--s6));
+  background: rgb(255 255 255 / .88);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid rgb(255 255 255 / .92);
   box-shadow:
     0 1px 0 rgb(255 255 255 / .95) inset,
-    0 30px 60px -28px rgb(27 23 57 / .34),
-    0 6px 16px -8px rgb(27 23 57 / .16);
+    0 34px 64px -30px rgb(27 23 57 / .34),
+    0 8px 20px -10px rgb(27 23 57 / .14);
 }
+/* Where a browser cannot blur, transparency alone would leave the form
+   sitting on grass. It gets opaque paper instead. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .signin-panel { background: rgb(255 255 255 / .97); }
 }
 
-/* A quieter heading: the h1 above it already said where you are. */
-.signin-heading {
-  font-family: var(--font-ui);
-  font-size: var(--fs-small);
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  margin: 0 0 var(--s1);
+.signin-heading { font-family: var(--font-display); font-size: 1.55rem; margin: 0 0 var(--s1); }
+.signin-panel > .muted { font-size: var(--fs-small); margin: 0 0 var(--s4); }
+
+/* --- fields -------------------------------------------------------------- */
+/* A mark at the leading edge, and room for it. */
+.pw-has-icon input { padding-inline-start: 2.9rem; }
+.pw-mark {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  width: 2.9rem;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--ink-4);
+  pointer-events: none;
+  z-index: 1;
 }
-.signin-panel > .muted { font-size: var(--fs-small); margin: 0 0 var(--s3); }
-.signin-panel label { margin-top: var(--s3); }
-.signin-panel label:first-of-type { margin-top: 0; }
+.pw-wrap + .pw-wrap, .signin-panel .pw-wrap + label + .pw-wrap { margin-top: var(--s3); }
+.signin-panel .pw-wrap { margin-top: var(--s3); }
+.signin-panel .pw-wrap:first-of-type { margin-top: 0; }
 
 .signin-panel input {
-  background: rgb(255 255 255 / .82);
+  background: rgb(255 255 255 / .86);
   border-color: rgb(205 194 236 / .95);
-  border-radius: 12px;
+  border-radius: 14px;
+  min-height: 3rem;
 }
+.signin-panel input::placeholder { color: var(--ink-4); }
 .signin-panel input:focus { background: var(--surface); }
 
-.signin-go { width: 100%; margin-top: var(--s4); border-radius: 12px; }
-.signin-help { margin-top: var(--s4); font-size: var(--fs-small); line-height: 1.55; }
-.signin-waiting { min-height: 19rem; }
-
-/* --- desktop ------------------------------------------------------------- */
-@media (min-width: 64rem) {
-  .signin-stage { grid-template-rows: auto 1fr; }
-  .signin-middle {
-    grid-template-columns: 1fr minmax(20rem, 24.5rem);
-    gap: clamp(var(--s5), 4vw, var(--s7));
-    align-items: center;
-  }
-  /*
-    Nudged toward the road's head and down onto it: the drawing anchors to the
-    bottom of the window, so she has to as well or she stands on the hillside
-    above the path.
-  */
-  .signin-girl {
-    align-self: end;
-    justify-self: start;
-    margin-left: clamp(1rem, 7vw, 7rem);
-    margin-bottom: clamp(2rem, 16vh, 10rem);
-  }
-  /* Lifted, so the climbing road arrives at the panel's foot. */
-  .signin-entry { align-self: center; margin-bottom: clamp(1rem, 6vh, 4rem); }
+.signin-go {
+  width: 100%;
+  margin-top: var(--s4);
+  border-radius: 14px;
+  min-height: 3.1rem;
+  font-size: 1.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
 }
+.signin-arrow { font-size: 1.1em; line-height: 1; }
+
+.signin-help { margin-top: var(--s4); font-size: var(--fs-small); line-height: 1.6; }
+.signin-waiting { min-height: 21rem; }
+
+/* --- Lina ---------------------------------------------------------------- */
+.signin-girl {
+  width: clamp(8rem, 30vw, 11rem);
+  justify-self: center;
+  filter: drop-shadow(0 22px 26px rgb(27 23 57 / .18));
+}
+
+/* --- phone: the form first, Lina beside the heading ---------------------- */
+@media (max-width: 47.9375rem) {
+  .signin { place-items: start center; padding-top: clamp(var(--s7), 14vh, var(--s8)); }
+  .signin-stage { gap: var(--s3); max-width: 24rem; }
+  /* She sits above the welcome at a size that does not push the form down. */
+  .signin-girl { width: 7.5rem; margin-bottom: calc(-1 * var(--s3)); }
+  .signin-title { background-size: 70% .26rem; }
+}
+
+/* --- tablet and up: she stands beside the panel -------------------------- */
+/*
+  A portrait window shows the whole height of a landscape drawing -- slicing
+  crops the sides, never the sky -- so on a tablet the horizon sits high and
+  the field runs a long way down. Centring the stage puts Lina's feet on that
+  field rather than on the skyline, and leaves the sky above her for the mark
+  and the welcome.
+*/
+@media (min-width: 48rem) and (max-width: 63.9375rem) {
+  .signin-girl { width: clamp(10rem, 22vw, 13rem); }
+}
+
+@media (min-width: 48rem) {
+  .signin-stage {
+    grid-template-columns: auto minmax(0, 27rem);
+    grid-template-areas: 'girl entry';
+    align-items: end;
+    justify-content: center;
+    gap: clamp(var(--s3), 2vw, var(--s5));
+    max-width: 64rem;
+  }
+  .signin-girl {
+    grid-area: girl;
+    align-self: end;
+    /* Overlapping the panel's edge, as in the approved composition: she is
+       beside the way in, not in a column of her own. */
+    margin-inline-end: clamp(-6rem, -6vw, -3rem);
+    margin-bottom: clamp(0rem, 3vh, 2rem);
+    position: relative;
+    /* In front of the panel, not meeting its edge: she overlaps it, which is
+       what puts her in the same space as the form rather than beside it. */
+    z-index: 3;
+  }
+  .signin-entry { grid-area: entry; display: grid; gap: var(--s4); }
+}
+
+@media (min-width: 64rem) {
+  .signin-stage { grid-template-columns: auto minmax(0, 29rem); max-width: 70rem; }
+  .signin-girl { width: clamp(13rem, 20vw, 18rem); }
+}
+
+/* Nothing on this page animates beyond the world's own butterfly, which
+   already honours prefers-reduced-motion where it is defined. */

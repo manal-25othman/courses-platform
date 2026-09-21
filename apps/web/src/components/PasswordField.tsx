@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { Icon } from './Icon';
+import { Icon, IconName } from './Icon';
 
 /**
  * A password box you can look at.
@@ -41,6 +41,8 @@ export function PasswordField({
   hint,
   autoFocus,
   testId,
+  icon,
+  placeholder,
 }: {
   id: string;
   label: string;
@@ -54,14 +56,29 @@ export function PasswordField({
   hint?: string;
   autoFocus?: boolean;
   testId?: string;
+  /** A mark inside the box, at the leading edge. */
+  icon?: IconName;
+  /**
+   * Shown while the box is empty. The label stays in the markup either way --
+   * a placeholder disappears the moment somebody types, so it can decorate a
+   * field but it cannot name one.
+   */
+  placeholder?: string;
 }) {
   const [shown, setShown] = useState(false);
   const hintId = useId();
 
   return (
     <>
-      <label htmlFor={id}>{label}</label>
-      <div className="pw-wrap">
+      <label htmlFor={id} className={placeholder ? 'sr-only' : undefined}>
+        {label}
+      </label>
+      <div className={`pw-wrap${icon ? ' pw-has-icon' : ''}`}>
+        {icon && (
+          <span className="pw-mark" aria-hidden="true">
+            <Icon name={icon} size={18} />
+          </span>
+        )}
         <input
           id={id}
           type={shown ? 'text' : 'password'}
@@ -79,6 +96,7 @@ export function PasswordField({
           required={required}
           minLength={minLength}
           autoFocus={autoFocus}
+          placeholder={placeholder}
           aria-describedby={hint ? hintId : undefined}
           data-testid={testId}
         />

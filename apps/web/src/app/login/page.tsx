@@ -5,6 +5,7 @@ import { Suspense, useState, FormEvent } from 'react';
 import { api, ApiError, homeFor, Me } from '@/lib/api';
 import { Brandmark } from '@/components/Shell';
 import { PasswordField } from '@/components/PasswordField';
+import { Icon } from '@/components/Icon';
 import { Girl } from '@/components/world/Girl';
 import { Trailhead } from '@/components/world/Trailhead';
 import { PLACES, themeVars } from '@/lib/world';
@@ -31,7 +32,8 @@ import { PLACES, themeVars } from '@/lib/world';
 function Welcome() {
   return (
     <div className="signin-words">
-      <h1 className="signin-title">Your English journey starts here</h1>
+      <p className="signin-eyebrow">Your English Journey</p>
+      <h1 className="signin-title">Starts Here</h1>
       <p className="signin-sub">Learn, practise, and grow with TOP GOAL.</p>
     </div>
   );
@@ -103,18 +105,27 @@ function LoginForm() {
       )}
 
       <form onSubmit={handleSubmit} noValidate>
-        <label htmlFor="username">Username</label>
-        <input
-          id="username"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          autoComplete="username"
-          // Capitals do not matter to the server, and a tablet keyboard adds
-          // one whether she wants it or not. Turning it off here means what
-          // she sees matches what she meant.
-          autoCapitalize="none"
-          required
-        />
+        {/* The label is kept for anyone who cannot see the placeholder. */}
+        <label htmlFor="username" className="sr-only">
+          Username
+        </label>
+        <div className="pw-wrap pw-has-icon">
+          <span className="pw-mark" aria-hidden="true">
+            <Icon name="user" size={18} />
+          </span>
+          <input
+            id="username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            autoComplete="username"
+            // Capitals do not matter to the server, and a tablet keyboard adds
+            // one whether she wants it or not. Turning it off here means what
+            // she sees matches what she meant.
+            autoCapitalize="none"
+            placeholder="Username"
+            required
+          />
+        </div>
 
         <PasswordField
           id="password"
@@ -124,6 +135,8 @@ function LoginForm() {
           autoComplete="current-password"
           required
           testId="login-password"
+          icon="lock"
+          placeholder="Password"
         />
 
         {error && (
@@ -138,6 +151,7 @@ function LoginForm() {
           disabled={busy}
         >
           {busy ? 'Signing in…' : 'Sign in'}
+          {!busy && <span className="signin-arrow" aria-hidden="true">→</span>}
         </button>
       </form>
 
@@ -158,22 +172,17 @@ function Stage({ children }: { children: React.ReactNode }) {
       {/* The field itself, behind everything, edge to edge. */}
       <Trailhead />
 
+      <header className="signin-brand">
+        <Brandmark />
+      </header>
+
       <div className="signin-stage">
-        <header className="signin-brand">
-          <Brandmark />
-        </header>
+        {/* She stands beside the way in, at the near end of the path. */}
+        <Girl who="lina" pose="wave" mood="bright" className="girl signin-girl" />
 
-        <div className="signin-middle">
-          {/* She stands at the head of the road, and the road goes to the
-              panel -- so the eye travels her, then it, then the way in. */}
-          <Girl who="lina" pose="wave" mood="bright" className="girl signin-girl" />
-
-          {/* Words and form are one block. Split across the page they read as
-              a caption for a picture rather than as an invitation to sign in. */}
-          <div className="signin-entry">
-            <Welcome />
-            {children}
-          </div>
+        <div className="signin-entry">
+          <Welcome />
+          {children}
         </div>
       </div>
     </main>

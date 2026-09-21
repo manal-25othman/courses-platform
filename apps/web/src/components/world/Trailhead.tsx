@@ -3,27 +3,39 @@
  *
  * `Scene` composes each place at 400x160 — the right shape for a band across
  * the top of a card, and the wrong one for a whole screen: stretched to a
- * window it is a 2x zoom into the middle of a small drawing, not a bigger
- * picture. So the sign-in page gets the same meadow laid out for a window.
+ * window it is a 2x zoom into a small drawing, not a bigger picture. So the
+ * sign-in page gets the same meadow laid out for a window.
  *
- * Same vocabulary, deliberately, shape for shape: the three depths `Scene`
- * builds every place from (distance, middle, foreground), the unit's own
- * three tints, the same sun and cloud and tree construction, the same white
- * flowers on the meadow floor, and the road from Grammar Adventure -- a band
- * in the mid tint with a white 8/12 dashed line down it. Nothing here is a
- * new art style; it is the existing one, given room.
+ * Same vocabulary as `Scene`, deliberately, shape for shape: three depths
+ * (distance, middle, foreground), the unit's own three tints, the same sun,
+ * cloud, tree and house construction, the same white meadow flowers. Nothing
+ * here is a new art style; it is the existing one, given room.
  *
- * The road is the point. It starts at Lina's feet in the bottom left and runs
- * away to the right, narrowing as it goes, so the page reads as the beginning
- * of something rather than as a picture of a field.
+ * Laid out to the composition the client approved: a winding path from the
+ * near edge of the field climbing to a village on the far hills, a canopy
+ * overhanging from the left, and the middle of the frame kept quiet — that is
+ * where the form sits, and the scenery must not compete with it.
  */
 
 const SUN = '#FFC845';
 const SUN_SOFT = '#FFE3A3';
 const CORAL = '#FF8F70';
+const SKY_TINT = '#EAF4FF';
 const PAPER = '#FFFFFF';
 const LEAF = '#5BC9A6';
 const INK = '#3B3159';
+const BARK = '#8A6244';
+/**
+ * The path.
+ *
+ * The one colour here not already in `Scene`. A green path on green grass is
+ * a shape you have to look for; the approved composition reads at a glance
+ * because the way through is a different material from the field. It is a
+ * light tint of the bark already in the palette, so it joins that set rather
+ * than opening a new one.
+ */
+const SAND = '#F0E4D2';
+const SAND_DEEP = '#E2D2B8';
 
 /** The same cloud `Scene` uses, at the scale this drawing works in. */
 function Cloud({ x, y, s = 1, o = 1 }: { x: number; y: number; s?: number; o?: number }) {
@@ -41,9 +53,22 @@ function Cloud({ x, y, s = 1, o = 1 }: { x: number; y: number; s?: number; o?: n
 function Flower({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`}>
-      <path d="M0 26c0-15 4-24 9-31" stroke={PAPER} strokeWidth="4" fill="none" strokeLinecap="round" opacity=".55" />
+      <path d="M0 26c0-15 4-24 9-31" stroke={PAPER} strokeWidth="4" fill="none" strokeLinecap="round" opacity=".5" />
       <circle cx="9" cy="-7" r="8.5" fill={PAPER} />
       <circle cx="9" cy="-7" r="3.4" fill={SUN} />
+    </g>
+  );
+}
+
+/** A house on the far hill, built the way `Scene`'s town builds one. */
+function House({ x, y, s = 1, roof = CORAL }: { x: number; y: number; s?: number; roof?: string }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <rect x="0" y="16" width="30" height="30" rx="3" fill={PAPER} />
+      <path d="M-5 18 15 0l20 18Z" fill={roof} />
+      <rect x="11" y="30" width="9" height="16" rx="2" fill={roof} opacity=".55" />
+      <rect x="3" y="22" width="6" height="6" rx="1.5" fill={SUN} />
+      <rect x="21" y="22" width="6" height="6" rx="1.5" fill={SUN} />
     </g>
   );
 }
@@ -57,101 +82,110 @@ export function Trailhead() {
       aria-hidden="true"
       focusable="false"
     >
-      {/* --- distance ---------------------------------------------------- */}
-      <rect x="0" y="0" width="1200" height="760" fill="url(#sky)" />
       <defs>
-        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="var(--w3)" />
-          <stop offset="0.6" stopColor="#FFFFFF" />
+        <linearGradient id="th-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={SKY_TINT} />
+          <stop offset="0.55" stopColor="#F6FBFF" />
+          <stop offset="1" stopColor="#FFFFFF" />
         </linearGradient>
       </defs>
 
-      {/* High and left of the panel, so nothing covers it. */}
-      <circle cx="676" cy="92" r="52" fill={SUN_SOFT} opacity=".5" />
-      <circle cx="676" cy="92" r="31" fill={SUN} opacity=".92" />
+      {/* --- distance ------------------------------------------------------ */}
+      <rect x="0" y="0" width="1200" height="760" fill="url(#th-sky)" />
 
-      <Cloud x={214} y={74} s={1.7} o={0.65} />
-      <Cloud x={868} y={62} s={1.25} o={0.5} />
-      <Cloud x={1004} y={150} s={1.35} o={0.36} />
+      <circle cx="946" cy="104" r="62" fill={SUN_SOFT} opacity=".45" />
+      <circle cx="946" cy="104" r="38" fill={SUN} opacity=".8" />
 
-      {/* Far hills, lightest tint: distance as haze. Drawn to 1220 on both
-          sides so no edge of the window can ever show through. */}
+      <Cloud x={168} y={96} s={1.7} o={0.85} />
+      <Cloud x={540} y={62} s={1.2} o={0.55} />
+      <Cloud x={1020} y={188} s={1.35} o={0.5} />
+
+      {/* Far ridge. */}
       <path
-        d="M-20 372C120 306 268 290 392 322c120 31 232 22 336-24 86-38 180-42 272-16
-           68 19 148 26 240 22V780H-20Z"
+        d="M-20 356C110 300 244 288 366 316c122 28 238 18 342-26 88-37 182-40 272-14
+           68 20 150 28 240 24V780H-20Z"
         fill="var(--w3)"
       />
 
+      {/* The village the path leads to: small, far, and off to one side, so the
+          eye finds it after the form rather than before it. */}
+      <g opacity=".92">
+        <House x={952} y={286} s={0.62} />
+        <House x={1004} y={300} s={0.5} roof="#C9A0E8" />
+        <House x={906} y={306} s={0.44} roof="#7FC6E8" />
+      </g>
+
       {/* Middle hills. */}
       <path
-        d="M-20 462C130 406 288 400 414 446c110 40 224 30 338-26 92-45 192-46 288-12
-           62 22 120 32 180 32V780H-20Z"
+        d="M-20 442C120 388 270 380 398 424c112 38 228 28 342-28 92-45 194-46 290-12
+           62 22 120 32 190 32V780H-20Z"
         fill="var(--w2)"
       />
 
-      {/* One tree, built the way every tree in this world is built, set in the
-          middle distance where the eye passes between Lina and the panel. */}
-      <g transform="translate(486 306) scale(.7)">
-        <rect x="-9" y="66" width="19" height="86" rx="9" fill="#8A6244" />
-        <circle cx="0" cy="50" r="54" fill="var(--w1)" />
-        <circle cx="-44" cy="76" r="35" fill="var(--w1)" />
-        <circle cx="44" cy="76" r="35" fill="var(--w1)" />
-        <circle cx="-20" cy="34" r="10" fill={CORAL} opacity=".75" />
-        <circle cx="26" cy="58" r="8" fill={CORAL} opacity=".75" />
+      {/* A tree in the middle distance, left of the form. */}
+      <g transform="translate(232 320) scale(.62)">
+        <rect x="-10" y="60" width="21" height="104" rx="10" fill={BARK} />
+        <circle cx="0" cy="44" r="58" fill="var(--w1)" />
+        <circle cx="-48" cy="72" r="38" fill="var(--w1)" />
+        <circle cx="48" cy="72" r="38" fill="var(--w1)" />
+        <circle cx="-22" cy="26" r="11" fill={CORAL} opacity=".7" />
+        <circle cx="28" cy="52" r="9" fill={CORAL} opacity=".7" />
       </g>
 
-      {/* --- foreground floor ---------------------------------------------- */}
-      {/* Full width, explicitly: the first version ran out of curve at x=1020
-          and left a white rectangle in the corner of the window. */}
+      {/* --- the field ------------------------------------------------------ */}
       <path
-        d="M-20 672C140 634 300 640 432 682c118 36 240 28 356-14 96-35 200-36 302-12
-           48 11 94 16 130 16V780H-20Z"
+        d="M-20 566C140 524 306 530 442 576c120 40 246 30 362-16 98-38 204-38 308-12
+           48 12 94 17 130 17V780H-20Z"
         fill="var(--w1)"
       />
 
-      {/* --- the road ------------------------------------------------------- */}
+      {/* --- the path ------------------------------------------------------- */}
       {/*
-        Wide at her feet, narrowing as it goes, and it runs on toward the
-        panel rather than stopping short of it -- the path continues into the
-        place she is about to enter.
+        Wide at the near edge, narrowing as it climbs to the village. It passes
+        below the middle of the frame, leaving the centre for the form.
       */}
       <path
-        d="M-40 780C20 664 170 574 372 522c186-48 402-74 668-82l220-6 0 42-216 6
-           c-262 8-472 34-654 80-198 50-336 138-398 240Z"
-        fill="var(--w2)"
+        d="M262 790C312 698 418 632 560 584c126-43 254-84 352-136 34-18 62-36 84-54
+           l10 12c-20 20-48 40-82 59-100 55-230 98-358 143-136 48-234 110-276 196Z"
+        fill={SAND}
       />
-      <path
-        d="M-30 762C30 656 180 570 380 519c186-47 400-73 664-81l224-6"
-        stroke={PAPER}
-        strokeWidth="6"
-        strokeDasharray="10 16"
-        fill="none"
-        opacity=".7"
-        strokeLinecap="round"
-      />
+      {[
+        [372, 742, 30, 11],
+        [452, 700, 26, 9.5],
+        [536, 664, 22, 8],
+        [622, 632, 19, 7],
+        [706, 604, 16, 6],
+        [788, 576, 13, 5],
+        [864, 548, 11, 4.2],
+        [930, 516, 9, 3.4],
+      ].map(([cx, cy, rx, ry]) => (
+        <ellipse key={cx} cx={cx} cy={cy} rx={rx} ry={ry} fill={SAND_DEEP} opacity=".7" />
+      ))}
 
-      {/* Flowers along the near edge, thinning with distance. */}
-      <Flower x={110} y={716} s={1.1} />
-      <Flower x={246} y={652} s={.95} />
-      <Flower x={470} y={596} s={.76} />
-      <Flower x={706} y={556} s={.62} />
-      <Flower x={942} y={534} s={.52} />
-      <Flower x={1136} y={560} s={.6} />
+      {/* --- foreground ------------------------------------------------------ */}
+      <Flower x={92} y={686} s={1.15} />
+      <Flower x={238} y={732} s={1.25} />
+      <Flower x={654} y={700} s={0.95} />
+      <Flower x={840} y={664} s={0.8} />
+      <Flower x={1018} y={700} s={0.9} />
+      <Flower x={1128} y={648} s={0.7} />
 
-      {[150, 560, 830, 1064].map((x, i) => (
+      {[160, 560, 930, 1090].map((x, i) => (
         <path
           key={x}
-          d={`M${x} ${730 - i * 46}c-3-20 2-33 9-42M${x + 13} ${730 - i * 46}c-2-17 0-28 5-34`}
+          d={`M${x} ${744 - i * 22}c-3-20 2-33 9-42M${x + 13} ${744 - i * 22}c-2-17 0-28 5-34`}
           stroke={LEAF}
           strokeWidth="4.5"
           fill="none"
           strokeLinecap="round"
-          opacity=".5"
+          opacity=".45"
         />
       ))}
 
-      {/* Two butterflies, on the class the rest of the world flits with. */}
-      <g transform="translate(330 226) scale(1.2)">
+      {/* One butterfly, on the class the rest of the world flits with. Low and
+          left of centre: the middle of the frame is where the form sits, and
+          a wing showing through the panel reads as a smudge on the glass. */}
+      <g transform="translate(620 676) scale(1.15)">
         <g className="w-flit">
           <ellipse cx="-8" cy="-4" rx="8" ry="6" fill={CORAL} />
           <ellipse cx="8" cy="-4" rx="8" ry="6" fill={CORAL} />
@@ -159,13 +193,6 @@ export function Trailhead() {
           <ellipse cx="6" cy="4" rx="6" ry="4" fill={SUN} />
           <rect x="-1.2" y="-9" width="2.4" height="16" rx="1.2" fill={INK} />
           <path d="M-2-9c-3-4-6-6-9-7M2-9c3-4 6-6 9-7" stroke={INK} strokeWidth="1.4" fill="none" strokeLinecap="round" />
-        </g>
-      </g>
-      <g transform="translate(566 170) scale(.85)">
-        <g className="w-flit w-flit-2">
-          <ellipse cx="-8" cy="-4" rx="8" ry="6" fill={SUN} />
-          <ellipse cx="8" cy="-4" rx="8" ry="6" fill={SUN} />
-          <rect x="-1.2" y="-9" width="2.4" height="16" rx="1.2" fill={INK} />
         </g>
       </g>
     </svg>
