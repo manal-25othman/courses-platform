@@ -180,7 +180,16 @@ export default function LearnUnitPage() {
         places -- a different area of the world she has been walking, not a
         picture of one pasted into a card.
       */}
-      <div className="valley-hold" style={themeVars(theme)} aria-hidden="true">
+      {/*
+        The world stays, and during a test it steps back: `calm` fades and
+        desaturates the valley so nothing moves or competes while she is
+        answering. It is the same place, quieter -- not a different screen.
+      */}
+      <div
+        className={`valley-hold${activeTab === 'assessment' ? ' calm' : ''}`}
+        style={themeVars(theme)}
+        aria-hidden="true"
+      >
         <Valley />
       </div>
 

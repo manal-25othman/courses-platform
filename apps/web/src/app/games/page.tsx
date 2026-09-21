@@ -6,9 +6,9 @@ import { api, BonusGame, LearnUnitSummary, Me, homeFor } from '@/lib/api';
 import { StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
 import { Glyph } from '@/components/world/Scene';
-import { WorldGround } from '@/components/world/WorldGround';
+import { Valley } from '@/components/world/Valley';
 import { Girl } from '@/components/world/Girl';
-import { themeFor, themeVars } from '@/lib/world';
+import { themeFor, themeVars, PLACES } from '@/lib/world';
 
 import { BonusGames, poolNoun } from '@/components/BonusGames';
 
@@ -85,9 +85,16 @@ export default function GamesPage() {
     return (
       <>
         <TopBar nav />
-        <WorldGround />
+        {/* Inside a unit's games, the world is that unit's own place. */}
+        <div
+          className="valley-hold"
+          style={unit ? themeVars(themeFor(unit.title, unit.progress.countsTowardCompletion, units.indexOf(unit))) : themeVars(PLACES.meadow)}
+          aria-hidden="true"
+        >
+          <Valley />
+        </div>
         <main
-          className="page has-navbar stack world"
+          className="page has-navbar stack world games-world"
           data-kind="games"
           style={unit ? themeVars(themeFor(unit.title, unit.progress.countsTowardCompletion, units.indexOf(unit))) : undefined}
         >
@@ -131,8 +138,12 @@ export default function GamesPage() {
   return (
     <>
       <TopBar nav />
-      <WorldGround />
-      <main className="page has-navbar stack world" data-kind="games">
+      {/* The hub belongs to no single unit, so it stands in the meadow --
+          the place the sign-in page and Home are drawn in. */}
+      <div className="valley-hold" style={themeVars(PLACES.meadow)} aria-hidden="true">
+        <Valley />
+      </div>
+      <main className="page has-navbar stack world games-world" data-kind="games">
         <header className="greeting">
           <h1>Games</h1>
           <p className="greeting-line">

@@ -3673,3 +3673,205 @@ body:has(.world) { background: #F2EDFF; }
   }
   .unit-world .unit-track .track-label { font-size: .7rem; white-space: nowrap; }
 }
+
+/* ==========================================================================
+   PHASE C — ACTIVITIES, GAMES, TESTS
+   Three different jobs in one world: practice is bright, a game is playful,
+   a test is quiet. Scoped to `.unit-world` and `.games-world` so `.card`,
+   `.badge` and the rest stay exactly as the teacher and admin screens use
+   them. No game logic, scoring rule or question is touched here.
+   ========================================================================== */
+
+/* The world steps back while she answers a test. Same place, quieter. */
+.valley-hold.calm { opacity: .42; filter: saturate(.72); }
+@media (prefers-reduced-motion: no-preference) {
+  .valley-hold { transition: opacity 400ms ease, filter 400ms ease; }
+}
+
+/* --- the shared surface for everything in this phase --------------------- */
+.unit-world .result-panel,
+.unit-world .running,
+.unit-world .round-end,
+.unit-world .adv,
+.games-world .game-card,
+.games-world .locked-note,
+.games-world .round-end,
+.games-world .adv {
+  border-radius: 26px;
+  background: rgb(255 255 255 / .93);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid rgb(255 255 255 / .92);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / .95) inset,
+    0 34px 64px -30px rgb(27 23 57 / .32),
+    0 8px 20px -10px rgb(27 23 57 / .12);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .unit-world .result-panel,
+  .unit-world .running,
+  .unit-world .adv,
+  .games-world .game-card,
+  .games-world .locked-note { background: rgb(255 255 255 / .98); }
+}
+
+/* --- practice and the test ----------------------------------------------- */
+.unit-world .exam-rules {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s3);
+  margin: 0;
+}
+.unit-world .exam-rule {
+  border-radius: 18px;
+  padding: var(--s4) var(--s3);
+  text-align: center;
+  background: var(--w3);
+}
+.unit-world .exam-rule b { display: block; font-size: 1.5rem; color: var(--w1); line-height: 1.1; }
+
+/* The question itself. One thing on the paper at a time, set large enough to
+   read across a shared tablet, with the options as full-width targets. */
+.unit-world .running { padding: clamp(var(--s4), 3vw, var(--s6)); }
+.unit-world .q-pips { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; }
+.unit-world .q-pip {
+  /* Flex items shrink by default: without this, forty-one of them collapsed
+     into a row of slivers rather than wrapping onto a second line. */
+  flex: 0 0 auto;
+  width: 1.7rem; height: 1.7rem; min-width: 0; min-height: 0; padding: 0;
+  border-radius: 50%; font-size: .7rem; font-weight: 700; line-height: 1;
+  display: grid; place-items: center; box-shadow: none;
+  border: 2px solid rgb(27 23 57 / .14); background: rgb(255 255 255 / .9); color: var(--ink-3);
+}
+.unit-world .q-pip[data-on='true'], .unit-world .q-pip[aria-selected='true'] {
+  background: var(--w1); border-color: var(--w1); color: #fff;
+}
+.unit-world .q-pip[data-done='true'] { background: var(--ok); border-color: var(--ok); color: #fff; }
+
+/* Answer options: a comfortable target on a tablet, and a visible focus ring
+   that is not the browser's default hairline. */
+.unit-world .choice {
+  min-height: 3.25rem;
+  border-radius: 16px;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+/* A single-letter answer is still something a child taps on a shared tablet,
+   so the tile is a target before it is a letter. */
+.unit-world .tile-row .choice {
+  min-width: 3.25rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.unit-world .choice:focus-visible,
+.unit-world .q-pip:focus-visible,
+.unit-world .word-pip:focus-visible,
+.games-world .game-card:focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 3px;
+}
+
+.unit-world .q-move { margin-top: var(--s5); display: flex; gap: var(--s3); align-items: center; }
+
+/* --- the result ---------------------------------------------------------- */
+/* The score, said once and said plainly, with the one thing she can do next
+   directly under it. No badge, no medal, no points -- the product has none. */
+.unit-world .result-panel { padding: clamp(var(--s5), 3vw, var(--s6)); text-align: center; }
+.unit-world .result-line { font-size: 1.05rem; color: var(--ink-2); }
+.unit-world .tries { margin-top: var(--s3); }
+.unit-world .try {
+  border-radius: 16px;
+  background: rgb(255 255 255 / .7);
+  border: 1px solid rgb(27 23 57 / .07);
+}
+
+/* --- the games ----------------------------------------------------------- */
+/*
+  Each game keeps its own face: Memory Match stays its own board, Quick Match
+  its own round, Grammar Adventure its own road. What changes is the shelf
+  they sit on -- three invitations on the world's paper instead of three flat
+  boxes on a lavender page.
+*/
+.games-world .game-shelf,
+.unit-world .game-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--s4);
+}
+.games-world .game-card,
+.unit-world .game-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  padding: var(--s5) var(--s4) var(--s4);
+  text-align: start;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  /*
+    These cards are <button>s, and a browser centres a button's grid tracks:
+    the column was sizing to its widest line and sitting in the middle of a
+    full-width card, which is why the games hub had a wide empty gutter. It
+    predates this phase. One column, stretched, fixes it everywhere.
+  */
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  justify-items: start;
+}
+/*
+  The wash of the game's own colour stays -- each game should stay
+  recognisable -- but as a fade rather than a disc. Against the old opaque
+  card its hard edge was invisible; on translucent paper it read as a
+  rendering fault in the corner.
+*/
+.games-world .game-card::before,
+.unit-world .game-card::before {
+  top: 0;
+  left: 0;
+  width: 14rem;
+  height: 10rem;
+  border-radius: 0;
+  background: radial-gradient(120% 120% at 0 0, var(--w3) 0%, rgb(255 255 255 / 0) 72%);
+  opacity: .9;
+}
+.games-world .game-card:hover,
+.unit-world .game-card:hover { transform: translateY(-3px); }
+/* The scene was being used as a decorative wash and clipped into a quarter
+   disc in the corner -- it read as a rendering fault, not a flourish. The
+   world is behind the page now, so the card does not need its own copy. */
+.games-world .game-card > .scene,
+.unit-world .game-card > .scene,
+.games-world .game-card svg.scene,
+.unit-world .game-card svg.scene { display: none; }
+.games-world .game-icon,
+.unit-world .game-icon {
+  width: 3rem; height: 3rem; border-radius: 16px;
+  display: grid; place-items: center;
+  background: var(--w1); color: #fff;
+}
+.games-world .game-name,
+.unit-world .game-name {
+  display: block; margin-top: var(--s3);
+  font-family: var(--font-display); font-size: 1.3rem; color: var(--ink);
+}
+.games-world .game-why,
+.unit-world .game-why { display: block; margin-top: var(--s2); color: var(--ink-2); line-height: 1.55; }
+
+/* --- Grammar Adventure --------------------------------------------------- */
+.unit-world .adv, .games-world .adv { padding: clamp(var(--s3), 2vw, var(--s4)); }
+.unit-world .adv-stage, .games-world .adv-stage { border-radius: 18px; overflow: hidden; }
+.unit-world .adv-ask, .games-world .adv-ask {
+  border-radius: 18px;
+  background: rgb(255 255 255 / .92);
+  padding: var(--s4);
+}
+
+/* --- phone --------------------------------------------------------------- */
+@media (max-width: 30rem) {
+  .unit-world .exam-rules { grid-template-columns: 1fr; gap: var(--s2); }
+  .unit-world .exam-rule { display: flex; align-items: baseline; justify-content: center; gap: var(--s2); padding: var(--s3); }
+  .unit-world .exam-rule b { display: inline; font-size: 1.25rem; }
+  .unit-world .q-move { flex-wrap: wrap; }
+  .unit-world .q-move > button { flex: 1 1 8rem; }
+  /* Thumb-sized, and never smaller: these are the controls a child taps most. */
+  .unit-world .choice { min-height: 3.5rem; }
+  .games-world .game-shelf, .unit-world .game-shelf { grid-template-columns: 1fr; }
+}
