@@ -17,9 +17,9 @@ import { BonusGames } from '@/components/BonusGames';
 import { StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
 import { UnitJourney } from '@/components/UnitJourney';
-import { Scene, Glyph } from '@/components/world/Scene';
+import { Glyph } from '@/components/world/Scene';
 import { Girl } from '@/components/world/Girl';
-import { WorldGround } from '@/components/world/WorldGround';
+import { Valley } from '@/components/world/Valley';
 import { themeFor, themeVars } from '@/lib/world';
 
 type Tab = 'vocabulary' | 'grammar' | 'activity' | 'assessment' | 'games';
@@ -174,15 +174,24 @@ export default function LearnUnitPage() {
         }
       />
 
-      <WorldGround />
+      {/*
+        The same valley as Home, in this unit's own tints: Living Things is
+        the mint meadow, Lifestyles the coral town. One component, five
+        places -- a different area of the world she has been walking, not a
+        picture of one pasted into a card.
+      */}
+      <div className="valley-hold" style={themeVars(theme)} aria-hidden="true">
+        <Valley />
+      </div>
+
       <main
-        className="page has-navbar stack world"
+        className="page has-navbar stack world unit-world"
         data-kind={kindOf[activeTab]}
         style={themeVars(theme)}
       >
-        {/* The unit's banner: its place, its name, and how far along she is. */}
+        {/* Arriving: the place, the unit's name, and how far along she is --
+            standing on the world rather than inside a card on top of it. */}
         <header className="unit-banner">
-          <Scene kind={theme.scene} />
           <Girl
             who="lina"
             pose={progress?.assessmentState.passed ? 'cheer' : 'walk'}

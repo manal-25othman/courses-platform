@@ -3428,3 +3428,248 @@ body:has(.world) { background: #F2EDFF; }
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
 }
+
+/* ==========================================================================
+   PHASE B — THE UNIT, THE WORDS, THE GRAMMAR
+   Arriving somewhere on the trail. Everything is scoped under `.unit-world`
+   on purpose: `.lesson`, `.locked-note` and the rest are shared with screens
+   this phase does not touch, so the new material is opt-in per page.
+   Reading comes first here. The world is behind the page, never over the
+   words: every surface carrying curriculum is the approved paper, opaque
+   enough to read a lesson on without thinking about it.
+   ========================================================================== */
+.unit-world { position: relative; max-width: 56rem; }
+
+/* --- arriving ------------------------------------------------------------ */
+/* No card. The banner is the same shape as Home's welcome, so walking from
+   one to the other is the same room seen from a step further on. */
+.unit-world .unit-banner {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  column-gap: clamp(var(--s3), 3vw, var(--s5));
+  background: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: clamp(var(--s4), 3vh, var(--s5));
+  overflow: visible;
+}
+.unit-world .banner-girl {
+  position: static;
+  grid-row: 1 / span 4;
+  width: clamp(5.5rem, 15vw, 8.5rem);
+  filter: drop-shadow(0 16px 20px rgb(27 23 57 / .16));
+}
+.unit-world .unit-place {
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  color: var(--w1);
+  font-weight: 700;
+  font-size: var(--fs-small);
+  background: none;
+  padding: 0;
+}
+.unit-world .unit-banner h1 {
+  grid-column: 2;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 1.2rem + 1.8vw, 2.4rem);
+  line-height: 1.08;
+  margin: .1rem 0 0;
+  color: var(--ink);
+}
+.unit-world .unit-banner > p { grid-column: 2; margin: var(--s1) 0 0; color: var(--ink-2); }
+.unit-world .unit-banner .meter {
+  grid-column: 2;
+  margin-top: var(--s2);
+  max-width: 22rem;
+  background: rgb(255 255 255 / .7);
+}
+
+/* --- the road through the unit ------------------------------------------- */
+/* The four parts on the approved paper, so the navigation is a piece of the
+   same trail rather than a second white box stacked on the first. */
+.unit-world .unit-journey {
+  border-radius: 22px;
+  padding: var(--s3) var(--s4);
+  background: rgb(255 255 255 / .86);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  border: 1px solid rgb(255 255 255 / .9);
+  box-shadow: 0 20px 44px -30px rgb(27 23 57 / .34);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .unit-world .unit-journey { background: rgb(255 255 255 / .97); }
+}
+
+/* --- the paper every piece of curriculum sits on ------------------------- */
+.unit-world .word-card,
+.unit-world .lesson,
+.unit-world .locked-note {
+  border-radius: 26px;
+  background: rgb(255 255 255 / .93);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid rgb(255 255 255 / .92);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / .95) inset,
+    0 34px 64px -30px rgb(27 23 57 / .32),
+    0 8px 20px -10px rgb(27 23 57 / .12);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .unit-world .word-card,
+  .unit-world .lesson,
+  .unit-world .locked-note { background: rgb(255 255 255 / .98); }
+}
+/* The world is behind the page now, so a picture of it in the corner of a
+   card is the thumbnail this redesign exists to get rid of. */
+.unit-world .word-card .scene-mark { display: none; }
+
+/* --- the words ----------------------------------------------------------- */
+/*
+  Twenty-six numbered buttons read as pagination. The same twenty-six, as
+  beads threaded on a line, read as the words of this unit -- and keep every
+  one of them a real button she can jump to.
+*/
+.unit-world .word-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .45rem;
+  padding: var(--s3) var(--s4);
+  border-radius: 999px;
+  background: rgb(255 255 255 / .74);
+}
+/*
+  Beads, but numbered. The first pass took the numbers out and left
+  twenty-six identical dots: prettier, and useless -- "go back to word 14" is
+  a thing she does, and a dot cannot be counted at a glance. The number stays
+  and the button stays a button; only the shape changed.
+*/
+.unit-world .word-pip {
+  width: 1.9rem;
+  height: 1.9rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgb(27 23 57 / .14);
+  background: rgb(255 255 255 / .9);
+  color: var(--ink-3);
+  font-size: .7rem;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  box-shadow: none;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.unit-world .word-pip:hover { transform: scale(1.12); border-color: var(--w1); color: var(--ink); }
+.unit-world .word-pip[data-on='true'],
+.unit-world .word-pip[aria-selected='true'] {
+  background: var(--w1);
+  border-color: var(--w1);
+  color: #fff;
+  transform: scale(1.18);
+}
+.unit-world .word-pip[data-done='true'] { background: var(--ok); border-color: var(--ok); color: #fff; }
+
+.unit-world .word-en {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 1.6rem + 3.4vw, 3.6rem);
+  line-height: 1.05;
+  color: var(--ink);
+}
+.unit-world .word-ar { font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem); color: var(--ink-2); }
+.unit-world .word-example {
+  max-width: 46ch;
+  margin-inline: auto;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* --- the grammar --------------------------------------------------------- */
+/*
+  Readability wins here. The lesson is the widest comfortable measure, the
+  body is set larger and looser than the rest of the product, and nothing
+  decorative is allowed over the text -- the scenery stays outside the paper.
+*/
+.unit-world .lesson { padding: clamp(var(--s4), 3vw, var(--s6)); }
+.unit-world .lesson-head {
+  background: none;
+  border: 0;
+  padding: 0 0 var(--s3);
+  margin-bottom: var(--s3);
+  border-bottom: 1px solid rgb(27 23 57 / .08);
+}
+.unit-world .lesson-topic {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 1.1rem + .8vw, 1.6rem);
+  color: var(--ink);
+  margin: 0;
+}
+.unit-world .lesson-body {
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  color: var(--ink);
+  max-width: 62ch;
+}
+/* The teacher's own scans and photographs, at full width and unretouched. */
+.unit-world .lesson img,
+.unit-world .video-frame {
+  border-radius: 16px;
+  margin-top: var(--s4);
+  overflow: hidden;
+}
+.unit-world .examples-set {
+  margin-top: var(--s4);
+  padding: var(--s4);
+  border-radius: 18px;
+  background: var(--w3);
+}
+.unit-world .set-label {
+  display: block;
+  font-weight: 700;
+  font-size: var(--fs-small);
+  color: var(--w1);
+  margin-bottom: var(--s2);
+}
+.unit-world .lesson-foot {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid rgb(27 23 57 / .08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+/* --- phone --------------------------------------------------------------- */
+@media (max-width: 30rem) {
+  .unit-world .unit-banner { align-items: center; column-gap: var(--s3); }
+  .unit-world .word-strip { border-radius: 20px; padding: var(--s3); }
+  .unit-world .lesson-foot { flex-direction: column; align-items: stretch; }
+  .unit-world .lesson-foot .primary { width: 100%; }
+  /*
+    Five stops will not share 390px: squeezed to fit, "Grammar" and
+    "Activity" ran into each other. Each stop keeps the width its label
+    needs and the road scrolls sideways instead -- the sequence stays
+    readable, and nothing is truncated or dropped.
+  */
+  .unit-world .unit-track {
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--s2);
+  }
+  .unit-world .unit-track .track-step {
+    flex: 0 0 4.9rem;
+    scroll-snap-align: center;
+  }
+  .unit-world .unit-track .track-label { font-size: .7rem; white-space: nowrap; }
+}
