@@ -71,3 +71,50 @@ jobs:
           PLATFORM_ADMIN_EMAIL: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_EMAIL }}
           PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
         run: node tooling/deploy/verify-operator-login.mjs
+
+      # Review-branch only: dispatched with ref=claude/student-world-review so
+      # the live pages can be inspected from somewhere that can reach them.
+      # Read-only; signs in to nothing and writes nothing.
+      - name: Ask the live site whether the student redesign is served
+        env:
+          SITE: ${{ inputs.site_url }}
+        run: |
+          set -u
+          fail=0
+          echo "=== routes ==="
+          for path in / /login /home /games /dashboard /progress /students /content; do
+            code=$(curl -s -o /tmp/p.html -w '%{http_code}' -m 40 "$SITE$path" || echo 000)
+            printf '%-12s HTTP %s\n' "$path" "$code"
+            case "$path" in
+              /login) cp /tmp/p.html /tmp/login.html ;;
+              /dashboard|/progress|/students|/content) cp /tmp/p.html "/tmp/t$(echo "$path" | tr / _).html" ;;
+            esac
+            [ "$code" = "200" ] || fail=1
+          done
+          echo
+          echo "=== approved sign-in wording, live ==="
+          for phrase in "Your English Journey" "Starts Here" "Learn, practise, and grow with TOP GOAL."; do
+            if grep -qF "$phrase" /tmp/login.html; then echo "found: $phrase"; else echo "MISSING: $phrase"; fail=1; fi
+          done
+          echo
+          echo "=== stylesheet the deployed build links ==="
+          css=$(grep -o '/_next/static/css/[A-Za-z0-9._-]*\.css' /tmp/login.html | head -1)
+          echo "css: ${css:-none}"
+          if [ -z "$css" ]; then fail=1; else
+            curl -s -m 40 "$SITE$css" -o /tmp/app.css
+            echo "bytes: $(wc -c < /tmp/app.css)"
+            for cls in trailhead signin-panel valley-hold trail-stop trail-mark unit-world games-world q-jump q-pip trail-parts; do
+              if grep -qF ".$cls" /tmp/app.css; then echo "present: .$cls"; else echo "MISSING: .$cls"; fail=1; fi
+            done
+          fi
+          echo
+          echo "=== teacher and admin routes carry no student-world markup ==="
+          for f in /tmp/t_dashboard.html /tmp/t_progress.html /tmp/t_students.html /tmp/t_content.html; do
+            [ -f "$f" ] || continue
+            hits=$(grep -o -E 'class="[^"]*(valley-hold|trail-stop|unit-world|games-world)[^"]*"' "$f" | wc -l)
+            printf '%-24s student-world classes: %s\n' "$(basename "$f")" "$hits"
+            [ "$hits" = "0" ] || fail=1
+          done
+          echo
+          [ "$fail" = "0" ] && echo "ALL LIVE CHECKS PASSED" || echo "SOME LIVE CHECKS FAILED"
+          exit "$fail"
