@@ -103,7 +103,23 @@ jobs:
           for bad in "wa.me" "whatsapp"; do
             if grep -qiF "$bad" /tmp/login.html; then echo "LEAK: $bad on /login"; fail=1; else echo "absent: $bad"; fi
           done
-          if grep -q -E '\+?[0-9][0-9 ().-]{8,}[0-9]' /tmp/login.html; then echo "LEAK: something phone-shaped on /login"; fail=1; else echo "absent: any phone-shaped string"; fi
+          # Only the words a visitor can actually read. The built HTML is full
+          # of asset hashes and inline JSON, and a digit-run check over all of
+          # it says nothing about whether a number is on the page.
+          python3 - <<'PYEOF' > /tmp/login.txt
+import re
+html = open('/tmp/login.html', encoding='utf-8', errors='replace').read()
+html = re.sub(r'(?is)<(script|style)\b.*?</\1>', ' ', html)
+print(re.sub(r'(?s)<[^>]+>', ' ', html))
+PYEOF
+          if grep -q -E '\+?[0-9][0-9 ().-]{8,}[0-9]' /tmp/login.txt; then
+            echo "LEAK: phone-shaped text a visitor can read:"
+            grep -o -E '\+?[0-9][0-9 ().-]{8,}[0-9]' /tmp/login.txt | head -5
+            fail=1
+          else
+            echo "absent: any phone-shaped string in the readable text"
+          fi
+          if grep -qi 'href="tel:' /tmp/login.html; then echo "LEAK: a tel: link"; fail=1; else echo "absent: any tel: link"; fi
 
           echo
           echo "=== who may read the teacher contact, on production ==="
@@ -113,9 +129,16 @@ jobs:
           case "$anon" in 401|403) ;; *) fail=1 ;; esac
           # Signed in, but not a student: the platform operator.
           jar=$(mktemp)
+          # jq builds the JSON so a password containing a quote or a backslash
+          # cannot break the body -- the first attempt interpolated it raw and
+          # the API answered 400.
+          jq -n --arg u "$OPERATOR_USERNAME" --arg p "$OPERATOR_PASSWORD" \
+            '{username: $u, password: $p}' > /tmp/creds.json
           code=$(curl -s -o /tmp/login.json -w '%{http_code}' -m 40 -c "$jar" \
             -X POST "$SITE/api/v1/auth/login" -H 'content-type: application/json' \
-            --data "{\"username\":\"$OPERATOR_USERNAME\",\"password\":\"$OPERATOR_PASSWORD\"}")
+            --data @/tmp/creds.json)
+          rm -f /tmp/creds.json
+          if [ "$code" != "200" ]; then echo "  body: $(head -c 200 /tmp/login.json)"; fi
           echo "operator sign-in -> HTTP $code"
           if [ "$code" = "200" ]; then
             op=$(curl -s -o /dev/null -w '%{http_code}' -m 40 -b "$jar" "$SITE/api/v1/teachers/mine")
