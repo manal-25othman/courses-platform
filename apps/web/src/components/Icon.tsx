@@ -11,7 +11,7 @@ export type IconName =
   | 'words' | 'grammar' | 'activity' | 'assessment' | 'games'
   | 'home' | 'progress' | 'message' | 'teacher'
   | 'lock' | 'tick' | 'cross' | 'play' | 'sound' | 'back' | 'star' | 'signout'
-  | 'eye' | 'eye-off' | 'user' | 'whatsapp';
+  | 'eye' | 'eye-off' | 'user' | 'whatsapp' | 'settings';
 
 const paths: Record<IconName, React.ReactNode> = {
   /*
@@ -52,6 +52,11 @@ const paths: Record<IconName, React.ReactNode> = {
   // A person, for the username box. Same build as `teacher`, named for what
   // it marks here rather than for who it is.
   user: <><circle cx="12" cy="8.5" r="3.6" /><path d="M5 20a7 7 0 0 1 14 0" /></>,
+  // Settings: two controls sitting on their rails. A cog is the usual glyph,
+  // but at 17px its teeth close into a blur; this stays legible at the size the
+  // header draws it, and it says what the page is -- the few things she sets
+  // for herself.
+  settings: <><path d="M4 8.5h8.5M17.5 8.5H20M4 15.5h2.5M11.5 15.5H20" /><circle cx="15" cy="8.5" r="2.5" /><circle cx="9" cy="15.5" r="2.5" /></>,
   // Eye: shown. The outline everyone already reads as "look at this".
   eye: <><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
   // Eye, struck through: hidden. The stroke is what carries the meaning, so it

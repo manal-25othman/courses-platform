@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
 import { MessageBell } from './MessageBell';
 
@@ -102,16 +102,24 @@ export function Avatar({ name }: { name: string }) {
 /**
  * Where a teacher can go.
  *
- * Four destinations, and every one is a screen that already exists. There is
+ * Five destinations, and every one is a screen that already exists. There is
  * deliberately no Messages entry: a teacher's conversations live inside a
  * student's page, not in a place of their own, and a nav item pointing at the
  * student-only /messages route would be a dead end.
+ *
+ * Settings is last because it is about her rather than about her class, and it
+ * is here rather than tucked beside her name because it had no way in at all:
+ * the screen existed, nothing linked to it, and the only way to reach the box
+ * holding her WhatsApp number was to know the address. In this strip it keeps
+ * its name at every width, including on a phone, where the account corner has
+ * room for an icon and nothing else.
  */
 const TEACHER_NAV: { href: string; label: string; icon: IconName }[] = [
   { href: '/dashboard', label: 'Dashboard', icon: 'home' },
   { href: '/progress', label: 'Class progress', icon: 'progress' },
   { href: '/students', label: 'Students', icon: 'teacher' },
   { href: '/content', label: 'Curriculum', icon: 'grammar' },
+  { href: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
 /**
@@ -124,10 +132,33 @@ const TEACHER_NAV: { href: string; label: string; icon: IconName }[] = [
  */
 export function TeacherNav() {
   const here = useHere();
+  const strip = useRef<HTMLElement | null>(null);
+  const path = usePathname();
+
+  // On a phone the strip is wider than the screen, so the screen she is
+  // actually on can start out past its right edge -- which is where Settings
+  // sits, and where Curriculum already sat. Bring the current one into view,
+  // moving the strip itself rather than the page.
+  useEffect(() => {
+    const nav = strip.current;
+    const current = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !current) return;
+    if (nav.scrollWidth <= nav.clientWidth) return;
+    nav.scrollLeft = Math.max(
+      0,
+      current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2,
+    );
+  }, [path]);
+
   return (
-    <nav className="teachernav" aria-label="Sections">
+    <nav className="teachernav" aria-label="Sections" ref={strip}>
       {TEACHER_NAV.map((item) => (
-        <Link key={item.href} href={item.href} aria-current={here(item.href) ? 'page' : undefined}>
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-current={here(item.href) ? 'page' : undefined}
+          data-testid={`teacher-nav-${item.href.slice(1)}`}
+        >
           <Icon name={item.icon} size={17} />
           {item.label}
         </Link>

@@ -71,11 +71,15 @@ export default function TeacherSettingsPage() {
 
   return (
     <>
-      <TeacherHeader me={me} />
+      <TeacherHeader me={me} teacherTitle={profile.title} />
     <main className="page stack">
-      <div className="between">
-        <h1>My details</h1>
-
+      <div className="page-head">
+        <div>
+          <h1>Settings</h1>
+          <p className="page-lead">
+            Your name, your title, and the WhatsApp number your students reach you on.
+          </p>
+        </div>
       </div>
 
       {error && (

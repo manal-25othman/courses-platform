@@ -1384,12 +1384,22 @@ button.memory-card.done::after { content: none; }
 .teacher-bar .school-mark { max-width: 16rem; }
 .teacher-bar .brandmark .name { white-space: nowrap; }
 .teacher-bar .ghost { flex: none; white-space: nowrap; }
+/* The bar was 68rem wide while the pages under it are 78rem, so the wordmark
+   sat 80px inside the content it heads and the right-hand end ran out of room
+   early. Matching the two lines them up, and is where the room for a Settings
+   entry comes from. */
+.teacher-bar .topbar-inner { max-width: 78rem; }
+/* Whatever room is still short, the account cluster gives up: her name
+   shortens, then goes, and the avatar clips after it. Before this it was
+   squeezed to nothing and then painted on top of its neighbour. */
+.teacher-bar .who { overflow: hidden; }
+.avatar { flex: none; }
 .who-name { white-space: nowrap; }
 /* The name is a courtesy, and the nav is not: where the bar runs out of room
    the name goes first and every destination keeps its place. */
 @media (max-width: 78rem) { .who-name { display: none; } }
 .bar-rule { width: 1px; height: 1.5rem; background: var(--line); flex: none; display: none; }
-@media (min-width: 62rem) { .bar-rule { display: block; } }
+@media (min-width: 72rem) { .bar-rule { display: block; } }
 
 .who { display: none; align-items: center; gap: var(--s2); min-width: 0; }
 .who-name {
@@ -1406,7 +1416,12 @@ button.memory-card.done::after { content: none; }
   position: relative; flex: none;
 }
 .teachernav::-webkit-scrollbar { display: none; }
-@media (max-width: 61.99rem) {
+/* The row gives up and becomes two below 72rem rather than 62rem. Four
+   destinations, an inbox, Settings and Sign out do not fit beside the
+   wordmark on a 1024- or 1100-wide screen: kept on one line they pushed the
+   last of them off the end of the bar. Two rows is what this bar already
+   does on a phone, so it is the shape the layout has rather than a new one. */
+@media (max-width: 71.99rem) {
   .teacher-bar .topbar-inner { flex-wrap: wrap; row-gap: var(--s2); padding-bottom: var(--s2); }
   .teachernav { order: 10; width: 100%; margin-inline: calc(-1 * var(--s1)); padding-inline: var(--s1); }
   /* A fade at the edge says the strip carries on. */
