@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, homeFor, Me, MyTeacher } from '@/lib/api';
 import { StudentNav, TopBar } from '@/components/Shell';
-import { Icon } from '@/components/Icon';
 import { WorldGround } from '@/components/world/WorldGround';
 import { Conversation } from '@/components/Conversation';
+import { TeacherContact } from '@/components/TeacherContact';
 
 /**
  * Talking to her teacher.
@@ -58,33 +58,7 @@ export default function MessagesPage() {
       <main className="page has-navbar stack world">
         <h1>Your teacher</h1>
 
-        {teacher?.whatsappUrl && (
-          <div className="card" style={{ borderTop: '3px solid var(--ok)' }}>
-            <div className="row" style={{ flexWrap: 'nowrap', gap: '.75rem' }}>
-              <span className="mark tick">
-                <Icon name="teacher" />
-              </span>
-              <div style={{ flex: 1 }}>
-                <strong style={{ display: 'block', fontFamily: 'var(--font-display)' }}>
-                  {teacher.title ? `${teacher.title} ` : ''}
-                  {teacher.displayName}
-                </strong>
-                <span className="muted">Message her on WhatsApp if you are stuck.</span>
-              </div>
-            </div>
-            <a
-              className="button-link"
-              style={{ marginTop: '.75rem', width: '100%' }}
-              href={`${teacher.whatsappUrl}?text=${encodeURIComponent(
-                `Hello, this is ${me.displayName} from TOP GOAL 3.`,
-              )}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open WhatsApp
-            </a>
-          </div>
-        )}
+        <TeacherContact teacher={teacher} studentName={me.displayName} />
 
         <Conversation
           loadPath="/messages/mine"

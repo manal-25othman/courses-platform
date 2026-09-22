@@ -3939,3 +3939,100 @@ body:has(.world) { background: #F2EDFF; }
   .unit-world .choice { min-height: 3.5rem; }
   .games-world .game-shelf, .unit-world .game-shelf { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   THE TEACHER — who she is, and the way to reach her
+   On the approved paper, in the approved shapes. The WhatsApp button keeps
+   WhatsApp's own green: it is the one control on these screens that leaves
+   the platform, and it should look like where it goes.
+   ========================================================================== */
+.teacher-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(var(--s3), 2vw, var(--s4));
+  margin-bottom: clamp(var(--s4), 3vh, var(--s5));
+  padding: var(--s4);
+  border-radius: 22px;
+  background: rgb(255 255 255 / .88);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid rgb(255 255 255 / .92);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / .95) inset,
+    0 24px 48px -32px rgb(27 23 57 / .3);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .teacher-card { background: rgb(255 255 255 / .97); }
+}
+
+.teacher-face {
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--w3, #EEE9FF);
+  color: var(--w1, #6C4CE0);
+}
+.teacher-words { min-width: 0; display: grid; gap: .1rem; }
+.teacher-label {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.teacher-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 1rem + .4vw, 1.25rem);
+  color: var(--ink);
+}
+.teacher-note { margin: .2rem 0 0; font-size: var(--fs-small); color: var(--ink-3); line-height: 1.5; }
+.teacher-card[data-state='none'] .teacher-face { background: rgb(27 23 57 / .06); color: var(--ink-3); }
+
+/* --- the way out to WhatsApp --------------------------------------------- */
+.wa-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  min-height: 3rem;
+  padding: 0 1.1rem;
+  border-radius: 14px;
+  background: #25D366;
+  color: #0B2E19;
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+.wa-button:hover { filter: brightness(1.06); }
+.wa-button:active { transform: translateY(1px); }
+.wa-button:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+
+/* --- phone ---------------------------------------------------------------- */
+@media (max-width: 34rem) {
+  /* The button drops to its own full-width row rather than squeezing the
+     name: a thumb needs the whole width more than the row needs to be one. */
+  .teacher-card { grid-template-columns: auto minmax(0, 1fr); }
+  .wa-button { grid-column: 1 / -1; width: 100%; }
+}
+
+/* --- the sign-in attribution ---------------------------------------------- */
+/* Under the mark, quiet enough not to compete with the welcome. */
+.signin-by {
+  margin: var(--s2) 0 0;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--ink-2);
+  /* Wide enough that "Ms. Najwa Al-Shahrani" stays on one line: at a
+     narrower measure it broke at the hyphen, which read as a typo. */
+  max-width: 22ch;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+@media (max-width: 47.9375rem) {
+  .signin-by { max-width: none; font-size: .75rem; }
+}

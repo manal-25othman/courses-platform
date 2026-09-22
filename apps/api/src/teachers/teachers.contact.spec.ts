@@ -96,3 +96,59 @@ describe('what is handed out is a link, never the number', () => {
     expect(whatsappDigits('966500000000')).toBe('966500000000');
   });
 });
+
+describe('the sign-in page names the teacher and nothing else', () => {
+  const login = read('../../../../apps/web/src/app/login/page.tsx');
+  const brand = read('../../../../apps/web/src/lib/brand.ts');
+
+  it('carries the attribution, from the one constant that holds it', () => {
+    // The page must not spell the name out itself: one constant means one
+    // place to change it, and the sign-in page is the only screen allowed to
+    // use it -- everywhere else the name comes from the teacher's own record.
+    expect(login).toContain('TEACHER_ATTRIBUTION');
+    expect(brand).toContain('English Learning with Ms. Najwa Al-Shahrani');
+  });
+
+  it('claims only that she teaches', () => {
+    // She is the English teacher. The product does not say she owns the
+    // platform, administers the school, or wrote the software, because
+    // nothing in the project establishes any of that.
+    for (const claim of ['owner', 'developer', 'administrator', 'founder']) {
+      expect(brand.toLowerCase()).not.toContain(`${claim} of`);
+    }
+  });
+
+  it('keeps the interface in English', () => {
+    // The Arabic form is kept for the handover documents, in a comment, and
+    // is never rendered. Nothing outside a comment may carry Arabic script.
+    const code = brand
+      .split('\n')
+      .filter((line) => !/^\s*(\*|\/\*|\/\/)/.test(line))
+      .join('\n');
+    expect(code).not.toMatch(/[\u0600-\u06FF]/);
+  });
+});
+
+describe('no phone number is written into the web app', () => {
+  it('has none in any student-facing source file', () => {
+    // The API hands the client a finished wa.me address or nothing, so the
+    // browser never needs a number -- and must never carry one.
+    const roots = [
+      '../../../../apps/web/src/components/TeacherContact.tsx',
+      '../../../../apps/web/src/lib/brand.ts',
+      '../../../../apps/web/src/app/home/page.tsx',
+      '../../../../apps/web/src/app/messages/page.tsx',
+    ];
+    for (const file of roots) {
+      expect(read(file)).not.toMatch(/\+?\d[\d\s().-]{8,}\d/);
+    }
+  });
+
+  it('offers the button only when a number is configured', () => {
+    // A teacher with no number set must produce an explanation, never a link
+    // that goes nowhere.
+    const card = read('../../../../apps/web/src/components/TeacherContact.tsx');
+    expect(card).toMatch(/teacher\.whatsappUrl && \(/);
+    expect(card).toContain('whatsapp-unavailable');
+  });
+});

@@ -9,6 +9,7 @@ import { Icon } from '@/components/Icon';
 import { Girl } from '@/components/world/Girl';
 import { Trailhead } from '@/components/world/Trailhead';
 import { PLACES, themeVars } from '@/lib/world';
+import { TEACHER_ATTRIBUTION } from '@/lib/brand';
 
 /**
  * The way in.
@@ -174,6 +175,9 @@ function Stage({ children }: { children: React.ReactNode }) {
 
       <header className="signin-brand">
         <Brandmark />
+        {/* Whose course this is. A name and a subject, under the mark --
+            no contact details of any kind reach this page. */}
+        <p className="signin-by">{TEACHER_ATTRIBUTION}</p>
       </header>
 
       <div className="signin-stage">

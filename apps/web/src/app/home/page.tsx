@@ -2,12 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { api, ApiError, homeFor, LearnUnitSummary, Me } from '@/lib/api';
+import { api, ApiError, homeFor, LearnUnitSummary, Me, MyTeacher } from '@/lib/api';
 import { Avatar, StudentNav, TopBar } from '@/components/Shell';
 import { Icon } from '@/components/Icon';
 import { Glyph } from '@/components/world/Scene';
 import { Girl } from '@/components/world/Girl';
 import { Valley } from '@/components/world/Valley';
+import { TeacherContact } from '@/components/TeacherContact';
 import { themeFor, themeVars, PLACES } from '@/lib/world';
 
 /**
@@ -209,6 +210,7 @@ export default function StudentHomePage() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [units, setUnits] = useState<LearnUnitSummary[] | null>(null);
+  const [teacher, setTeacher] = useState<MyTeacher | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -223,6 +225,16 @@ export default function StudentHomePage() {
       })
       .catch(() => router.replace('/login'));
   }, [router]);
+
+  /*
+    Her own teacher, for the contact card. It is a separate request on purpose:
+    a school that has not assigned her a teacher, or an API that is slow to
+    answer, must not hold up her course.
+  */
+  useEffect(() => {
+    if (!me) return;
+    api.get<MyTeacher | null>('/teachers/mine').then(setTeacher).catch(() => setTeacher(null));
+  }, [me]);
 
   useEffect(() => {
     if (!me) return;
@@ -311,6 +323,8 @@ export default function StudentHomePage() {
             </p>
           </div>
         </header>
+
+        <TeacherContact teacher={teacher} studentName={me.displayName} />
 
         {error && (
           <p className="alert error" role="alert">
