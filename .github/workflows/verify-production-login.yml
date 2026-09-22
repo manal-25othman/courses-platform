@@ -126,9 +126,13 @@ jobs:
           jar=$(mktemp)
           # jq builds the JSON so a password containing a quote or a backslash
           # cannot break the body -- the first attempt interpolated it raw and
-          # the API answered 400.
+          # the API answered 400.  The secret is trimmed the same way
+          # verify-operator-login.mjs trims it: a trailing newline stored with
+          # the secret is not part of the password, and sending it raw is what
+          # made the second attempt answer 401.
           jq -n --arg u "$OPERATOR_USERNAME" --arg p "$OPERATOR_PASSWORD" \
-            '{username: $u, password: $p}' > /tmp/creds.json
+            '{username: ($u | gsub("^\\s+|\\s+$"; "")),
+              password: ($p | gsub("^\\s+|\\s+$"; ""))}' > /tmp/creds.json
           code=$(curl -s -o /tmp/login.json -w '%{http_code}' -m 40 -c "$jar" \
             -X POST "$SITE/api/v1/auth/login" -H 'content-type: application/json' \
             --data @/tmp/creds.json)
