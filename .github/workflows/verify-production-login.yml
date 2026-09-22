@@ -78,11 +78,13 @@ jobs:
       - name: Ask the live site whether the student redesign is served
         env:
           SITE: ${{ inputs.site_url }}
+          OPERATOR_USERNAME: operator
+          OPERATOR_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
         run: |
           set -u
           fail=0
           echo "=== routes ==="
-          for path in / /login /home /games /dashboard /progress /students /content; do
+          for path in / /login /home /games /messages /dashboard /progress /students /content; do
             code=$(curl -s -o /tmp/p.html -w '%{http_code}' -m 40 "$SITE$path" || echo 000)
             printf '%-12s HTTP %s\n' "$path" "$code"
             case "$path" in
@@ -93,9 +95,38 @@ jobs:
           done
           echo
           echo "=== approved sign-in wording, live ==="
-          for phrase in "Your English Journey" "Starts Here" "Learn, practise, and grow with TOP GOAL."; do
+          for phrase in "Your English Journey" "Starts Here" "Learn, practise, and grow with TOP GOAL." "English Learning with Ms. Najwa Al-Shahrani"; do
             if grep -qF "$phrase" /tmp/login.html; then echo "found: $phrase"; else echo "MISSING: $phrase"; fail=1; fi
           done
+          echo
+          echo "=== the public page still carries no contact details ==="
+          for bad in "wa.me" "whatsapp"; do
+            if grep -qiF "$bad" /tmp/login.html; then echo "LEAK: $bad on /login"; fail=1; else echo "absent: $bad"; fi
+          done
+          if grep -q -E '\+?[0-9][0-9 ().-]{8,}[0-9]' /tmp/login.html; then echo "LEAK: something phone-shaped on /login"; fail=1; else echo "absent: any phone-shaped string"; fi
+
+          echo
+          echo "=== who may read the teacher contact, on production ==="
+          # Nobody signed in at all.
+          anon=$(curl -s -o /dev/null -w '%{http_code}' -m 40 "$SITE/api/v1/teachers/mine")
+          echo "anonymous GET /teachers/mine -> HTTP $anon"
+          case "$anon" in 401|403) ;; *) fail=1 ;; esac
+          # Signed in, but not a student: the platform operator.
+          jar=$(mktemp)
+          code=$(curl -s -o /tmp/login.json -w '%{http_code}' -m 40 -c "$jar" \
+            -X POST "$SITE/api/v1/auth/login" -H 'content-type: application/json' \
+            --data "{\"username\":\"$OPERATOR_USERNAME\",\"password\":\"$OPERATOR_PASSWORD\"}")
+          echo "operator sign-in -> HTTP $code"
+          if [ "$code" = "200" ]; then
+            op=$(curl -s -o /dev/null -w '%{http_code}' -m 40 -b "$jar" "$SITE/api/v1/teachers/mine")
+            echo "operator (not a student) GET /teachers/mine -> HTTP $op"
+            [ "$op" = "403" ] || fail=1
+            curl -s -o /dev/null -m 40 -b "$jar" -X POST "$SITE/api/v1/auth/logout" || true
+          else
+            echo "could not sign in as operator; role check not run"; fail=1
+          fi
+          rm -f "$jar" /tmp/login.json
+
           echo
           echo "=== stylesheet(s) the deployed build links ==="
           # Next inlines some CSS and links the rest; the path is not fixed, so
@@ -108,7 +139,7 @@ jobs:
             curl -s -m 40 "$url" >> /tmp/all.css.txt
           done
           echo "searched bytes: $(wc -c < /tmp/all.css.txt)"
-          for cls in trailhead signin-panel valley-hold trail-stop trail-mark unit-world games-world q-jump q-pip trail-parts; do
+          for cls in trailhead signin-panel valley-hold trail-stop trail-mark unit-world games-world q-jump q-pip trail-parts teacher-card wa-button teacher-label signin-by; do
             if grep -qF ".$cls" /tmp/all.css.txt; then echo "present: .$cls"; else echo "MISSING: .$cls"; fail=1; fi
           done
 
