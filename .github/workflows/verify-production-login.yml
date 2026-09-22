@@ -106,12 +106,7 @@ jobs:
           # Only the words a visitor can actually read. The built HTML is full
           # of asset hashes and inline JSON, and a digit-run check over all of
           # it says nothing about whether a number is on the page.
-          python3 - <<'PYEOF' > /tmp/login.txt
-import re
-html = open('/tmp/login.html', encoding='utf-8', errors='replace').read()
-html = re.sub(r'(?is)<(script|style)\b.*?</\1>', ' ', html)
-print(re.sub(r'(?s)<[^>]+>', ' ', html))
-PYEOF
+          python3 -c "import re,sys; h=open('/tmp/login.html',encoding='utf-8',errors='replace').read(); h=re.sub(r'(?is)<(script|style)[^>]*>.*?</\\1>',' ',h); sys.stdout.write(re.sub(r'(?s)<[^>]+>',' ',h))" > /tmp/login.txt
           if grep -q -E '\+?[0-9][0-9 ().-]{8,}[0-9]' /tmp/login.txt; then
             echo "LEAK: phone-shaped text a visitor can read:"
             grep -o -E '\+?[0-9][0-9 ().-]{8,}[0-9]' /tmp/login.txt | head -5
