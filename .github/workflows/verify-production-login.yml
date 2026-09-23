@@ -189,31 +189,47 @@ jobs:
           # Everything a teacher's screen is built from arrives as JavaScript,
           # so the nav entry is not in the HTML: gather the scripts each page
           # references and read those.
+          # A page references dozens of chunks; fetched one at a time with a
+          # generous timeout that is slower than it sounds, so they are asked
+          # for compressed, with a short deadline each, and capped.
           gather() {
             page="$1"; out="$2"
-            curl -s -m 40 "$SITE$page" > "/tmp/pg.html"
+            curl -s -m 20 --compressed "$SITE$page" > "/tmp/pg.html"
             cp /tmp/pg.html "$out"
-            for src in $(grep -o -E 'src="[^"]+\.js[^"]*"' /tmp/pg.html | sed -E 's/.*="([^"]+)".*/\1/' | sort -u); do
+            n=0
+            for src in $(grep -o -E 'src="[^"]+\.js[^"]*"' /tmp/pg.html | sed -E 's/.*="([^"]+)".*/\1/' | sort -u | head -40); do
               case "$src" in http*) url="$src" ;; /*) url="$SITE$src" ;; *) url="$SITE/$src" ;; esac
-              curl -s -m 40 "$url" >> "$out"
+              curl -s -m 15 --compressed "$url" >> "$out" || true
+              n=$((n + 1))
             done
-            echo "  $page: $(wc -c < "$out") bytes of page and script"
+            echo "  $page: $n scripts, $(wc -c < "$out") bytes"
           }
 
           echo "=== waiting for the build carrying the Settings entry ==="
+          # The stylesheet is one file and the change touched it, so it is the
+          # cheapest thing to ask. Gathering every script on every attempt was
+          # not: it took longer than the deployment it was waiting for.
+          css_of() {
+            curl -s -m 20 --compressed "$SITE/dashboard" > /tmp/dash.html
+            : > /tmp/css.txt
+            for href in $(grep -o -E '(href|src)="[^"]+\.css[^"]*"' /tmp/dash.html | sed -E 's/.*="([^"]+)".*/\1/' | sort -u); do
+              case "$href" in http*) url="$href" ;; /*) url="$SITE$href" ;; *) url="$SITE/$href" ;; esac
+              curl -s -m 20 --compressed "$url" >> /tmp/css.txt
+            done
+          }
           served=0
-          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            gather /dashboard /tmp/dash.js.txt > /dev/null
-            if grep -qF 'teacher-nav-settings' /tmp/dash.js.txt; then
-              echo "attempt $attempt: the new build is being served"
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            css_of
+            if grep -qE '\.teacher-bar \.topbar-inner\{[^}]*max-width:78rem' /tmp/css.txt; then
+              echo "attempt $attempt: the new build is being served ($(wc -c < /tmp/css.txt) bytes of css)"
               served=1
               break
             fi
-            echo "attempt $attempt: not yet; waiting 30s"
-            sleep 30
+            echo "attempt $attempt: not yet ($(wc -c < /tmp/css.txt) bytes of css); waiting 20s"
+            sleep 20
           done
           if [ "$served" != "1" ]; then
-            echo "the deployment did not reach the site within six minutes"
+            echo "the deployment did not reach the site in time"
             exit 1
           fi
 
@@ -247,12 +263,6 @@ jobs:
 
           echo
           echo "=== the bar rules that make room for it ==="
-          curl -s -m 40 "$SITE/dashboard" > /tmp/dash.html
-          : > /tmp/css.txt
-          for href in $(grep -o -E '(href|src)="[^"]+\.css[^"]*"' /tmp/dash.html | sed -E 's/.*="([^"]+)".*/\1/' | sort -u); do
-            case "$href" in http*) url="$href" ;; /*) url="$SITE$href" ;; *) url="$SITE/$href" ;; esac
-            curl -s -m 40 "$url" >> /tmp/css.txt
-          done
           echo "searched bytes: $(wc -c < /tmp/css.txt)"
           if grep -qE '\.teacher-bar \.topbar-inner\{[^}]*max-width:78rem' /tmp/css.txt; then
             echo "found: the bar now matches the pages under it"
