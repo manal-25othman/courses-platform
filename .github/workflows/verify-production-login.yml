@@ -176,3 +176,111 @@ jobs:
           echo
           [ "$fail" = "0" ] && echo "ALL LIVE CHECKS PASSED" || echo "SOME LIVE CHECKS FAILED"
           exit "$fail"
+
+      # Review-branch only, as above. Read-only: it signs in to nothing, and
+      # it types nothing into anybody's profile.
+      - name: Ask the live site whether the Settings entry is served
+        env:
+          SITE: ${{ inputs.site_url }}
+        run: |
+          set -u
+          fail=0
+
+          # Everything a teacher's screen is built from arrives as JavaScript,
+          # so the nav entry is not in the HTML: gather the scripts each page
+          # references and read those.
+          gather() {
+            page="$1"; out="$2"
+            curl -s -m 40 "$SITE$page" > "/tmp/pg.html"
+            cp /tmp/pg.html "$out"
+            for src in $(grep -o -E 'src="[^"]+\.js[^"]*"' /tmp/pg.html | sed -E 's/.*="([^"]+)".*/\1/' | sort -u); do
+              case "$src" in http*) url="$src" ;; /*) url="$SITE$src" ;; *) url="$SITE/$src" ;; esac
+              curl -s -m 40 "$url" >> "$out"
+            done
+            echo "  $page: $(wc -c < "$out") bytes of page and script"
+          }
+
+          echo "=== waiting for the build carrying the Settings entry ==="
+          served=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            gather /dashboard /tmp/dash.js.txt > /dev/null
+            if grep -qF 'teacher-nav-settings' /tmp/dash.js.txt; then
+              echo "attempt $attempt: the new build is being served"
+              served=1
+              break
+            fi
+            echo "attempt $attempt: not yet; waiting 30s"
+            sleep 30
+          done
+          if [ "$served" != "1" ]; then
+            echo "the deployment did not reach the site within six minutes"
+            exit 1
+          fi
+
+          echo
+          echo "=== routes ==="
+          for path in /settings /dashboard /progress /students /content /home /games /login; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 40 "$SITE$path" || echo 000)
+            printf '%-12s HTTP %s\n' "$path" "$code"
+            [ "$code" = "200" ] || fail=1
+          done
+
+          echo
+          echo "=== what the deployed build carries ==="
+          gather /dashboard /tmp/dash.js.txt
+          gather /settings /tmp/set.js.txt
+
+          check() {
+            if grep -qF "$2" "$3"; then echo "found: $1"; else echo "MISSING: $1"; fail=1; fi
+          }
+          check 'the Settings entry, in the teacher nav'        'teacher-nav-settings'      /tmp/dash.js.txt
+          check 'its destination'                               '"/settings"'               /tmp/dash.js.txt
+          check 'its label'                                     'Settings'                  /tmp/dash.js.txt
+          check 'the four class destinations, still there'      'Class progress'            /tmp/dash.js.txt
+          check 'Students'                                      'Students'                  /tmp/dash.js.txt
+          check 'Curriculum'                                    'Curriculum'                /tmp/dash.js.txt
+          check 'the WhatsApp field, on the Settings page'      'Your WhatsApp number'      /tmp/set.js.txt
+          check 'the page lead under the heading'               'the WhatsApp number your students reach you on' /tmp/set.js.txt
+          check 'the existing profile endpoint, unchanged'      '/teachers/me'              /tmp/set.js.txt
+          check 'the existing save control'                     'save-teacher'              /tmp/set.js.txt
+          if grep -qF 'My details' /tmp/set.js.txt; then echo "STILL THERE: the old heading"; fail=1; else echo "gone: the old heading"; fi
+
+          echo
+          echo "=== the bar rules that make room for it ==="
+          curl -s -m 40 "$SITE/dashboard" > /tmp/dash.html
+          : > /tmp/css.txt
+          for href in $(grep -o -E '(href|src)="[^"]+\.css[^"]*"' /tmp/dash.html | sed -E 's/.*="([^"]+)".*/\1/' | sort -u); do
+            case "$href" in http*) url="$href" ;; /*) url="$SITE$href" ;; *) url="$SITE/$href" ;; esac
+            curl -s -m 40 "$url" >> /tmp/css.txt
+          done
+          echo "searched bytes: $(wc -c < /tmp/css.txt)"
+          if grep -qE '\.teacher-bar \.topbar-inner\{[^}]*max-width:78rem' /tmp/css.txt; then
+            echo "found: the bar now matches the pages under it"
+          else
+            echo "MISSING: the widened teacher bar"; fail=1
+          fi
+          if grep -qF '71.99rem' /tmp/css.txt; then echo "found: the two-row bar below 72rem"; else echo "MISSING: the wrap rule"; fail=1; fi
+
+          echo
+          echo "=== nothing already deployed was lost ==="
+          for cls in trailhead signin-panel valley-hold trail-stop unit-world games-world q-pip teacher-card wa-button signin-by; do
+            if grep -qF ".$cls" /tmp/css.txt; then echo "present: .$cls"; else echo "MISSING: .$cls"; fail=1; fi
+          done
+          if curl -s -m 40 "$SITE/login" | grep -qF 'English Learning with Ms. Najwa Al-Shahrani'; then
+            echo "present: the teacher's name at the door"
+          else
+            echo "MISSING: the login attribution"; fail=1
+          fi
+
+          echo
+          echo "=== the teacher's contact is still hers alone ==="
+          anon=$(curl -s -o /dev/null -w '%{http_code}' -m 40 "$SITE/api/v1/teachers/mine")
+          echo "anonymous GET /teachers/mine -> HTTP $anon"
+          case "$anon" in 401|403) ;; *) fail=1 ;; esac
+          prof=$(curl -s -o /dev/null -w '%{http_code}' -m 40 "$SITE/api/v1/teachers/me")
+          echo "anonymous GET /teachers/me   -> HTTP $prof"
+          case "$prof" in 401|403) ;; *) fail=1 ;; esac
+
+          echo
+          [ "$fail" = "0" ] && echo "ALL SETTINGS CHECKS PASSED" || echo "SOME SETTINGS CHECKS FAILED"
+          exit "$fail"
