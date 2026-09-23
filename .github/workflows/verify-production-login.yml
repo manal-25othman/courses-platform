@@ -249,12 +249,16 @@ jobs:
           check() {
             if grep -qF "$2" "$3"; then echo "found: $1"; else echo "MISSING: $1"; fail=1; fi
           }
-          check 'the Settings entry, in the teacher nav'        'teacher-nav-settings'      /tmp/dash.js.txt
-          check 'its destination'                               '"/settings"'               /tmp/dash.js.txt
-          check 'its label'                                     'Settings'                  /tmp/dash.js.txt
-          check 'the four class destinations, still there'      'Class progress'            /tmp/dash.js.txt
-          check 'Students'                                      'Students'                  /tmp/dash.js.txt
-          check 'Curriculum'                                    'Curriculum'                /tmp/dash.js.txt
+          # The entry as the built bundle actually writes it. The test id is
+          # not looked for as a whole word: the markup builds it per item, so
+          # only its stem survives minification.
+          check 'the Settings entry, last in the teacher nav' \
+            '{href:"/settings",label:"Settings",icon:"settings"}' /tmp/dash.js.txt
+          check 'the four class destinations, ahead of it' \
+            '{href:"/dashboard",label:"Dashboard"' /tmp/dash.js.txt
+          check 'Class progress, Students and Curriculum, in order' \
+            '{href:"/content",label:"Curriculum",icon:"grammar"},{href:"/settings"' /tmp/dash.js.txt
+          check 'each entry still names itself for a test'       'teacher-nav-'              /tmp/dash.js.txt
           check 'the WhatsApp field, on the Settings page'      'Your WhatsApp number'      /tmp/set.js.txt
           check 'the page lead under the heading'               'the WhatsApp number your students reach you on' /tmp/set.js.txt
           check 'the existing profile endpoint, unchanged'      '/teachers/me'              /tmp/set.js.txt
