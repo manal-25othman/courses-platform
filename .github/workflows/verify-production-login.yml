@@ -19,6 +19,11 @@ on:
         required: true
         default: 'https://courses-platform-web.vercel.app'
         type: string
+      browser_timing:
+        description: 'Also walk the sign-in in a real browser. Off by default: installing one prints three hundred lines that bury the measurements.'
+        required: false
+        default: false
+        type: boolean
       repair_operator_password:
         description: 'Reset the operator password from the current secret, if and only if it does not already match.'
         required: false
@@ -92,13 +97,13 @@ jobs:
       # Playwright is not a dependency of this repository and should not
       # become one for a diagnosis: --no-save keeps the lockfile untouched.
       - name: Install a browser for the stage-by-stage timing
-        if: always()
+        if: ${{ always() && inputs.browser_timing }}
         run: |
           npm i --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
 
       - name: Time the sign-in the way a browser performs it
-        if: always()
+        if: ${{ always() && inputs.browser_timing }}
         env:
           SITE_URL: ${{ inputs.site_url }}
           PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
