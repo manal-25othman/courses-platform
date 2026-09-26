@@ -190,6 +190,31 @@ if (login.status === 200 && jar) {
 }
 
 // ---------------------------------------------------------------------------
+console.log('\n=== 5b. what the deployed build carries ===');
+// The site is JavaScript, so the words a girl reads are in the scripts, not
+// in the HTML. Gathered once, read for the strings this deployment added.
+{
+  let bundle = '';
+  for (const page of ['/login', '/home']) {
+    const html = await (await fetch(`${site}${page}`)).text();
+    bundle += html;
+    const refs = [...new Set([...html.matchAll(/src="(\/_next\/[^"]+\.js)"/g)].map((m) => m[1]))];
+    for (const path of refs.slice(0, 30)) {
+      bundle += await (await fetch(`${site}${path}`)).text().catch(() => '');
+    }
+  }
+  console.log(`  read ${Math.round(bundle.length / 1024)} KB of page and script`);
+
+  const carries = (label, needle) =>
+    console.log(`  ${bundle.includes(needle) ? 'found' : 'MISSING'}: ${label}`);
+
+  carries('the new wording for a refusal that is the rate limit', 'Too many sign-in attempts just now');
+  carries('it tells her the password has not changed', 'your username and password have not changed');
+  carries('the old wording is not what a rate limit shows', 'Incorrect username or password');
+  carries("Home's three requests are asked for together", '/teachers/mine');
+  carries('the units request is still made', '/learn/units');
+}
+
 console.log('\n=== 6. the production database, read only ===');
 const db = new PrismaClient({ datasourceUrl: url });
 try {
