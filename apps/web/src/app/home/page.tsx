@@ -213,43 +213,67 @@ export default function StudentHomePage() {
   const [teacher, setTeacher] = useState<MyTeacher | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  /*
+    All three start at once.
+
+    They used to run in step: ask who she is, and only once that came back ask
+    for her units and her teacher. That is two round trips deep before
+    anything can be drawn, and against an API in another country the second
+    trip is most of the wait. Nothing about the units request depends on the
+    answer to the first -- the API decides for itself whether the caller may
+    have them, from the same cookie, and refuses if not -- so waiting was
+    costing a round trip to learn something the server already knew.
+
+    Nothing protected is shown any earlier: `me` still gates the render below,
+    and a caller who is not a signed-in pupil is still sent away. What changes
+    is only that the answer is already on its way when that decision is made.
+  */
   useEffect(() => {
-    api
-      .get<Me>('/auth/me')
+    let current = true;
+
+    const asked = {
+      me: api.get<Me>('/auth/me'),
+      units: api.get<LearnUnitSummary[]>('/learn/units'),
+      teacher: api.get<MyTeacher | null>('/teachers/mine'),
+    };
+
+    // Nothing here may reject on its own: an unhandled rejection from a
+    // request whose answer is thrown away -- a teacher's, refused for the
+    // units she cannot have -- would surface as an error in the console.
+    asked.units.catch(() => undefined);
+    asked.teacher.catch(() => undefined);
+
+    asked.me
       .then((user) => {
+        if (!current) return;
+
         if (user.role !== 'STUDENT' || user.mustChangePassword) {
           router.replace(homeFor(user));
           return;
         }
+
         setMe(user);
+
+        asked.teacher.then((mine) => current && setTeacher(mine)).catch(() => current && setTeacher(null));
+
+        asked.units
+          .then((units) => current && setUnits(units))
+          .catch((caught) => {
+            if (!current) return;
+            setUnits([]);
+            setError(
+              caught instanceof ApiError
+                ? caught.message
+                : 'Your units could not be loaded. Try again in a moment.',
+            );
+          });
       })
-      .catch(() => router.replace('/login'));
+      .catch(() => current && router.replace('/login'));
+
+    return () => {
+      current = false;
+    };
   }, [router]);
-
-  /*
-    Her own teacher, for the contact card. It is a separate request on purpose:
-    a school that has not assigned her a teacher, or an API that is slow to
-    answer, must not hold up her course.
-  */
-  useEffect(() => {
-    if (!me) return;
-    api.get<MyTeacher | null>('/teachers/mine').then(setTeacher).catch(() => setTeacher(null));
-  }, [me]);
-
-  useEffect(() => {
-    if (!me) return;
-    api
-      .get<LearnUnitSummary[]>('/learn/units')
-      .then(setUnits)
-      .catch((caught) => {
-        setUnits([]);
-        setError(
-          caught instanceof ApiError
-            ? caught.message
-            : 'Your units could not be loaded. Try again in a moment.',
-        );
-      });
-  }, [me]);
 
   async function signOut() {
     await api.post('/auth/logout').catch(() => undefined);

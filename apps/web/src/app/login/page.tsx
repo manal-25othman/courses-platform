@@ -72,12 +72,20 @@ function LoginForm() {
       // any account.
       const looksLikeAnAddress = username.includes('@');
 
+      // A refusal for trying too often is not a refusal of the password, and
+      // showing it as one sends her to change something that was never wrong.
+      // It says what happened and what to do, and names neither the account
+      // nor whether it exists -- the limit applies the same either way.
+      const tooMany = caught instanceof ApiError && caught.status === 429;
+
       setError(
-        looksLikeAnAddress
-          ? 'That looks like an email address. Sign in with your username — your email is only used to send you a reset link.'
-          : caught instanceof ApiError
-            ? caught.message
-            : 'Could not sign in.',
+        tooMany
+          ? 'Too many sign-in attempts just now. Please wait a minute and try again — your username and password have not changed.'
+          : looksLikeAnAddress
+            ? 'That looks like an email address. Sign in with your username — your email is only used to send you a reset link.'
+            : caught instanceof ApiError
+              ? caught.message
+              : 'Could not sign in.',
       );
       setBusy(false);
     }

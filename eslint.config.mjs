@@ -68,6 +68,12 @@ export default tseslint.config(
         // a question without a dependency.
         fetch: 'readonly',
         AbortSignal: 'readonly',
+        // A script that measures has to be able to read a clock and to wait.
+        performance: 'readonly',
+        setTimeout: 'readonly',
+        // Evaluated inside the page by a browser script, never in Node.
+        document: 'readonly',
+        window: 'readonly',
       },
     },
     rules: {

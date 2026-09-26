@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, SettingScope } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { cachedSetting, forgetCachedSettings } from './settings-cache';
 import { SettingKey, SettingScopeRef } from './settings.types';
 
 /**
@@ -28,26 +29,35 @@ export class SettingsService {
   ): Promise<T | undefined> {
     const chain: SettingScopeRef[] = [...scopes, { scope: SettingScope.GLOBAL, scopeId: null }];
 
-    // One query for every candidate scope, then pick by the chain's order.
-    const rows = await this.prisma.setting.findMany({
-      where: {
-        key,
-        OR: chain.map(({ scope, scopeId }) => ({ scope, scopeId })),
-      },
-    });
+    // The chain, not just the key, identifies the question: the same key
+    // answered against a different unit or school is a different answer, and
+    // caching them together would hand one scope's value to another. Within
+    // one request the same question has the same answer, and asking it forty
+    // times -- which a unit list does -- is forty round trips for one fact.
+    const question = `${key}|${chain.map(({ scope, scopeId }) => `${scope}:${scopeId ?? ''}`).join('>')}`;
 
-    if (rows.length === 0) {
-      return undefined;
-    }
+    return cachedSetting(question, async () => {
+      // One query for every candidate scope, then pick by the chain's order.
+      const rows = await this.prisma.setting.findMany({
+        where: {
+          key,
+          OR: chain.map(({ scope, scopeId }) => ({ scope, scopeId })),
+        },
+      });
 
-    for (const { scope, scopeId } of chain) {
-      const match = rows.find((row) => row.scope === scope && row.scopeId === scopeId);
-      if (match) {
-        return match.value as T;
+      if (rows.length === 0) {
+        return undefined;
       }
-    }
 
-    return undefined;
+      for (const { scope, scopeId } of chain) {
+        const match = rows.find((row) => row.scope === scope && row.scopeId === scopeId);
+        if (match) {
+          return match.value as T;
+        }
+      }
+
+      return undefined;
+    });
   }
 
   /**
@@ -75,6 +85,10 @@ export class SettingsService {
     scopeId: string | null = null,
     updatedBy: string | null = null,
   ): Promise<void> {
+    // A request that changes a value and then reads it must see what it wrote,
+    // so the cache this request built is dropped here.
+    forgetCachedSettings();
+
     const existing = await this.prisma.setting.findFirst({ where: { key, scope, scopeId } });
 
     if (existing) {

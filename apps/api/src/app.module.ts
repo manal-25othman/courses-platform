@@ -1,16 +1,17 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
-import { attemptSubject } from './auth/guards/auth-throttle.guard';
+import { addressSubject, attemptSubject } from './auth/guards/auth-throttle.guard';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { EmailModule } from './email/email.module';
 import { SettingsModule } from './settings/settings.module';
+import { SettingsCacheMiddleware } from './settings/settings-cache.middleware';
 import { StudentsModule } from './students/students.module';
 import { AdminModule } from './admin/admin.module';
 import { SchoolModule } from './school/school.module';
@@ -32,11 +33,14 @@ import { MessagesModule } from './messages/messages.module';
     // and what ten a minute was always meant to stop; see attemptSubject for
     // why the account and not the address. `address` is the coarse backstop
     // underneath it — one host may not spray a hundred attempts a minute
-    // across many accounts — and it is set high enough that a whole school
-    // arriving through one proxy never reaches it.
+    // across many accounts — and it counts an authenticated
+    // caller against her own account rather than the address her whole class
+    // shares behind the website's proxy; see addressSubject. Both apply only to
+    // the four endpoints that declare the guard, so ordinary use of the app --
+    // every screen a girl opens after signing in -- reaches neither.
     ThrottlerModule.forRoot([
       { name: 'auth', ttl: 60_000, limit: 10, getTracker: (req) => attemptSubject(req) },
-      { name: 'address', ttl: 60_000, limit: 100 },
+      { name: 'address', ttl: 60_000, limit: 100, getTracker: (req) => addressSubject(req) },
     ]),
     PrismaModule,
     EmailModule,
@@ -62,4 +66,12 @@ import { MessagesModule } from './messages/messages.module';
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * Every request gets its own settings cache, and only for as long as it
+   * lasts. See settings-cache.ts for why that boundary is the point.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(SettingsCacheMiddleware).forRoutes('*');
+  }
+}

@@ -57,3 +57,42 @@ export function attemptSubject(request: Record<string, unknown>): string {
 
   return `address:${String(request.ip)}`;
 }
+
+/**
+ * Who the coarse backstop counts against.
+ *
+ * The backstop underneath the per-account limit asks a different question:
+ * not "is somebody guessing this girl's password" but "is one caller working
+ * through many accounts". It has always counted the caller's address, and an
+ * address is exactly what stops being personal once something sits in front of
+ * the API. Behind the website's proxy, Render sees the proxy for everybody, so
+ * the backstop's budget is shared by the whole school -- and a girl can be
+ * refused for attempts that were not hers.
+ *
+ * Two changes, and neither invents trust:
+ *
+ *   - Where the request is already authenticated -- changing her own password
+ *     is the case that matters -- it is counted against her account. She has
+ *     proved who she is, so there is no reason to charge her to an address she
+ *     shares with her class.
+ *
+ *   - Where it is not, the address Express worked out under the configured hop
+ *     count is used, and nothing else. `X-Forwarded-For` is never read here:
+ *     the whole point of the hop count in common/trusted-proxy.ts is that only
+ *     the proxies actually in front of the API may speak, and reading the
+ *     header directly would hand any caller a fresh identity per request.
+ *
+ * The residual case is honest and unresolved in code: two unauthenticated
+ * callers arriving through the same proxy still share this budget, because
+ * from inside the API they are the same address. That is fixed by recovering
+ * the real client address -- a hop-count change -- and that is only safe once
+ * the API cannot be reached except through the proxy. Until then the
+ * per-account limit above is what protects an individual girl, and it does:
+ * her ten a minute are hers, whatever anybody else is doing.
+ */
+export function addressSubject(request: Record<string, unknown>): string {
+  const user = request.user as { id?: unknown } | undefined;
+  if (typeof user?.id === 'string') return `user:${user.id}`;
+
+  return `address:${String(request.ip)}`;
+}
