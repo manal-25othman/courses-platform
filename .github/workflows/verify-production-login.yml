@@ -71,3 +71,30 @@ jobs:
           PLATFORM_ADMIN_EMAIL: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_EMAIL }}
           PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
         run: node tooling/deploy/verify-operator-login.mjs
+
+      # Review-branch only: dispatched with ref=claude/login-regressions-review
+      # so the live site can be measured from somewhere that can reach it.
+      # Read-only. It signs in as the operator and writes nothing: no row, no
+      # account, no migration, no environment variable.
+      - name: Measure the production sign-in, and read what the database holds
+        env:
+          SITE_URL: ${{ inputs.site_url }}
+          # The API's own host, public and not a secret: this is what tells the
+          # website's proxy hop apart from the API's own answer.
+          API_URL: https://smart-shift-api.onrender.com
+          DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+          PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
+        run: node tooling/deploy/diagnose-login.mjs
+
+      # Playwright is not a dependency of this repository and should not
+      # become one for a diagnosis: --no-save keeps the lockfile untouched.
+      - name: Install a browser for the stage-by-stage timing
+        run: |
+          npm i --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Time the sign-in the way a browser performs it
+        env:
+          SITE_URL: ${{ inputs.site_url }}
+          PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
+        run: node tooling/deploy/diagnose-login-browser.mjs
