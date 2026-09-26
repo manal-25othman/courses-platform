@@ -76,7 +76,10 @@ jobs:
       # so the live site can be measured from somewhere that can reach it.
       # Read-only. It signs in as the operator and writes nothing: no row, no
       # account, no migration, no environment variable.
+      # Runs whatever the step above concluded: when the live path is failing,
+      # measuring why is the whole point.
       - name: Measure the production sign-in, and read what the database holds
+        if: always()
         env:
           SITE_URL: ${{ inputs.site_url }}
           # The API's own host, public and not a secret: this is what tells the
@@ -89,11 +92,13 @@ jobs:
       # Playwright is not a dependency of this repository and should not
       # become one for a diagnosis: --no-save keeps the lockfile untouched.
       - name: Install a browser for the stage-by-stage timing
+        if: always()
         run: |
           npm i --no-save playwright@1.63.0
           npx playwright install --with-deps chromium
 
       - name: Time the sign-in the way a browser performs it
+        if: always()
         env:
           SITE_URL: ${{ inputs.site_url }}
           PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}

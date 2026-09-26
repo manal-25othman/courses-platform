@@ -59,7 +59,52 @@ async function timed(label, target, init = {}) {
 }
 
 // ---------------------------------------------------------------------------
-console.log('=== 1. is the API awake? a free Render instance sleeps when idle ===');
+// Asked first, because a refused request cannot be timed. The API carries a
+// second limit besides the sign-in one: 100 requests a minute counted by
+// address. Behind the website's proxy the API may see one address for
+// everybody, and then that limit is 100 a minute for the whole school.
+console.log('=== 0. is anything being refused before it is even answered? ===');
+async function probe(label, target) {
+  const started = performance.now();
+  const response = await fetch(target).catch(() => null);
+  const ms = Math.round(performance.now() - started);
+  if (!response) {
+    console.log(`  ${label}: unreachable`);
+    return { status: 0, ms };
+  }
+  const interesting = ['retry-after', 'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'];
+  const headers = interesting
+    .map((h) => (response.headers.get(h) ? `${h}=${response.headers.get(h)}` : null))
+    .filter(Boolean)
+    .join(' ');
+  console.log(`  ${label}: HTTP ${response.status} in ${ms} ms${headers ? `  [${headers}]` : ''}`);
+  return { status: response.status, ms };
+}
+
+const throughSite = await probe('/health through the website', `${site}/api/v1/health`);
+const straightAtApi = apiDirect ? await probe('/health straight at the API', `${apiDirect}/api/v1/health`) : null;
+
+if (throughSite.status === 429 || straightAtApi?.status === 429) {
+  console.log('\n  The API is refusing requests with 429 (too many). This run has made');
+  console.log('  only a handful, so the allowance it is spending is not its own:');
+  console.log('  the count is shared. Waiting 65 seconds for the window to roll over.');
+  await new Promise((r) => setTimeout(r, 65_000));
+  const again = await probe('/health through the website, one minute later', `${site}/api/v1/health`);
+  const againDirect = apiDirect
+    ? await probe('/health straight at the API, one minute later', `${apiDirect}/api/v1/health`)
+    : null;
+  console.log(
+    again.status === 429
+      ? '  => still refused after a quiet minute: the allowance is being spent by other traffic'
+      : '  => it recovered after a quiet minute: the window had simply been filled',
+  );
+  if (againDirect && again.status !== againDirect.status) {
+    console.log(`  => through the website ${again.status}, straight at the API ${againDirect.status}:`);
+    console.log('     the two are counted differently, which is what a shared bucket looks like');
+  }
+}
+
+console.log('\n=== 1. is the API awake? a free Render instance sleeps when idle ===');
 const first = await timed('the very first call to /health', `${site}/api/v1/health`);
 const warmHealth = [];
 for (let i = 0; i < 5; i += 1) {
