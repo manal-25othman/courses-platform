@@ -108,3 +108,26 @@ jobs:
           SITE_URL: ${{ inputs.site_url }}
           PLATFORM_ADMIN_PASSWORD: ${{ secrets.PRODUCTION_PLATFORM_ADMIN_PASSWORD }}
         run: node tooling/deploy/diagnose-login-browser.mjs
+
+      # Reads nothing but the response headers of the sign-in page, which are
+      # public and carry no session. A missing header is the one fault here
+      # that is invisible from a browser window: the page looks identical
+      # whether the rules arrived or not.
+      - name: Check the security headers the site sends
+        if: always()
+        env:
+          SITE_URL: ${{ inputs.site_url }}
+        run: |
+          headers=$(curl -sS -D - -o /dev/null "${SITE_URL%/}/login")
+          missing=0
+          for name in Strict-Transport-Security X-Content-Type-Options X-Frame-Options \
+                      Referrer-Policy Permissions-Policy Content-Security-Policy; do
+            line=$(printf '%s' "$headers" | grep -i "^$name:" || true)
+            if [ -z "$line" ]; then
+              echo "MISSING: $name"
+              missing=1
+            else
+              echo "  $line"
+            fi
+          done
+          exit $missing
